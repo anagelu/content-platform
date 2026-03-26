@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum TradeDirection {
+  LONG
+  SHORT
+}
+
+enum TradeOutcome {
+  PENDING
+  HIT_TARGET
+  STOPPED_OUT
+  PARTIAL
+  INVALIDATED
+}
+
+model User {
+  id                   Int              @id @default(autoincrement())
+  name                 String?
+  username             String           @unique
+  email                String?          @unique
+  passwordHash         String
+  role                 UserRole         @default(USER)
+  publicTradingProfile Boolean          @default(false)
+  tradingBio           String?
+  tradingFocus         String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @default(now()) @updatedAt
+
+  tradingSessions TradingSession[]
+  tradingJournalEntries TradingJournalEntry[]
+  contentDerivatives ContentDerivative[]
+  patentRecords PatentRecord[]
+  books                Book[]
+}
+
+model Post {
+  id         Int       @id @default(autoincrement())
+  title      String
+  slug       String    @unique
+  summary    String?
+  body       String
+  sourceChat String?
+  votes      Int       @default(0)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now()) @updatedAt
+
+  categoryId Int?
+  category   Category? @relation(fields: [categoryId], references: [id])
+  contentDerivatives ContentDerivative[]
+}
+
+model Category {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  posts Post[]
+}
+
+model TradingSession {
+  id                  Int      @id @default(autoincrement())
+  title               String
+  slug                String   @unique
+  market              String
+  timeframe           String
+  setupType           String
+  direction           TradeDirection
+  thesis              String
+  summary             String
+  entryMin            Float
+  entryMax            Float
+  stopLoss            Float
+  targetOne           Float
+  targetTwo           Float?
+  confidence          Int
+  outcome             TradeOutcome @default(PENDING)
+  sourceChat          String?
+  setupContext        String?
+  workflowNotes       String?
+  personalizedInsight String?
+  featuredPublic      Boolean  @default(false)
+  votes               Int      @default(0)
+  suggestionCount     Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @default(now()) @updatedAt
+
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  contentDerivatives ContentDerivative[]
+}
+
+model TradingJournalEntry {
+  id             Int      @id @default(autoincrement())
+  title          String
+  slug           String   @unique
+  market         String
+  timeframe      String
+  direction      TradeDirection
+  entryDate      DateTime
+  exitDate       DateTime?
+  entryPrice     Float
+  exitPrice      Float?
+  summary        String
+  executionNotes String?
+  mistakeReview  String?
+  lessonLearned  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model ContentDerivative {
+  id              Int      @id @default(autoincrement())
+  channel         String
+  format          String
+  title           String
+  body            String
+  metadata        String?
+  status          String   @default("draft")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+
+  authorId        Int
+  author          User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  postId          Int?
+  post            Post? @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  tradingSessionId Int?
+  tradingSession  TradingSession? @relation(fields: [tradingSessionId], references: [id], onDelete: Cascade)
+}
+
+model PatentRecord {
+  id                    Int      @id @default(autoincrement())
+  title                 String
+  slug                  String   @unique
+  inventorNames         String
+  problem               String
+  solution              String
+  novelty               String
+  useCases              String?
+  alternatives          String?
+  figureNotes           String?
+  publicDisclosureState String
+  provisionalFiledAt    DateTime?
+  provisionalDeadline   DateTime?
+  packetBody            String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @default(now()) @updatedAt
+
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+}
+
+model Book {
+  id           Int      @id @default(autoincrement())
+  title        String
+  slug         String   @unique
+  bookType     String
+  isPublic     Boolean  @default(false)
+  targetLength String?
+  audience     String?
+  tone         String?
+  summary      String?
+  outline      String?
+  sourceDraft  String
+  authorNotes  String?
+  storySynopsis       String?
+  storyChapterCount   Int?
+  storyStructureNotes String?
+  characterProfilesJson String?
+  settingProfilesJson   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  sections BookSection[]
+}
+
+model BookSection {
+  id              Int      @id @default(autoincrement())
+  kind            String
+  title           String
+  summary         String?
+  content         String
+  characterIdsJson String?
+  settingIdsJson   String?
+  sceneGoal        String?
+  sceneConflict    String?
+  povCharacterId   String?
+  position        Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+  parentSectionId Int?
+
+  bookId Int
+  book   Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  parentSection BookSection?  @relation("BookSectionChildren", fields: [parentSectionId], references: [id], onDelete: Cascade)
+  subsections   BookSection[] @relation("BookSectionChildren")
+}
