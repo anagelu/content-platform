@@ -3,6 +3,7 @@ import Link from "next/link";
 import "./globals.css";
 import { auth, signOut } from "@/auth";
 import { SiteSidebar } from "./site-sidebar";
+import { getSiteSettings } from "@/lib/site-settings";
 
 export const metadata: Metadata = {
   title: "Pattern Foundry",
@@ -14,7 +15,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const session = await auth();
+  const [session, siteSettings] = await Promise.all([auth(), getSiteSettings()]);
 
   return (
     <html lang="en">
@@ -85,6 +86,7 @@ export default async function RootLayout({
             <SiteSidebar
               isAdmin={session?.user?.role === "admin"}
               isAuthenticated={Boolean(session?.user?.id)}
+              siteSettings={siteSettings}
             />
             <div className="app-content">{children}</div>
           </div>
