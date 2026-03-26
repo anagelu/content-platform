@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 
 export type SiteSettings = {
@@ -87,12 +88,26 @@ async function ensureSiteSettingsTable() {
   return ensureSiteSettingsTablePromise;
 }
 
-export async function getSiteSettings(): Promise<SiteSettings> {
-  await ensureSiteSettingsTable();
+function isMissingSiteSettingsTableError(error: unknown) {
+  return (
+    error instanceof Error &&
+    (error.message.includes("no such table: site_settings") ||
+      error.message.includes("does not exist"))
+  );
+}
 
-  const rows = (await prisma.$queryRawUnsafe(
-    `SELECT key, value FROM site_settings`,
-  )) as Array<{ key: string; value: string }>;
+export const getSiteSettings = cache(async (): Promise<SiteSettings> => {
+  let rows: Array<{ key: string; value: string }> = [];
+
+  try {
+    rows = (await prisma.$queryRawUnsafe(
+      `SELECT key, value FROM site_settings`,
+    )) as Array<{ key: string; value: string }>;
+  } catch (error) {
+    if (!isMissingSiteSettingsTableError(error)) {
+      throw error;
+    }
+  }
 
   const settings: SiteSettings = { ...defaultSiteSettings };
 
@@ -103,7 +118,7 @@ export async function getSiteSettings(): Promise<SiteSettings> {
   }
 
   return settings;
-}
+});
 
 export async function updateSiteSettings(
   values: Partial<Record<SiteSettingsKey, string>>,

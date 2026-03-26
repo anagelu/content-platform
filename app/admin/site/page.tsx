@@ -8,6 +8,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { saveSiteSettings } from "./actions";
 
+export const dynamic = "force-dynamic";
+
 const groups: Array<{
   title: string;
   description: string;
