@@ -1,6 +1,5 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { getSiteSettings } from "@/lib/site-settings";
 import Link from "next/link";
 import { HomeIdeaStarter } from "./home-idea-starter";
 
@@ -33,7 +32,7 @@ const outputOptions = [
 
 export default async function HomePage() {
   const session = await auth();
-  const [posts, books, patents, siteSettings] = await Promise.all([
+  const [posts, books, patents] = await Promise.all([
     prisma.post.findMany({
       orderBy: { createdAt: "desc" },
       include: {
@@ -58,7 +57,6 @@ export default async function HomePage() {
           take: 2,
         })
       : Promise.resolve([]),
-    getSiteSettings(),
   ]);
 
   return (
@@ -67,29 +65,34 @@ export default async function HomePage() {
         <div className="home-main">
           <section className="home-hero" id="overview">
             <div className="home-hero-copy">
-              <p className="home-hero-kicker">{siteSettings.homeHeroKicker}</p>
-              <h1 className="page-title">{siteSettings.homeHeroTitle}</h1>
+              <p className="home-hero-kicker">Pattern Foundry</p>
+              <h1 className="page-title">Turn rough ideas into durable assets.</h1>
               <p className="page-subtitle">
-                {siteSettings.homeHeroSubtitle}
+                Start messy. Refine later. Paste a conversation, note, or draft
+                and turn it into a post, book section, patent draft, or
+                distribution-ready asset without losing the thread of the idea.
               </p>
             </div>
 
             <div className="home-hero-panel">
-              <p className="home-hero-panel-label">{siteSettings.homeFlowLabel}</p>
+              <p className="home-hero-panel-label">Core Flow</p>
               <ol className="home-flow-list">
-                <li>{siteSettings.homeFlowStepOne}</li>
-                <li>{siteSettings.homeFlowStepTwo}</li>
-                <li>{siteSettings.homeFlowStepThree}</li>
-                <li>{siteSettings.homeFlowStepFour}</li>
+                <li>Paste a conversation, note, or rough draft.</li>
+                <li>Choose the output shape you want to create.</li>
+                <li>Refine the draft section by section.</li>
+                <li>Publish or distribute when the asset is ready.</li>
               </ol>
             </div>
           </section>
 
           <section id="start-with-an-idea" className="home-idea-section">
             <div className="home-section-heading">
-              <p className="home-section-kicker">{siteSettings.homeIdeaStepKicker}</p>
-              <h2 className="trading-section-title">{siteSettings.homeIdeaStepTitle}</h2>
-              <p className="meta">{siteSettings.homeIdeaStepSubtitle}</p>
+              <p className="home-section-kicker">Step 1</p>
+              <h2 className="trading-section-title">Capture the rough version first.</h2>
+              <p className="meta">
+                One entry point. Multiple durable outputs. This is the cleanest
+                place to begin the product experience.
+              </p>
             </div>
 
             <HomeIdeaStarter outputOptions={outputOptions} />
@@ -97,8 +100,8 @@ export default async function HomePage() {
 
           <section className="home-core-section">
             <div className="home-section-heading">
-              <p className="home-section-kicker">{siteSettings.homeGenerateStepKicker}</p>
-              <h2 className="trading-section-title">{siteSettings.homeGenerateStepTitle}</h2>
+              <p className="home-section-kicker">Step 3</p>
+              <h2 className="trading-section-title">Generate, refine, and turn the idea into something durable.</h2>
             </div>
 
             <div className="home-core-grid">
@@ -125,8 +128,8 @@ export default async function HomePage() {
 
           <section className="home-secondary-section">
             <div className="home-section-heading">
-              <p className="home-section-kicker">{siteSettings.homeRecentKicker}</p>
-              <h2 className="trading-section-title">{siteSettings.homeRecentTitle}</h2>
+              <p className="home-section-kicker">Recently Active</p>
+              <h2 className="trading-section-title">Secondary systems stay available, but out of the way.</h2>
             </div>
 
             <div className="trading-detail-grid">

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { SiteSettings } from "@/lib/site-settings";
 
 type NavItem = {
   href: string;
@@ -124,10 +123,7 @@ const contextualSections: Array<{
     match: (pathname) => pathname.startsWith("/admin"),
     title: "Admin",
     description: "Inspect provider usage and internal controls.",
-    items: [
-      { href: "/admin/site", label: "Site Settings", hint: "copy" },
-      { href: "/admin/ai?range=30d", label: "AI Usage", hint: "ops" },
-    ],
+    items: [{ href: "/admin/ai?range=30d", label: "AI Usage", hint: "ops" }],
   },
   {
     match: (pathname) =>
@@ -189,56 +185,20 @@ function NavBlock({
 export function SiteSidebar({
   isAdmin,
   isAuthenticated,
-  siteSettings,
 }: {
   isAdmin: boolean;
   isAuthenticated: boolean;
-  siteSettings: SiteSettings;
 }) {
   const pathname = usePathname();
-  const contextualSectionsWithSettings = contextualSections.map((section) => {
-    switch (section.title) {
-      case "Books":
-        return { ...section, description: siteSettings.sidebarBooksDescription };
-      case "Trading":
-        return { ...section, description: siteSettings.sidebarTradingDescription };
-      case "Publishing":
-        return { ...section, description: siteSettings.sidebarPublishingDescription };
-      case "Categories":
-        return { ...section, description: siteSettings.sidebarCategoriesDescription };
-      case "Patents":
-        return { ...section, description: siteSettings.sidebarPatentsDescription };
-      case "Studio":
-        return { ...section, description: siteSettings.sidebarStudioDescription };
-      case "Inbox":
-        return { ...section, description: siteSettings.sidebarInboxDescription };
-      case "Operating System":
-        return { ...section, description: siteSettings.sidebarOsDescription };
-      case "Admin":
-        return { ...section, description: siteSettings.sidebarAdminDescription };
-      case "Account":
-        return { ...section, description: siteSettings.sidebarAccountDescription };
-      default:
-        return section;
-    }
-  });
-  const matchedSection = contextualSectionsWithSettings.find((section) =>
+  const matchedSection = contextualSections.find((section) =>
     section.match(pathname),
   );
-  const visiblePrimarySections = primarySections.map((section) => {
-    const description =
-      section.title === "Main Paths"
-        ? siteSettings.sidebarMainPathsDescription
-        : section.description;
-
-    return {
-      ...section,
-      description,
-      items: section.items.filter((item) =>
-        isAuthenticated ? true : !["/patents", "/studio"].includes(item.href),
-      ),
-    };
-  });
+  const visiblePrimarySections = primarySections.map((section) => ({
+    ...section,
+    items: section.items.filter((item) =>
+      isAuthenticated ? true : !["/patents", "/studio"].includes(item.href),
+    ),
+  }));
   const visibleSecondaryItems = secondaryItems.filter((item) =>
     isAuthenticated ? true : !["/inbox/messages", "/os"].includes(item.href),
   );
@@ -252,7 +212,7 @@ export function SiteSidebar({
           description={section.description}
           items={
             isAdmin && index === primarySections.length - 1
-              ? [...section.items, { href: "/admin/site", label: "Admin", hint: "ops" }]
+              ? [...section.items, { href: "/admin/ai?range=30d", label: "Admin", hint: "ops" }]
               : section.items
           }
           pathname={pathname}
@@ -273,13 +233,13 @@ export function SiteSidebar({
           <span>
             <span className="site-sidebar-label">More</span>
             <span className="site-sidebar-description">
-              {siteSettings.sidebarMoreDescription}
+              Secondary systems, archives, and deeper workspace areas.
             </span>
           </span>
           <span className="site-sidebar-disclosure-hint">Expand</span>
         </summary>
         <nav className="site-sidebar-nav" aria-label="More">
-          {[...visibleSecondaryItems, ...(isAdmin ? [{ href: "/admin/site", label: "Admin", hint: "ops" }] : [])].map((item) => {
+          {[...visibleSecondaryItems, ...(isAdmin ? [{ href: "/admin/ai?range=30d", label: "Admin", hint: "ops" }] : [])].map((item) => {
             const active = isItemActive(pathname, item);
 
             return (
