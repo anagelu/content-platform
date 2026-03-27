@@ -89,6 +89,41 @@ export default async function HomePage() {
             </div>
           </section>
 
+          <section className="home-secondary-section" style={{ marginTop: 0 }}>
+            <div className="home-section-heading">
+              <p className="home-section-kicker">Navigate</p>
+              <h2 className="trading-section-title">Jump straight to the workspace you need.</h2>
+              <p className="meta">
+                Use capture when you want to start from rough material, or go directly into a workspace below.
+              </p>
+            </div>
+
+            <div className="toolbar" style={{ marginBottom: 0 }}>
+              <Link href="/posts" className="button-link secondary">
+                Posts
+              </Link>
+              <Link href="/books" className="button-link secondary">
+                Books
+              </Link>
+              <Link href="/patents" className="button-link secondary">
+                Patents
+              </Link>
+              <Link href="/studio" className="button-link secondary">
+                Studio
+              </Link>
+              {session ? (
+                <>
+                  <Link href="/trading" className="button-link secondary">
+                    Trading
+                  </Link>
+                  <Link href="/inbox/messages" className="button-link secondary">
+                    Inbox
+                  </Link>
+                </>
+              ) : null}
+            </div>
+          </section>
+
           <section id="start-with-an-idea" className="home-idea-section">
             <div className="home-section-heading">
               <p className="home-section-kicker">Step 1</p>
