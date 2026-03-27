@@ -586,6 +586,17 @@ main {
   line-height: 1.6;
 }
 
+.post-note-preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0.75rem 0 0.6rem;
+}
+
+.post-note-preset-button {
+  white-space: nowrap;
+}
+
 .home-core-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

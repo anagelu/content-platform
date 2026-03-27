@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { inferCategoryNameFromText } from "@/lib/category-inference";
 import { generateQuickDraftFromSourceChat } from "@/lib/local-draft";
+import { POST_NOTE_PRESETS } from "@/lib/post-note-presets";
 import {
   POST_TO_TRADING_DRAFT_KEY,
   type PostToTradingDraft,
@@ -43,6 +44,7 @@ export function PostEditorForm({
   const [draftSummary, setDraftSummary] = useState("");
   const [draftPresentationOutline, setDraftPresentationOutline] = useState("");
   const [draftContent, setDraftContent] = useState("");
+  const [authorNotesValue, setAuthorNotesValue] = useState(initialAuthorNotes);
   const tradingCategory = categories.find(
     (category) => category.name.toLowerCase() === "trading",
   );
@@ -222,6 +224,10 @@ export function PostEditorForm({
     window.location.assign("/trading/new?from=posts");
   }
 
+  function handleApplyNotesPreset(notes: string) {
+    setAuthorNotesValue(notes);
+  }
+
   return (
     <div className="form-card">
       <form ref={formRef} action={createPost}>
@@ -262,13 +268,29 @@ export function PostEditorForm({
             <p className="form-help">
               Strongly recommended: add a thoughtful note here. This is where your originality should shine. Use the generator like pen and paper, not as a substitute for your point of view.
             </p>
+            <div className="post-note-preset-row" aria-label="Author note presets">
+              {POST_NOTE_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  className="button-link secondary post-note-preset-button"
+                  onClick={() => handleApplyNotesPreset(preset.notes)}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+            <p className="form-help">
+              Presets are editable starting points. Apply one, then rewrite it in your own words.
+            </p>
             <textarea
               id="authorNotes"
               name="authorNotes"
               rows={6}
               className="form-textarea form-textarea-compact"
               placeholder="What is your real angle, takeaway, or opinion here? What should be emphasized, cut, challenged, or made more original?"
-              defaultValue={initialAuthorNotes}
+              value={authorNotesValue}
+              onChange={(event) => setAuthorNotesValue(event.target.value)}
             />
           </div>
         </section>
