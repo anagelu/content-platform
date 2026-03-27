@@ -1,32 +1,36 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { HomeIdeaStarter } from "./home-idea-starter";
+import { HomeIdeaStarter, type OutputOption } from "./home-idea-starter";
 
-const outputOptions = [
+const outputOptions: OutputOption[] = [
   {
     title: "Post",
     description: "Turn a raw conversation or note into something readable and publishable.",
     href: "/posts/new",
     action: "Convert to Post",
+    previewKind: "post",
   },
   {
     title: "Book",
     description: "Shape a rough concept into a structured chapter or section draft.",
     href: "/books/new",
     action: "Convert to Book Section",
+    previewKind: "book",
   },
   {
     title: "Patent Draft",
     description: "Move an invention idea into a clearer problem-solution filing frame.",
     href: "/patents/new",
     action: "Convert to Patent Draft",
+    previewKind: "patent",
   },
   {
     title: "Distribution Piece",
     description: "Rework a finished idea into a channel-ready derivative asset.",
     href: "/studio",
     action: "Convert to Distribution Asset",
+    previewKind: "distribution",
   },
 ];
 
@@ -90,8 +94,8 @@ export default async function HomePage() {
               <p className="home-section-kicker">Step 1</p>
               <h2 className="trading-section-title">Capture the rough version first.</h2>
               <p className="meta">
-                One entry point. Multiple durable outputs. This is the cleanest
-                place to begin the product experience.
+                Capture first, choose the shape next, and continue in the
+                workspace where the real drafting happens.
               </p>
             </div>
 
