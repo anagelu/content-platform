@@ -233,6 +233,10 @@ main {
   align-items: start;
 }
 
+.home-page-shell {
+  width: 100%;
+}
+
 .home-sidebar {
   position: sticky;
   top: 1.5rem;

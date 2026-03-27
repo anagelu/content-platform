@@ -65,7 +65,7 @@ export default async function HomePage() {
 
   return (
     <main>
-      <div className="site-shell site-shell-wide">
+      <div className="home-page-shell">
         <div className="home-main">
           <section className="home-hero" id="overview">
             <div className="home-hero-copy">
