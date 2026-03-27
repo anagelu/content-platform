@@ -35,7 +35,7 @@ export default async function NewBookPage({
 
   return (
     <main>
-      <div className="site-shell site-shell-wide">
+      <div className="site-shell">
         <h1 className="page-title">Create New Book</h1>
         <p className="page-subtitle">
           Start with a questionnaire, choose a title, then build the manuscript through an editable outline and section editor.

@@ -98,25 +98,25 @@ export default async function HomePage() {
               </p>
             </div>
 
-            <div className="toolbar" style={{ marginBottom: 0 }}>
-              <Link href="/posts" className="button-link secondary">
+            <div className="home-workspace-nav">
+              <Link href="/posts" className="home-workspace-link">
                 Posts
               </Link>
-              <Link href="/books" className="button-link secondary">
+              <Link href="/books" className="home-workspace-link">
                 Books
               </Link>
-              <Link href="/patents" className="button-link secondary">
+              <Link href="/patents" className="home-workspace-link">
                 Patents
               </Link>
-              <Link href="/studio" className="button-link secondary">
+              <Link href="/studio" className="home-workspace-link">
                 Studio
               </Link>
               {session ? (
                 <>
-                  <Link href="/trading" className="button-link secondary">
+                  <Link href="/trading" className="home-workspace-link">
                     Trading
                   </Link>
-                  <Link href="/inbox/messages" className="button-link secondary">
+                  <Link href="/inbox/messages" className="home-workspace-link">
                     Inbox
                   </Link>
                 </>
