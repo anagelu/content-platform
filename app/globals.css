@@ -54,6 +54,14 @@ main {
   align-items: start;
 }
 
+.app-shell-inner:has(.home-page-shell) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app-shell-inner:has(.home-page-shell) .site-sidebar {
+  display: none;
+}
+
 .app-content {
   min-width: 0;
 }
