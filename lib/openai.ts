@@ -539,7 +539,7 @@ export async function generatePostDraftFromSourceChat({
 
   if (trimmedSourceChat.length > MAX_POST_SOURCE_CHARS) {
     throw new Error(
-      `Source chat is too long for the low-cost draft flow. Keep it under ${MAX_POST_SOURCE_CHARS} characters.`,
+      `Source chat is too long for this low-cost draft flow. Keep it under ${MAX_POST_SOURCE_CHARS} characters. If the original session is longer, condense it first or ask the source AI to summarize the main idea, key turns, and final takeaways.`,
     );
   }
 
@@ -641,7 +641,7 @@ export async function refinePostDraftWithAi({
 
   if (trimmedArticle.length > MAX_POST_SOURCE_CHARS) {
     throw new Error(
-      `Draft content is too long for the low-cost refine flow. Keep it under ${MAX_POST_SOURCE_CHARS} characters.`,
+      `Draft content is too long for this low-cost refine flow. Keep it under ${MAX_POST_SOURCE_CHARS} characters, or trim it down to the sections you want refined next.`,
     );
   }
 
@@ -767,7 +767,7 @@ export async function generateBookDraftFromSourceMaterial({
 
   if (trimmedSourceDraft.length > MAX_POST_SOURCE_CHARS) {
     throw new Error(
-      `Source draft is too long for the low-cost book flow. Keep it under ${MAX_POST_SOURCE_CHARS} characters.`,
+      `Source draft is too long for this low-cost book flow. Keep it under ${MAX_POST_SOURCE_CHARS} characters. If the original session is longer, condense it first or ask the source AI to summarize the main idea, structure, and strongest takeaways.`,
     );
   }
 
@@ -1423,7 +1423,7 @@ export async function generateTradingSessionAssist({
 
   if (trimmedSourceChat.length > MAX_POST_SOURCE_CHARS) {
     throw new Error(
-      `Source session is too long for the low-cost assist flow. Keep it under ${MAX_POST_SOURCE_CHARS} characters.`,
+      `Source session is too long for this low-cost assist flow. Keep it under ${MAX_POST_SOURCE_CHARS} characters. If the original session is longer, condense it first or ask the source AI to summarize the setup, key confirmations, and final takeaways.`,
     );
   }
 
