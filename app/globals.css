@@ -49,8 +49,8 @@ main {
   margin: 0 auto;
   padding: 2rem 1.4rem 4.5rem;
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 2rem;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 1.5rem;
   align-items: start;
 }
 
@@ -81,7 +81,7 @@ main {
 }
 
 .site-sidebar-card {
-  padding: 1rem 1rem 1.05rem;
+  padding: 0.9rem 0.85rem 0.95rem;
   border-radius: 18px;
   border: 1px solid #ddc8a7;
   background: linear-gradient(180deg, rgba(255, 250, 241, 0.96), rgba(244, 234, 215, 0.92));
@@ -112,8 +112,8 @@ main {
 .site-sidebar-description {
   margin: 0 0 0.95rem;
   color: #6c6257;
-  font-size: 0.92rem;
-  line-height: 1.55;
+  font-size: 0.84rem;
+  line-height: 1.45;
 }
 
 .site-sidebar-card-spotlight .site-sidebar-description {
@@ -133,7 +133,7 @@ main {
 
 .site-sidebar-link {
   display: block;
-  padding: 0.76rem 0.82rem;
+  padding: 0.62rem 0.68rem;
   border-radius: 14px;
   color: #3f382f;
   font-weight: 500;
@@ -162,19 +162,21 @@ main {
 
 .site-sidebar-link-copy {
   display: flex;
-  justify-content: space-between;
-  gap: 0.7rem;
-  align-items: baseline;
+  flex-direction: column;
+  gap: 0.18rem;
+  align-items: flex-start;
 }
 
 .site-sidebar-link-hint {
-  flex-shrink: 0;
+  flex-shrink: 1;
   color: #9b8b76;
-  font-size: 0.74rem;
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   opacity: 0.82;
+  line-height: 1.2;
+  word-break: break-word;
 }
 
 .site-sidebar-link.is-active .site-sidebar-link-hint {
@@ -243,8 +245,8 @@ main {
 
 .home-layout {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 2rem;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 1.5rem;
   align-items: start;
 }
 
@@ -271,10 +273,10 @@ main {
 .home-side-nav a,
 .home-side-nav span {
   display: flex;
-  justify-content: space-between;
-  gap: 0.75rem;
-  align-items: center;
-  padding: 0.55rem 0.7rem;
+  flex-direction: column;
+  gap: 0.18rem;
+  align-items: flex-start;
+  padding: 0.48rem 0.6rem;
   border-radius: 12px;
   background: #fcf8f1;
   color: #3f382f;
@@ -287,10 +289,14 @@ main {
 }
 
 .home-side-nav-count {
-  flex-shrink: 0;
+  flex-shrink: 1;
   color: #7c4f18;
-  font-size: 0.85rem;
+  font-size: 0.68rem;
   font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  word-break: break-word;
+  text-transform: uppercase;
 }
 
 .home-main {
