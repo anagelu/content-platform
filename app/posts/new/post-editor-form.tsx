@@ -10,6 +10,12 @@ import {
 } from "@/lib/trading-draft-transfer";
 import { createPost } from "./actions";
 
+const MAX_AI_SOURCE_CHARS = 6000;
+
+function buildLongSourceError() {
+  return `This AI draft flow works best under ${MAX_AI_SOURCE_CHARS} characters. If the original session is longer, condense it first or ask the source AI to summarize the main idea, key turns, and final takeaways.`;
+}
+
 type CategoryOption = {
   id: number;
   name: string;
@@ -110,6 +116,11 @@ export function PostEditorForm({
 
     if (!sourceChat) {
       setGenerationError("Paste the AI conversation first.");
+      return;
+    }
+
+    if (sourceChat.length > MAX_AI_SOURCE_CHARS) {
+      setGenerationError(buildLongSourceError());
       return;
     }
 
