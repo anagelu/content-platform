@@ -179,9 +179,9 @@ main {
 .site-sidebar-link-hint {
   flex-shrink: 1;
   color: #9b8b76;
-  font-size: 0.52rem;
+  font-size: 0.62rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   opacity: 0.82;
   line-height: 1.2;
@@ -301,11 +301,12 @@ main {
 .home-side-nav-count {
   flex-shrink: 1;
   color: #7c4f18;
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.09em;
   line-height: 1.2;
-  word-break: break-word;
+  word-break: normal;
+  overflow-wrap: anywhere;
   text-transform: uppercase;
 }
 
