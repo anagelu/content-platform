@@ -243,7 +243,7 @@ main {
 
 .home-layout {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: 220px minmax(0, 1fr);
   gap: 2rem;
   align-items: start;
 }
@@ -730,6 +730,14 @@ main {
   }
 
   .site-sidebar {
+    position: static;
+  }
+
+  .home-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .home-sidebar {
     position: static;
   }
 }
