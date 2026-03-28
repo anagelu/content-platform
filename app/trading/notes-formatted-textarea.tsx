@@ -31,6 +31,8 @@ export function NotesFormattedTextarea({
   rows,
   required,
   defaultValue,
+  value,
+  onChange,
   placeholder,
 }: {
   id: string;
@@ -38,6 +40,8 @@ export function NotesFormattedTextarea({
   rows: number;
   required?: boolean;
   defaultValue?: string;
+  value?: string;
+  onChange?: (value: string) => void;
   placeholder: string;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -161,9 +165,11 @@ export function NotesFormattedTextarea({
         rows={rows}
         required={required}
         defaultValue={defaultValue}
+        value={value}
         className="form-textarea"
         placeholder={placeholder}
         onKeyDown={handleKeyDown}
+        onChange={(event) => onChange?.(event.target.value)}
       />
     </>
   );

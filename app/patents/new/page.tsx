@@ -3,6 +3,7 @@ import { NotesFormattedTextarea } from "@/app/trading/notes-formatted-textarea";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createPatentRecord } from "./actions";
+import { PatentProblemField } from "./patent-problem-field";
 
 export default async function NewPatentRecordPage({
   searchParams,
@@ -96,14 +97,7 @@ export default async function NewPatentRecordPage({
               <label htmlFor="problem" className="form-label">
                 Problem
               </label>
-              <NotesFormattedTextarea
-                id="problem"
-                name="problem"
-                rows={7}
-                required
-                placeholder="What problem does this invention solve and why does it matter?"
-                defaultValue={seededIdea}
-              />
+              <PatentProblemField initialValue={seededIdea} />
             </div>
 
             <div className="form-group">

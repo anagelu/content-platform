@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { storeHomeIdeaTransfer } from "@/lib/home-idea-transfer";
 
 type PreviewKind = "post" | "book" | "patent" | "distribution";
 
@@ -183,13 +184,8 @@ export function HomeIdeaStarter({
       return;
     }
 
-    const params = new URLSearchParams();
-
-    if (idea.trim()) {
-      params.set("idea", idea);
-    }
-
-    router.push(params.size > 0 ? `${target.href}?${params.toString()}` : target.href);
+    storeHomeIdeaTransfer(idea);
+    router.push(target.href);
   }
 
   return (

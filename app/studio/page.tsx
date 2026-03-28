@@ -6,6 +6,7 @@ import { DISTRIBUTION_FORMATS } from "@/lib/distribution";
 import type { Post, TradingSession } from "@prisma/client";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { StudioSeedIdeaCard } from "./studio-seed-idea-card";
 
 export default async function StudioPage({
   searchParams,
@@ -101,33 +102,7 @@ export default async function StudioPage({
           ) : null}
         </div>
 
-        {seededIdea ? (
-          <section style={{ marginTop: "1.5rem" }}>
-            <div className="card">
-              <h2 className="card-title">Seed Idea From Home</h2>
-              <p className="meta">
-                You brought this idea in from the homepage. Studio works best
-                once the idea has been shaped into a post or draft, but the seed
-                is preserved here so you do not lose it.
-              </p>
-              <p className="preview">{seededIdea}</p>
-              <div className="toolbar" style={{ marginTop: "1rem", marginBottom: 0 }}>
-                <Link
-                  href={`/posts/new?idea=${encodeURIComponent(seededIdea)}`}
-                  className="button-link secondary"
-                >
-                  Turn Into Post First
-                </Link>
-                <Link
-                  href={`/books/new?idea=${encodeURIComponent(seededIdea)}`}
-                  className="button-link secondary"
-                >
-                  Turn Into Book Section
-                </Link>
-              </div>
-            </div>
-          </section>
-        ) : null}
+        <StudioSeedIdeaCard initialIdea={seededIdea} />
 
         <section style={{ marginTop: "2rem" }}>
           <h2 className="trading-section-title">AI Usage</h2>

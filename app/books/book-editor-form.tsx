@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { consumeHomeIdeaTransfer } from "@/lib/home-idea-transfer";
 import {
   BOOK_SECTION_KIND_OPTIONS,
   BOOK_SUBSECTION_KIND_OPTIONS,
@@ -258,6 +259,18 @@ export function BookEditorForm({
   const [isRefiningSection, setIsRefiningSection] = useState(false);
   const [generationError, setGenerationError] = useState("");
   const [generationNote, setGenerationNote] = useState("");
+
+  useEffect(() => {
+    if (initialBook?.sourceDraft || initialSeedSourceDraft.trim()) {
+      return;
+    }
+
+    const transferredIdea = consumeHomeIdeaTransfer();
+
+    if (transferredIdea) {
+      setSourceDraft(transferredIdea);
+    }
+  }, [initialBook?.sourceDraft, initialSeedSourceDraft]);
 
   const activeSection = useMemo(
     () => findSectionById(sections, activeSectionId) || sections[0] || null,

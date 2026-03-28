@@ -1,7 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { inferCategoryNameFromText } from "@/lib/category-inference";
+import { consumeHomeIdeaTransfer } from "@/lib/home-idea-transfer";
 import { generateQuickDraftFromSourceChat } from "@/lib/local-draft";
 import { POST_NOTE_PRESETS } from "@/lib/post-note-presets";
 import {
@@ -50,6 +51,7 @@ export function PostEditorForm({
   const [draftSummary, setDraftSummary] = useState("");
   const [draftPresentationOutline, setDraftPresentationOutline] = useState("");
   const [draftContent, setDraftContent] = useState("");
+  const [sourceChatValue, setSourceChatValue] = useState(initialSourceChat);
   const [authorNotesValue, setAuthorNotesValue] = useState(initialAuthorNotes);
   const tradingCategory = categories.find(
     (category) => category.name.toLowerCase() === "trading",
@@ -57,6 +59,18 @@ export function PostEditorForm({
   const isTradingSelected = tradingCategory
     ? selectedCategoryId === String(tradingCategory.id)
     : false;
+
+  useEffect(() => {
+    if (initialSourceChat.trim()) {
+      return;
+    }
+
+    const transferredIdea = consumeHomeIdeaTransfer();
+
+    if (transferredIdea) {
+      setSourceChatValue(transferredIdea);
+    }
+  }, [initialSourceChat]);
 
   function handleGenerateDraft() {
     const form = formRef.current;
@@ -265,7 +279,8 @@ export function PostEditorForm({
               rows={14}
               className="form-textarea"
               placeholder="Paste your conversation here..."
-              defaultValue={initialSourceChat}
+              value={sourceChatValue}
+              onChange={(event) => setSourceChatValue(event.target.value)}
             />
           </div>
         </section>
