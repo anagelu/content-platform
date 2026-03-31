@@ -2616,11 +2616,12 @@ main {
 .book-page-shell {
   display: grid;
   gap: 1.6rem;
+  max-width: 1020px;
 }
 
 .book-page-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.8fr);
   gap: 1.25rem;
   padding: 1.6rem 1.7rem;
   border-radius: 28px;
@@ -2693,8 +2694,8 @@ main {
 
 .book-reader-layout {
   display: grid;
-  grid-template-columns: 286px minmax(0, 1fr);
-  gap: 1.5rem;
+  grid-template-columns: minmax(220px, 248px) minmax(0, 1fr);
+  gap: 1rem;
 }
 
 .book-reader-outline {
@@ -3024,6 +3025,17 @@ main {
   width: 72px;
   border: none;
   border-top: 1px solid rgba(124, 79, 24, 0.25);
+}
+
+@media (max-width: 1220px) {
+  .book-page-hero,
+  .book-reader-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .book-reader-outline {
+    position: static;
+  }
 }
 
 .posts-hero-band {
