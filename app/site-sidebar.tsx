@@ -22,6 +22,7 @@ const primarySections: NavSection[] = [
     description: "Start from capture, then move toward finished assets.",
     items: [
       { href: "/", label: "Home", hint: "overview", exact: true },
+      { href: "/about", label: "About", hint: "mission" },
       { href: "/#start-with-an-idea", label: "Capture", hint: "start" },
       { href: "/posts", label: "Posts", hint: "publishing" },
       { href: "/patents", label: "Patents", hint: "filings" },
@@ -133,6 +134,16 @@ const contextualSections: Array<{
     items: [
       { href: "/login", label: "Sign In", hint: "access", exact: true },
       { href: "/signup", label: "Create Account", hint: "join", exact: true },
+    ],
+  },
+  {
+    match: (pathname) => pathname.startsWith("/about"),
+    title: "About",
+    description: "Why the platform exists and how rough thinking becomes durable work.",
+    items: [
+      { href: "/about", label: "Overview", hint: "mission", exact: true },
+      { href: "/#start-with-an-idea", label: "Capture", hint: "start" },
+      { href: "/posts", label: "Posts", hint: "examples" },
     ],
   },
 ];

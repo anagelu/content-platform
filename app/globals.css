@@ -428,6 +428,158 @@ main {
   margin-top: 2rem;
 }
 
+.about-page {
+  display: grid;
+  gap: 1.6rem;
+}
+
+.about-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr);
+  gap: 1.3rem;
+  align-items: stretch;
+}
+
+.about-hero-copy {
+  padding: 0.2rem 0;
+}
+
+.about-hero-panel {
+  padding: 1.35rem 1.35rem 1.25rem;
+  border-radius: 24px;
+  border: 1px solid rgba(111, 83, 49, 0.3);
+  background:
+    radial-gradient(circle at top right, rgba(214, 156, 77, 0.18), transparent 36%),
+    linear-gradient(145deg, rgba(31, 27, 22, 0.96), rgba(66, 50, 34, 0.92));
+  color: #fffaf1;
+  box-shadow: 0 20px 36px rgba(31, 27, 22, 0.14);
+}
+
+.about-panel-kicker,
+.about-closing-kicker {
+  margin: 0 0 0.6rem;
+  color: rgba(255, 247, 233, 0.78);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.about-panel-title {
+  margin: 0 0 0.65rem;
+  font-size: clamp(1.45rem, 2.4vw, 1.9rem);
+  line-height: 1.08;
+}
+
+.about-panel-copy {
+  margin: 0 0 1rem;
+  color: rgba(255, 247, 233, 0.86);
+  line-height: 1.7;
+}
+
+.about-signal-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.about-signal-item {
+  padding: 0.8rem 0.9rem;
+  border-radius: 16px;
+  background: rgba(255, 250, 241, 0.08);
+  border: 1px solid rgba(255, 247, 233, 0.12);
+}
+
+.about-signal-item strong {
+  display: block;
+  font-size: 0.98rem;
+  line-height: 1.45;
+}
+
+.about-signal-label {
+  display: inline-block;
+  margin-bottom: 0.3rem;
+  color: rgba(255, 247, 233, 0.7);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.about-intro-card,
+.about-closing-card {
+  padding: 1.55rem 1.6rem;
+  border-radius: 24px;
+  border: 1px solid rgba(221, 200, 167, 0.82);
+  background: linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(244, 234, 216, 0.93));
+  box-shadow: 0 16px 32px rgba(73, 52, 24, 0.08);
+}
+
+.about-intro-lead {
+  margin: 0 0 0.55rem;
+  font-size: clamp(1.25rem, 2.1vw, 1.65rem);
+  line-height: 1.2;
+  max-width: 22ch;
+}
+
+.about-section-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.about-story-card {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 1rem;
+  padding: 1.45rem 1.5rem;
+  border-radius: 22px;
+  border: 1px solid rgba(221, 200, 167, 0.82);
+  background: rgba(255, 252, 246, 0.9);
+  box-shadow: 0 14px 28px rgba(73, 52, 24, 0.06);
+}
+
+.about-story-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(160, 104, 34, 0.16), rgba(122, 79, 24, 0.1));
+  color: #7c4f18;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.about-story-title {
+  margin-bottom: 0.55rem;
+  max-width: 22ch;
+}
+
+.about-story-body {
+  margin: 0;
+  color: #4d4338;
+  line-height: 1.75;
+  max-width: 70ch;
+}
+
+.about-closing-card {
+  background:
+    radial-gradient(circle at top left, rgba(214, 156, 77, 0.16), transparent 30%),
+    linear-gradient(180deg, rgba(255, 251, 242, 0.98), rgba(241, 228, 205, 0.94));
+}
+
+.about-closing-kicker {
+  color: #7c4f18;
+}
+
+.about-closing-title {
+  margin: 0 0 1.1rem;
+  font-size: clamp(1.6rem, 3vw, 2.3rem);
+  line-height: 1.12;
+  max-width: 18ch;
+}
+
 .home-section-heading {
   margin-bottom: 0.6rem;
 }
@@ -1684,6 +1836,16 @@ main {
     grid-template-columns: 1fr;
   }
 
+  .about-hero,
+  .about-story-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .about-story-index {
+    width: 48px;
+    height: 48px;
+  }
+
   .spx-checklist-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -2831,10 +2993,18 @@ main {
   .book-outline-shell,
   .book-workbench,
   .book-reader-layout,
+  .about-hero,
   .trading-grid,
   .trading-detail-grid,
   .spx-action-grid,
   .trading-metric-row {
     grid-template-columns: 1fr;
+  }
+
+  .about-intro-card,
+  .about-closing-card,
+  .about-story-card,
+  .about-hero-panel {
+    padding: 1.15rem;
   }
 }

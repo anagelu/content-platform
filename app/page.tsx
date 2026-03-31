@@ -78,6 +78,10 @@ export default async function HomePage() {
                   <span>Home</span>
                   <span className="home-side-nav-count">overview</span>
                 </Link>
+                <Link href="/about">
+                  <span>About</span>
+                  <span className="home-side-nav-count">mission</span>
+                </Link>
                 <Link href="/#start-with-an-idea">
                   <span>Capture</span>
                   <span className="home-side-nav-count">start</span>
@@ -120,28 +124,45 @@ export default async function HomePage() {
             </div>
 
             <div className="site-sidebar-card home-sidebar-card">
-              <p className="site-sidebar-label">Core Flow</p>
+              <p className="site-sidebar-label">More</p>
               <p className="site-sidebar-description">
-                Move from rough material into a real workspace without losing
-                the thread of the idea.
+                Secondary systems, archives, and deeper workspace areas.
               </p>
-              <nav className="home-side-nav" aria-label="Homepage flow">
-                <span>
-                  <span>Paste first</span>
-                  <span className="home-side-nav-count">capture</span>
-                </span>
-                <span>
-                  <span>Choose shape</span>
-                  <span className="home-side-nav-count">route</span>
-                </span>
-                <span>
-                  <span>Refine in workspace</span>
-                  <span className="home-side-nav-count">edit</span>
-                </span>
-                <span>
-                  <span>Publish when ready</span>
-                  <span className="home-side-nav-count">finish</span>
-                </span>
+              <nav className="home-side-nav" aria-label="Secondary navigation">
+                <Link href="/books">
+                  <span>Books</span>
+                  <span className="home-side-nav-count">manuscripts</span>
+                </Link>
+                <Link href="/search">
+                  <span>Search</span>
+                  <span className="home-side-nav-count">finder</span>
+                </Link>
+                {session ? (
+                  <>
+                    <Link href="/trading">
+                      <span>Trading</span>
+                      <span className="home-side-nav-count">markets</span>
+                    </Link>
+                    <Link href="/categories">
+                      <span>Categories</span>
+                      <span className="home-side-nav-count">taxonomy</span>
+                    </Link>
+                    <Link href="/inbox/messages">
+                      <span>Inbox</span>
+                      <span className="home-side-nav-count">capture</span>
+                    </Link>
+                    <Link href="/os">
+                      <span>OS</span>
+                      <span className="home-side-nav-count">workspace</span>
+                    </Link>
+                    {session.user.role === "admin" ? (
+                      <Link href="/admin/ai?range=30d">
+                        <span>Admin</span>
+                        <span className="home-side-nav-count">ops</span>
+                      </Link>
+                    ) : null}
+                  </>
+                ) : null}
               </nav>
             </div>
           </aside>
@@ -166,41 +187,6 @@ export default async function HomePage() {
                   <li>Refine the draft section by section.</li>
                   <li>Publish or distribute when the asset is ready.</li>
                 </ol>
-              </div>
-            </section>
-
-            <section className="home-secondary-section" style={{ marginTop: 0 }}>
-              <div className="home-section-heading">
-                <p className="home-section-kicker">Navigate</p>
-                <h2 className="trading-section-title">Jump straight to the workspace you need.</h2>
-                <p className="meta">
-                  Use capture when you want to start from rough material, or go directly into a workspace below.
-                </p>
-              </div>
-
-              <div className="home-workspace-nav">
-                <Link href="/posts" className="home-workspace-link">
-                  Posts
-                </Link>
-                <Link href="/books" className="home-workspace-link">
-                  Books
-                </Link>
-                <Link href="/patents" className="home-workspace-link">
-                  Patents
-                </Link>
-                <Link href="/studio" className="home-workspace-link">
-                  Studio
-                </Link>
-                {session ? (
-                  <>
-                    <Link href="/trading" className="home-workspace-link">
-                      Trading
-                    </Link>
-                    <Link href="/inbox/messages" className="home-workspace-link">
-                      Inbox
-                    </Link>
-                  </>
-                ) : null}
               </div>
             </section>
 
