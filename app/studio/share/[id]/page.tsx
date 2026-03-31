@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { prismaWithDistribution } from "@/lib/prisma-distribution";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { SharePlatformButtons } from "@/app/share-platform-buttons";
 
 function parseMetadata(metadata: string | null) {
   if (!metadata) {
@@ -83,6 +84,11 @@ export default async function StudioSharePage({
           <p className="meta">
             {derivative.channel} · {derivative.format.replaceAll("_", " ")}
           </p>
+
+          <SharePlatformButtons
+            title={metadata?.shareTitle || derivative.title}
+            summary={metadata?.caption || derivative.post?.title || derivative.tradingSession?.title}
+          />
 
           {metadata?.caption ? (
             <section className="card" style={{ marginTop: "1.5rem" }}>

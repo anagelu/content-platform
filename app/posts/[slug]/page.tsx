@@ -14,6 +14,7 @@ import {
 } from "./actions";
 import { auth } from "@/auth";
 import { PostDraftWorkspace } from "./post-draft-workspace";
+import { SharePlatformButtons } from "@/app/share-platform-buttons";
 
 import type { ReactNode } from "react";
 
@@ -109,6 +110,8 @@ export default async function PostPage({
               </>
             ) : null}
           </div>
+
+          <SharePlatformButtons title={post.title} summary={post.summary} />
 
           <div className="reaction-row">
             <p className="form-help" style={{ margin: 0 }}>
