@@ -318,11 +318,14 @@ export function BookReaderWorkspace({
 
       <div className="book-reader-content">
         <div className="book-reader-sequence-bar">
-          <div>
+          <div className="book-reader-sequence-copy">
             <span className="book-editor-status-kicker">Reader Position</span>
             <strong>
               {activeIndex >= 0 ? `${activeIndex + 1} of ${entries.length}` : `0 of ${entries.length}`}
             </strong>
+            <p className="book-reader-sequence-note">
+              Follow the manuscript in order or jump to a different stop from the outline.
+            </p>
           </div>
           <div className="book-reader-sequence-actions">
             <button
@@ -359,19 +362,23 @@ export function BookReaderWorkspace({
             <section
               key={section.id}
               id={`section-${section.id}`}
-              className={sectionExpanded ? "card book-reader-panel is-expanded" : "card book-reader-panel"}
+              className={sectionExpanded ? "book-reader-panel is-expanded" : "book-reader-panel"}
               onMouseEnter={() => {
                 setHoveredEntryId(section.id);
                 setActiveEntryId(section.id);
               }}
               onMouseLeave={() => setHoveredEntryId((current) => (current === section.id ? null : current))}
             >
+              <div className="book-reader-folio">
+                <span>Folio {index + 1}</span>
+                <span>{section.kind}</span>
+              </div>
               <div className="book-reader-panel-header">
                 <div>
-                  <p className="meta">
+                  <p className="meta book-reader-label">
                     Section {index + 1} · {section.kind}
                   </p>
-                  <h2 className="card-title">{section.title}</h2>
+                  <h2 className="card-title book-reader-entry-title">{section.title}</h2>
                 </div>
                 <button
                   type="button"
@@ -422,8 +429,8 @@ export function BookReaderWorkspace({
                   ))}
                 </div>
               ) : null}
-              {section.summary ? <p className="preview">{section.summary}</p> : null}
-              <div className="markdown book-reader-panel-body">
+              {section.summary ? <p className="preview book-reader-summary">{section.summary}</p> : null}
+              <div className="markdown book-reader-panel-body book-reader-prose">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {section.content || "No content yet."}
                 </ReactMarkdown>
@@ -459,12 +466,16 @@ export function BookReaderWorkspace({
                           setHoveredEntryId((current) => (current === subsection.id ? null : current))
                         }
                       >
+                        <div className="book-reader-folio book-reader-folio-subsection">
+                          <span>Folio {index + 1}.{childIndex + 1}</span>
+                          <span>{subsection.kind}</span>
+                        </div>
                         <div className="book-reader-panel-header">
                           <div>
-                            <p className="meta">
+                            <p className="meta book-reader-label">
                               Subsection {index + 1}.{childIndex + 1} · {subsection.kind}
                             </p>
-                            <h3 className="card-title">{subsection.title}</h3>
+                            <h3 className="card-title book-reader-entry-title">{subsection.title}</h3>
                           </div>
                           <button
                             type="button"
@@ -524,9 +535,9 @@ export function BookReaderWorkspace({
                           </div>
                         ) : null}
                         {subsection.summary ? (
-                          <p className="preview">{subsection.summary}</p>
+                          <p className="preview book-reader-summary">{subsection.summary}</p>
                         ) : null}
-                        <div className="markdown book-reader-panel-body">
+                        <div className="markdown book-reader-panel-body book-reader-prose">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>
                             {subsection.content || "No content yet."}
                           </ReactMarkdown>

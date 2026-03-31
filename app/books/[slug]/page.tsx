@@ -73,39 +73,53 @@ export default async function BookPage({
   return (
     <main>
       <div className="site-shell site-shell-wide">
-        <article className="article-card">
-          <h1 className="article-title">{book.title}</h1>
-          <p className="meta">
-            {book.bookType}
-            {book.isPublic ? " · Public" : ""}
-            {book.targetLength ? ` · ${book.targetLength}` : ""}
-            {book.tone ? ` · ${book.tone}` : ""}
-          </p>
-          <p className="meta">
-            By {book.author.name ?? book.author.username} · Updated{" "}
-            {new Date(book.updatedAt).toLocaleDateString()}
-          </p>
+        <article className="book-page-shell">
+          <section className="book-page-hero">
+            <div className="book-page-hero-copy">
+              <p className="book-page-kicker">Reading Copy</p>
+              <h1 className="article-title book-page-title">{book.title}</h1>
+              <p className="book-page-meta">
+                {book.bookType}
+                {book.isPublic ? " · Public" : ""}
+                {book.targetLength ? ` · ${book.targetLength}` : ""}
+                {book.tone ? ` · ${book.tone}` : ""}
+              </p>
+              <p className="book-page-meta">
+                By {book.author.name ?? book.author.username} · Updated{" "}
+                {new Date(book.updatedAt).toLocaleDateString()}
+              </p>
 
-          {book.summary ? <p className="article-summary">{book.summary}</p> : null}
+              {book.summary ? <p className="book-page-summary">{book.summary}</p> : null}
 
-          <div className="article-actions">
-            <Link href="/books" className="button-link secondary">
-              Back to Books
-            </Link>
-            {canManage ? (
-              <>
-                <Link href={`/books/${book.slug}/edit`} className="button-link secondary">
-                  Edit
+              <div className="article-actions">
+                <Link href="/books" className="button-link secondary">
+                  Back to Books
                 </Link>
-                <form action={deleteBook}>
-                  <input type="hidden" name="id" value={book.id} />
-                  <button type="submit" className="delete-button">
-                    Delete
-                  </button>
-                </form>
-              </>
-            ) : null}
-          </div>
+                {canManage ? (
+                  <>
+                    <Link href={`/books/${book.slug}/edit`} className="button-link secondary">
+                      Edit
+                    </Link>
+                    <form action={deleteBook}>
+                      <input type="hidden" name="id" value={book.id} />
+                      <button type="submit" className="delete-button">
+                        Delete
+                      </button>
+                    </form>
+                  </>
+                ) : null}
+              </div>
+            </div>
+
+            <aside className="book-page-hero-note">
+              <p className="book-page-note-kicker">Book Feel</p>
+              <h2 className="book-page-note-title">Designed to read like pages, not panels.</h2>
+              <p className="book-page-note-body">
+                Move through the manuscript section by section, keep your place, and let the
+                reading surface hold more of the pacing and atmosphere of the book itself.
+              </p>
+            </aside>
+          </section>
 
           <BookReaderWorkspace
             outline={book.outline}
