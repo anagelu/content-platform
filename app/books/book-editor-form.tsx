@@ -287,6 +287,27 @@ export function BookEditorForm({
     () => countWords(activeSection?.content || ""),
     [activeSection],
   );
+  const activeSectionHasSeedContext = useMemo(
+    () =>
+      Boolean(
+        activeSection &&
+          [
+            activeSection.title,
+            activeSection.summary,
+            activeSection.content,
+            activeSection.sceneGoal,
+            activeSection.sceneConflict,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .trim(),
+      ),
+    [activeSection],
+  );
+  const activeSectionHasDraftContent = useMemo(
+    () => Boolean(activeSection && [activeSection.summary, activeSection.content].join(" ").trim()),
+    [activeSection],
+  );
   const activeSectionCharacters = useMemo(
     () =>
       storyCharacters.filter((character) =>
@@ -487,8 +508,12 @@ export function BookEditorForm({
       return;
     }
 
-    if (!activeSection.summary.trim() && !activeSection.content.trim()) {
-      setGenerationError("Add some notes or draft content to this section before refining it.");
+    if (!activeSectionHasSeedContext) {
+      setGenerationError(
+        isStoryMode
+          ? "Add at least a section title, summary, or scene context before generating this section."
+          : "Add some notes or draft content to this section before refining it.",
+      );
       return;
     }
 
@@ -1434,7 +1459,7 @@ export function BookEditorForm({
             <div className="book-workbench-header">
               <h2 className="trading-section-title">Outline</h2>
               <p className="form-help">
-                Select a chapter or subsection, then edit and refine only that part.
+                Select a chapter or subsection, then update only that part without changing sibling sections.
               </p>
             </div>
 
@@ -1479,6 +1504,13 @@ export function BookEditorForm({
                         ? `Inside ${activeParent?.title || "parent section"}`
                         : "Top-level chapter or section"}
                     </p>
+                    <p className="form-help" style={{ marginTop: "0.35rem", marginBottom: 0 }}>
+                      {isStoryMode
+                        ? activeSectionHasDraftContent
+                          ? "AI will refine only this selected story section and leave the rest of the outline alone."
+                          : "AI will draft only this selected story section from its local context, story bible, and rough book inputs."
+                        : "AI updates stay scoped to the selected section only."}
+                    </p>
                   </div>
 
                   <div className="toolbar" style={{ marginBottom: 0 }}>
@@ -1488,7 +1520,13 @@ export function BookEditorForm({
                       onClick={handleRefineSectionWithAi}
                       disabled={!aiDraftEnabled || isRefiningSection}
                     >
-                      {isRefiningSection ? "Refining..." : "Refine With AI"}
+                      {isRefiningSection
+                        ? isStoryMode && !activeSectionHasDraftContent
+                          ? "Generating..."
+                          : "Refining..."
+                        : isStoryMode && !activeSectionHasDraftContent
+                          ? "Generate With AI"
+                          : "Refine With AI"}
                     </button>
                     {!activeIsSubsection ? (
                       <button

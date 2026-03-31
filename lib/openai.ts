@@ -232,6 +232,10 @@ type OpenAIUsageStats = {
   totalTokens: number;
 };
 
+function isStoryBookType(value: string) {
+  return /novel|story|fiction|novella|fantasy|romance|thriller/i.test(value);
+}
+
 function getResponseText(payload: unknown) {
   if (!payload || typeof payload !== "object") {
     return "";
@@ -941,9 +945,30 @@ export async function refineBookSectionWithAi({
   sectionContent,
 }: GenerateBookSectionRefineInput): Promise<GenerateBookSectionRefineOutput> {
   const combinedSectionText = [sectionSummary, sectionContent].filter(Boolean).join("\n\n").trim();
+  const hasLocalDraft = Boolean(combinedSectionText);
+  const storyMode = isStoryBookType(bookType);
 
-  if (!combinedSectionText) {
-    throw new Error("Add some notes or draft content to the section before refining it.");
+  if (
+    !combinedSectionText &&
+    ![
+      sectionTitle,
+      sceneGoal,
+      sceneConflict,
+      povCharacterName,
+      selectedCharacterProfilesJson,
+      selectedSettingProfilesJson,
+      storySynopsis,
+      authorNotes,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .trim()
+  ) {
+    throw new Error(
+      storyMode
+        ? "Add at least a section title, scene goal, or story context before generating this section."
+        : "Add some notes or draft content to the section before refining it.",
+    );
   }
 
   if (combinedSectionText.length > MAX_POST_SOURCE_CHARS) {
@@ -954,13 +979,22 @@ export async function refineBookSectionWithAi({
 
   const model = await getPostDraftGenerationModel();
   const provider = await getAiProvider();
-  const systemInstruction =
-    "You are a cost-conscious book editor. Refine only the requested section while preserving its role in the larger book. Return JSON only with keys kind, title, summary, and content. Keep the same section scope, improve clarity and flow, and avoid changing unrelated chapters or introducing meta commentary about AI.";
+  const systemInstruction = storyMode
+    ? hasLocalDraft
+      ? "You are a fiction editor and scene writer helping refine one chapter or subsection of a novel. Return JSON only with keys kind, title, summary, and content. Write actual narrative prose for the selected section only. Preserve the current section's role, POV, tone, and story direction while improving voice, scene flow, specificity, and immersion. Use the wider book context only as background. Do not rewrite other chapters, do not return outlining notes, and do not add meta commentary about AI."
+      : "You are a fiction writer helping draft one chapter or subsection of a novel from planning context. Return JSON only with keys kind, title, summary, and content. Write actual narrative prose for the selected section only, not an outline, prompt, or editorial note. Use the section title, summary, POV, scene goal, scene conflict, characters, settings, and wider story context to produce book-ready prose. Keep the scope local to this section, do not rewrite other chapters, and do not add meta commentary about AI."
+    : "You are a cost-conscious book editor. Refine only the requested section while preserving its role in the larger book. Return JSON only with keys kind, title, summary, and content. Keep the same section scope, improve clarity and flow, and avoid changing unrelated chapters or introducing meta commentary about AI.";
+  const actionLabel = storyMode
+    ? hasLocalDraft
+      ? "Refine the selected story section."
+      : "Draft the selected story section from the available context."
+    : "Refine the selected section.";
   const userText = `Book title: ${bookTitle || "Untitled book"}
 Book type: ${bookType || "General nonfiction"}
 Target length: ${targetLength || "(not specified)"}
 Audience: ${audience || "(not specified)"}
 Tone: ${tone || "(not specified)"}
+Action: ${actionLabel}
 Book summary:
 ${bookSummary || "(not provided)"}
 
@@ -1007,6 +1041,13 @@ ${sectionSummary || "(none)"}
 
 Current section draft:
 ${sectionContent || "(none)"}
+
+Section-specific guidance:
+${storyMode
+  ? hasLocalDraft
+    ? "Keep this update local to the selected section. Preserve continuity with the story bible, but focus on compelling prose, concrete detail, and scene-level momentum."
+    : "Use the context above to create a self-contained draft for this section. Write narrative prose, ground the reader in the chosen POV, and turn the scene goal/conflict into the actual moment on the page."
+  : "Keep this update local to the selected section and preserve its purpose in the larger book."}
 
 Return a JSON object with this exact shape:
 {
