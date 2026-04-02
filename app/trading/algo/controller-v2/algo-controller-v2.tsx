@@ -10,8 +10,7 @@ type Snapshot = Awaited<ReturnType<typeof getAlpacaAlgoSnapshot>>;
 type ControllerResult = Awaited<ReturnType<typeof runAlpacaTradeController>>;
 type ControllerMode = "standard" | "turbo";
 type Bias = "bearish" | "neutral" | "bullish";
-type GaugeKey = "trend" | "momentum" | "execution" | "contractFitness";
-type StrategyProfileKey = "trend-follow" | "breakout" | "mean-reversion";
+type GaugeKey = "trend" | "momentum" | "execution";
 type GaugeSubscore = { label: string; score: number };
 type GaugeResult = {
   key: GaugeKey;
@@ -32,12 +31,6 @@ type ConfluenceModel = {
   reason: string;
   isReady: boolean;
 };
-type StrategyProfile = {
-  label: string;
-  description: string;
-  overallWeights: Record<GaugeKey, number>;
-  gaugeWeights: Record<GaugeKey, Record<string, number>>;
-};
 const COMMON_CRYPTO_BASE_SYMBOLS = new Set([
   "BTC",
   "ETH",
@@ -54,122 +47,6 @@ const COMMON_CRYPTO_BASE_SYMBOLS = new Set([
   "AAVE",
   "SHIB",
 ]);
-const STRATEGY_PROFILES: Record<StrategyProfileKey, StrategyProfile> = {
-  "trend-follow": {
-    label: "Trend-Follow",
-    description: "Leans on persistent direction with clean participation and safer execution.",
-    overallWeights: {
-      trend: 0.34,
-      momentum: 0.24,
-      execution: 0.26,
-      contractFitness: 0.16,
-    },
-    gaugeWeights: {
-      trend: {
-        emaAlignment: 0.34,
-        vwap: 0.2,
-        slope: 0.26,
-        structure: 0.2,
-      },
-      momentum: {
-        rsi: 0.18,
-        macd: 0.34,
-        roc: 0.22,
-        candleExpansion: 0.26,
-      },
-      execution: {
-        spreadQuality: 0.22,
-        relativeVolume: 0.32,
-        quoteStability: 0.22,
-        slippageRisk: 0.24,
-      },
-      contractFitness: {
-        delta: 0.2,
-        gamma: 0.12,
-        theta: 0.12,
-        vega: 0.1,
-        expirationFit: 0.22,
-        openInterestSpread: 0.24,
-      },
-    },
-  },
-  breakout: {
-    label: "Breakout",
-    description: "Rewards expanding momentum, participation, and decisive execution conditions.",
-    overallWeights: {
-      trend: 0.26,
-      momentum: 0.34,
-      execution: 0.24,
-      contractFitness: 0.16,
-    },
-    gaugeWeights: {
-      trend: {
-        emaAlignment: 0.24,
-        vwap: 0.18,
-        slope: 0.24,
-        structure: 0.34,
-      },
-      momentum: {
-        rsi: 0.16,
-        macd: 0.26,
-        roc: 0.24,
-        candleExpansion: 0.34,
-      },
-      execution: {
-        spreadQuality: 0.2,
-        relativeVolume: 0.36,
-        quoteStability: 0.16,
-        slippageRisk: 0.28,
-      },
-      contractFitness: {
-        delta: 0.24,
-        gamma: 0.16,
-        theta: 0.1,
-        vega: 0.1,
-        expirationFit: 0.18,
-        openInterestSpread: 0.22,
-      },
-    },
-  },
-  "mean-reversion": {
-    label: "Mean Reversion",
-    description: "Favors stretched conditions reverting with controlled entries and tighter timing.",
-    overallWeights: {
-      trend: 0.22,
-      momentum: 0.26,
-      execution: 0.32,
-      contractFitness: 0.2,
-    },
-    gaugeWeights: {
-      trend: {
-        emaAlignment: 0.18,
-        vwap: 0.32,
-        slope: 0.16,
-        structure: 0.34,
-      },
-      momentum: {
-        rsi: 0.34,
-        macd: 0.18,
-        roc: 0.26,
-        candleExpansion: 0.22,
-      },
-      execution: {
-        spreadQuality: 0.24,
-        relativeVolume: 0.24,
-        quoteStability: 0.28,
-        slippageRisk: 0.24,
-      },
-      contractFitness: {
-        delta: 0.16,
-        gamma: 0.18,
-        theta: 0.16,
-        vega: 0.12,
-        expirationFit: 0.22,
-        openInterestSpread: 0.16,
-      },
-    },
-  },
-};
 const ANALYSIS_TIMEFRAMES: Array<{ value: AlpacaBarTimeframe; label: string }> = [
   { value: "1Min", label: "1 Min" },
   { value: "5Min", label: "5 Min" },
@@ -177,6 +54,26 @@ const ANALYSIS_TIMEFRAMES: Array<{ value: AlpacaBarTimeframe; label: string }> =
   { value: "1Hour", label: "1 Hour" },
   { value: "1Day", label: "1 Day" },
 ];
+const GAUGE_WEIGHTS: Record<GaugeKey, Record<string, number>> = {
+  trend: {
+    "EMA alignment": 0.25,
+    "VWAP alignment": 0.25,
+    slope: 0.25,
+    structure: 0.25,
+  },
+  momentum: {
+    RSI: 0.25,
+    MACD: 0.25,
+    ROC: 0.25,
+    "candle expansion": 0.25,
+  },
+  execution: {
+    "spread quality": 0.25,
+    "relative volume": 0.25,
+    "quote stability": 0.25,
+    "slippage risk": 0.25,
+  },
+};
 
 function formatMoney(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -250,15 +147,15 @@ function getDefaultBiasFromSignal(signalAction: Snapshot["signal"]["action"]): B
 }
 
 function getScoreTone(score: number) {
-  if (score >= 80) {
+  if (score >= 81) {
     return "is-strong";
   }
 
-  if (score >= 60) {
+  if (score >= 61) {
     return "is-positive";
   }
 
-  if (score >= 40) {
+  if (score >= 46) {
     return "is-neutral";
   }
 
@@ -266,19 +163,75 @@ function getScoreTone(score: number) {
 }
 
 function getScoreBand(score: number) {
-  if (score >= 80) {
+  if (score >= 81) {
     return "Strong";
   }
 
-  if (score >= 60) {
+  if (score >= 61) {
     return "Favorable";
   }
 
-  if (score >= 40) {
+  if (score >= 46) {
     return "Mixed";
   }
 
-  return "Weak";
+  if (score >= 26) {
+    return "Weak";
+  }
+
+  return "Unfavorable";
+}
+
+function getGaugeReason(label: string, score: number) {
+  if (label === "Trend") {
+    if (score >= 81) return "Trend structure is strongly supportive.";
+    if (score >= 61) return "Trend structure is supportive.";
+    if (score >= 46) return "Trend conditions are mixed.";
+    if (score >= 26) return "Trend support is weak.";
+    return "Trend structure is unfavorable.";
+  }
+
+  if (label === "Momentum") {
+    if (score >= 81) return "Momentum is strong and expanding.";
+    if (score >= 61) return "Momentum is improving.";
+    if (score >= 46) return "Momentum is mixed.";
+    if (score >= 26) return "Momentum is weak.";
+    return "Momentum is unfavorable.";
+  }
+
+  if (score >= 81) return "Execution conditions are strong.";
+  if (score >= 61) return "Execution conditions are acceptable.";
+  if (score >= 46) return "Execution conditions are mixed.";
+  if (score >= 26) return "Execution conditions are weak.";
+  return "Execution conditions are unfavorable.";
+}
+
+function getConfluenceReason(favorableCount: number, strongCount: number, total: number) {
+  if (strongCount === total) {
+    return "All gauges are strong and broadly favorable.";
+  }
+
+  if (favorableCount === total) {
+    return "All gauges are favorable.";
+  }
+
+  if (favorableCount >= 2) {
+    return "Market conditions are leaning favorable, but not all gauges agree.";
+  }
+
+  if (favorableCount === 1) {
+    return "Only one gauge is favorable right now.";
+  }
+
+  return "Current market conditions are not yet favorable.";
+}
+
+function getOverallWeights(): Record<GaugeKey, number> {
+  return {
+    trend: 1 / 3,
+    momentum: 1 / 3,
+    execution: 1 / 3,
+  };
 }
 
 function getPrimaryCommand(
@@ -421,12 +374,7 @@ function createGauge(
   const score = Math.round(clamp(weightedScore(subscores, weights), 0, 100));
   const band = getScoreBand(score);
   const tone = getScoreTone(score);
-  const strongest = [...subscores].sort((left, right) => right.score - left.score)[0];
-  const weakest = [...subscores].sort((left, right) => left.score - right.score)[0];
-  const reason =
-    weakest && weakest.score < 45
-      ? `${strongest.label} is supportive, but ${weakest.label} is keeping this setup from full alignment.`
-      : `${strongest.label} is carrying the setup and the indicator group is broadly aligned.`;
+  const reason = getGaugeReason(label, score);
 
   return {
     key,
@@ -443,18 +391,10 @@ function buildConfluenceModel({
   snapshot,
   positionPnl,
   isCrypto,
-  targetDelta,
-  daysToExpiry,
-  mode,
-  profile,
 }: {
   snapshot: Snapshot | null;
   positionPnl: number;
   isCrypto: boolean;
-  targetDelta: number;
-  daysToExpiry: number;
-  mode: ControllerMode;
-  profile: StrategyProfile;
 }): ConfluenceModel {
   if (!snapshot) {
     return {
@@ -463,7 +403,7 @@ function buildConfluenceModel({
       overallBand: "Unavailable",
       overallTone: "is-neutral",
       alignmentCount: 0,
-      alignmentLabel: mode === "turbo" ? "0 of 4 aligned" : "0 of 3 aligned",
+      alignmentLabel: "0 of 3 favorable",
       reason: "A live market snapshot is required before confluence can be scored.",
       isReady: false,
     };
@@ -483,7 +423,7 @@ function buildConfluenceModel({
       ),
     },
     {
-      label: "VWAP",
+      label: "VWAP alignment",
       score: clamp(
         50 +
           snapshot.trendStrength * 24 * timeframeProfile.trendMultiplier +
@@ -527,7 +467,7 @@ function buildConfluenceModel({
       score: clamp(50 + snapshot.priceChangePercent * 7 * timeframeProfile.momentumMultiplier, 0, 100),
     },
     {
-      label: "Candle expansion",
+      label: "candle expansion",
       score: clamp(
         40 +
           (snapshot.relativeVolume ?? 1) * 20 +
@@ -539,15 +479,15 @@ function buildConfluenceModel({
   ];
   const executionSubscores: GaugeSubscore[] = [
     {
-      label: "Spread quality",
+      label: "spread quality",
       score: clamp((isCrypto ? 58 : 76) + ((snapshot.relativeVolume ?? 1) - 1) * 10, 0, 100),
     },
     {
-      label: "Relative volume",
+      label: "relative volume",
       score: clamp(snapshot.relativeVolume === null ? 50 : 34 + snapshot.relativeVolume * 24, 0, 100),
     },
     {
-      label: "Quote stability",
+      label: "quote stability",
       score: clamp(
         snapshot.signalAgeSeconds === null
           ? 58
@@ -557,7 +497,7 @@ function buildConfluenceModel({
       ),
     },
     {
-      label: "Slippage risk",
+      label: "slippage risk",
       score: clamp(
         (isCrypto ? 54 : 74) +
           ((snapshot.relativeVolume ?? 1) - 1) * 16 -
@@ -567,76 +507,28 @@ function buildConfluenceModel({
       ),
     },
   ];
-  const contractFitnessSubscores: GaugeSubscore[] = [
-    {
-      label: "Delta",
-      score: clamp(100 - Math.abs(targetDelta - 0.35) * 220, 0, 100),
-    },
-    {
-      label: "Gamma",
-      score: clamp(82 - Math.abs(daysToExpiry - 18) * 1.4 - Math.abs(targetDelta - 0.35) * 55, 0, 100),
-    },
-    {
-      label: "Theta",
-      score: clamp(86 - Math.max(14 - daysToExpiry, 0) * 2.4 - Math.max(daysToExpiry - 35, 0) * 1.2, 0, 100),
-    },
-    {
-      label: "Vega",
-      score: clamp(80 - Math.abs(daysToExpiry - 28) * 0.9, 0, 100),
-    },
-    {
-      label: "Expiration fit",
-      score: clamp(94 - Math.abs(daysToExpiry - 21) * 1.6, 0, 100),
-    },
-    {
-      label: "Open interest / spread width",
-      score: clamp((snapshot.relativeVolume === null ? 52 : 42 + snapshot.relativeVolume * 22) - (isCrypto ? 8 : 0), 0, 100),
-    },
-  ];
-
   const gauges: GaugeResult[] = [
-    createGauge("trend", "Trend", trendSubscores, profile.gaugeWeights.trend),
-    createGauge("momentum", "Momentum", momentumSubscores, profile.gaugeWeights.momentum),
-    createGauge("execution", "Execution", executionSubscores, profile.gaugeWeights.execution),
+    createGauge("trend", "Trend", trendSubscores, GAUGE_WEIGHTS.trend),
+    createGauge("momentum", "Momentum", momentumSubscores, GAUGE_WEIGHTS.momentum),
+    createGauge("execution", "Execution", executionSubscores, GAUGE_WEIGHTS.execution),
   ];
-
-  if (mode === "turbo") {
-    gauges.push(
-      createGauge(
-        "contractFitness",
-        "Contract Fitness",
-        contractFitnessSubscores,
-        profile.gaugeWeights.contractFitness,
-      ),
-    );
-  }
-
-  const visibleGauges = gauges.filter((gauge) => mode === "turbo" || gauge.key !== "contractFitness");
-  const overallWeightTotal = visibleGauges.reduce(
-    (sum, gauge) => sum + profile.overallWeights[gauge.key],
-    0,
-  );
+  const overallWeights = getOverallWeights();
+  const overallWeightTotal = gauges.reduce((sum, gauge) => sum + overallWeights[gauge.key], 0);
   const overallScore = Math.round(
-    visibleGauges.reduce(
-      (sum, gauge) => sum + gauge.score * profile.overallWeights[gauge.key],
-      0,
-    ) / overallWeightTotal,
+    gauges.reduce((sum, gauge) => sum + gauge.score * overallWeights[gauge.key], 0) /
+      overallWeightTotal,
   );
-  const alignmentCount = visibleGauges.filter((gauge) => gauge.score >= 60).length;
+  const alignmentCount = gauges.filter((gauge) => gauge.score >= 65).length;
+  const strongCount = gauges.filter((gauge) => gauge.score >= 80).length;
 
   return {
-    gauges: visibleGauges,
+    gauges,
     overallScore,
     overallBand: getScoreBand(overallScore),
     overallTone: getScoreTone(overallScore),
     alignmentCount,
-    alignmentLabel: `${alignmentCount} of ${visibleGauges.length} aligned`,
-    reason:
-      alignmentCount === visibleGauges.length
-        ? "All visible gauges are leaning the same way, which is the cleanest setup."
-        : alignmentCount >= Math.ceil(visibleGauges.length / 2)
-          ? "Most gauges agree, but one area still needs confirmation."
-          : "Confluence is thin right now, so the setup is still fragmented.",
+    alignmentLabel: `${alignmentCount} of ${gauges.length} favorable`,
+    reason: getConfluenceReason(alignmentCount, strongCount, gauges.length),
     isReady: true,
   };
 }
@@ -701,8 +593,6 @@ export function AlgoControllerV2({
   ).filter(Boolean);
 
   const [mode, setMode] = useState<ControllerMode>("standard");
-  const [strategyProfile, setStrategyProfile] =
-    useState<StrategyProfileKey>("trend-follow");
   const [symbol, setSymbol] = useState(normalizeMarketInput(initialSymbol));
   const [analysisTimeframe, setAnalysisTimeframe] = useState<AlpacaBarTimeframe>(
     initialControllers.find((controller) => controller.symbol === initialSymbol)?.strategyTimeframe ?? "1Day",
@@ -819,10 +709,6 @@ export function AlgoControllerV2({
     snapshot,
     positionPnl,
     isCrypto,
-    targetDelta: deltaTarget,
-    daysToExpiry,
-    mode,
-    profile: STRATEGY_PROFILES[strategyProfile],
   });
   const primaryCommand = getPrimaryCommand(activeController);
   const turboContracts = buildTurboContracts({
@@ -955,21 +841,6 @@ export function AlgoControllerV2({
           </label>
 
           <label className="algo-v2-field">
-            <span className="algo-v2-field-label">Strategy Profile</span>
-            <select
-              className="form-input"
-              value={strategyProfile}
-              onChange={(event) => setStrategyProfile(event.target.value as StrategyProfileKey)}
-            >
-              {Object.entries(STRATEGY_PROFILES).map(([key, profile]) => (
-                <option key={key} value={key}>
-                  {profile.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="algo-v2-field">
             <span className="algo-v2-field-label">Analysis Timeframe</span>
             <select
               className="form-input"
@@ -1032,7 +903,7 @@ export function AlgoControllerV2({
                   </div>
                   <div className="algo-v2-confluence-meta">
                     <strong>{confluence.alignmentLabel}</strong>
-                    <span>{STRATEGY_PROFILES[strategyProfile].label}</span>
+                    <span>Market conditions</span>
                   </div>
                 </div>
                 {confluence.isReady ? (
@@ -1204,7 +1075,7 @@ export function AlgoControllerV2({
                   </div>
                   <div className="algo-v2-confluence-meta">
                     <strong>{confluence.alignmentLabel}</strong>
-                    <span>{STRATEGY_PROFILES[strategyProfile].label}</span>
+                    <span>Market conditions</span>
                   </div>
                 </div>
                 {confluence.isReady ? (
