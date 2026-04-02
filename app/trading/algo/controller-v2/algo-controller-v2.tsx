@@ -10,6 +10,22 @@ type Snapshot = Awaited<ReturnType<typeof getAlpacaAlgoSnapshot>>;
 type ControllerResult = Awaited<ReturnType<typeof runAlpacaTradeController>>;
 type ControllerMode = "standard" | "turbo";
 type Bias = "bearish" | "neutral" | "bullish";
+const COMMON_CRYPTO_BASE_SYMBOLS = new Set([
+  "BTC",
+  "ETH",
+  "XRP",
+  "SOL",
+  "DOGE",
+  "ADA",
+  "AVAX",
+  "LINK",
+  "UNI",
+  "LTC",
+  "BCH",
+  "MATIC",
+  "AAVE",
+  "SHIB",
+]);
 
 function formatMoney(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -59,6 +75,15 @@ function formatDteLabel(days: number) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function normalizeMarketInput(value: string) {
+  return value.replace(/\s+/g, "").toUpperCase();
+}
+
+function isCryptoLikeSymbol(symbol: string) {
+  const normalized = normalizeMarketInput(symbol);
+  return normalized.includes("/") || COMMON_CRYPTO_BASE_SYMBOLS.has(normalized);
 }
 
 function getDefaultBiasFromSignal(signalAction: Snapshot["signal"]["action"]): Bias {
@@ -128,8 +153,8 @@ function getPrimaryCommand(
   if (!controller || controller.status === "EJECTED") {
     return {
       command: "PLAY",
-      label: "Execute Strategy",
-      helper: "Arms the controller and enters according to the current sizing plan.",
+      label: "Play Position",
+      helper: "Arm the controller and enter using the size you selected above.",
       tone: "algo-v2-action-button is-positive",
     };
   }
@@ -201,11 +226,13 @@ export function AlgoControllerV2({
   initialControllers,
   initialPositions,
   initialPnl,
+  initialError,
 }: {
   initialSymbol: string;
   initialControllers: AlpacaTradeController[];
   initialPositions: AlpacaPosition[];
   initialPnl: number;
+  initialError: string;
 }) {
   const router = useRouter();
   const controllerSymbols = initialControllers.map((controller) => controller.symbol);
@@ -215,35 +242,64 @@ export function AlgoControllerV2({
   ).filter(Boolean);
 
   const [mode, setMode] = useState<ControllerMode>("standard");
-  const [symbol, setSymbol] = useState(initialSymbol);
-  const [targetPercent, setTargetPercent] = useState(50);
+  const [symbol, setSymbol] = useState(normalizeMarketInput(initialSymbol));
+  const [targetSize, setTargetSize] = useState(
+    String(initialControllers.find((controller) => controller.symbol === initialSymbol)?.targetQty ?? 10),
+  );
   const [deltaTarget, setDeltaTarget] = useState(0.4);
   const [daysToExpiry, setDaysToExpiry] = useState(30);
   const [bias, setBias] = useState<Bias>("bullish");
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [controllers, setControllers] = useState(initialControllers);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialError);
   const [actionNotice, setActionNotice] = useState("");
   const [isBusy, setIsBusy] = useState(false);
+  const normalizedSymbol = normalizeMarketInput(symbol);
 
   const activeController = useMemo(
-    () => controllers.find((controller) => controller.symbol === symbol) ?? null,
-    [controllers, symbol],
+    () => controllers.find((controller) => controller.symbol === normalizedSymbol) ?? null,
+    [controllers, normalizedSymbol],
   );
   const activePosition = useMemo(
-    () => initialPositions.find((position) => position.symbol === symbol) ?? null,
-    [initialPositions, symbol],
+    () => initialPositions.find((position) => position.symbol === normalizedSymbol) ?? null,
+    [initialPositions, normalizedSymbol],
   );
+  const isCrypto = isCryptoLikeSymbol(normalizedSymbol);
+  const targetQtyValue = Math.max(Number(targetSize) || 0, 0);
+  const minimumTargetQty = isCrypto ? 0.01 : 1;
+  const targetSliderMax = Math.max(
+    isCrypto ? 5 : 100,
+    targetQtyValue > 0 ? targetQtyValue * 2 : isCrypto ? 5 : 100,
+  );
+  const targetSliderStep = isCrypto ? 0.01 : 1;
+
+  useEffect(() => {
+    if (!normalizedSymbol) {
+      return;
+    }
+
+    const suggestedTarget =
+      activeController?.targetQty ?? Math.abs(activePosition?.qty ?? 0) ?? minimumTargetQty;
+
+    if (Number.isFinite(suggestedTarget) && suggestedTarget > 0) {
+      setTargetSize(String(suggestedTarget));
+    }
+  }, [activeController?.targetQty, activePosition?.qty, minimumTargetQty, normalizedSymbol]);
 
   useEffect(() => {
     let cancelled = false;
 
     setError("");
 
+    if (!normalizedSymbol) {
+      setSnapshot(null);
+      return;
+    }
+
     startTransition(async () => {
       try {
         const result = await getAlpacaAlgoSnapshot({
-          symbol,
+          symbol: normalizedSymbol,
           strategyType: activeController?.strategyType ?? "NONE",
           strategyTimeframe: activeController?.strategyTimeframe ?? "1Min",
           fastPeriod: activeController?.fastPeriod ?? 5,
@@ -276,17 +332,16 @@ export function AlgoControllerV2({
     return () => {
       cancelled = true;
     };
-  }, [activeController, symbol]);
+  }, [activeController, normalizedSymbol]);
 
   const currentQty = snapshot?.position?.qty ?? activePosition?.qty ?? 0;
-  const currentPercent = clamp(Math.round((Math.abs(currentQty) / Math.max(Math.abs(currentQty), 1, activeController?.targetQty ?? 1)) * 100), 0, 100);
-  const pendingChange = targetPercent - currentPercent;
+  const pendingChange = targetQtyValue - Math.abs(currentQty);
   const positionPnl = snapshot?.position?.unrealizedPl ?? activePosition?.unrealizedPl ?? initialPnl;
   const healthScore = getHealthScore(snapshot, positionPnl);
   const healthLabel = getHealthLabel(healthScore);
   const primaryCommand = getPrimaryCommand(activeController);
   const turboContracts = buildTurboContracts({
-    symbol,
+    symbol: normalizedSymbol || "SPY",
     latestPrice: snapshot?.latestPrice ?? activePosition?.avgEntryPrice ?? 500,
     bias,
     targetDelta: deltaTarget,
@@ -300,16 +355,10 @@ export function AlgoControllerV2({
 
     startTransition(async () => {
       try {
-        const baselinePrice = snapshot?.latestPrice ?? activePosition?.avgEntryPrice ?? 1;
-        const derivedTargetQty = Math.max(
-          1,
-          Math.round(((activeController?.maxNotional ?? 100) * (targetPercent / 100)) / Math.max(baselinePrice, 1)),
-        );
-
         const result: ControllerResult = await runAlpacaTradeController({
-          symbol,
+          symbol: normalizedSymbol,
           command,
-          targetQty: derivedTargetQty,
+          targetQty: Math.max(targetQtyValue, minimumTargetQty),
           strategyType: activeController?.strategyType ?? "NONE",
           strategyTimeframe: activeController?.strategyTimeframe ?? "1Min",
           fastPeriod: activeController?.fastPeriod ?? 5,
@@ -344,9 +393,9 @@ export function AlgoControllerV2({
       <div className="algo-v2-stage">
         <div className="algo-v2-topbar">
           <div className="algo-v2-topbar-left">
-            <div className="algo-v2-symbol-badge">{symbol}</div>
+            <div className="algo-v2-symbol-badge">{normalizedSymbol || "--"}</div>
             <div>
-              <h2 className="algo-v2-title">{symbol} Controller</h2>
+              <h2 className="algo-v2-title">{normalizedSymbol || "Market"} Controller</h2>
               <p className="algo-v2-subtitle">
                 <span className="algo-v2-dot is-green" /> Market Open
                 <span className="algo-v2-dot is-blue" /> Trading
@@ -369,13 +418,26 @@ export function AlgoControllerV2({
               value={symbol}
               list="algo-v2-market-suggestions"
               placeholder="SPY or BTC/USD"
-              onChange={(event) => setSymbol(event.target.value.toUpperCase())}
+              onChange={(event) => setSymbol(normalizeMarketInput(event.target.value))}
             />
             <datalist id="algo-v2-market-suggestions">
               {suggestedSymbols.map((option) => (
                 <option key={option} value={option} />
               ))}
             </datalist>
+          </label>
+
+          <label className="algo-v2-field">
+            <span className="algo-v2-field-label">
+              Target Position Size {isCrypto ? "(units)" : "(shares)"}
+            </span>
+            <input
+              className="form-input"
+              inputMode={isCrypto ? "decimal" : "numeric"}
+              value={targetSize}
+              onChange={(event) => setTargetSize(event.target.value)}
+              placeholder={isCrypto ? "0.50" : "10"}
+            />
           </label>
 
           <div className="algo-v2-mode-toggle" role="tablist" aria-label="Controller mode">
@@ -428,21 +490,28 @@ export function AlgoControllerV2({
 
               <div className="algo-v2-slider-card">
                 <div className="algo-v2-slider-header">
-                  <strong>Target Position Size</strong>
-                  <strong>{targetPercent}%</strong>
+                  <strong>Sizing Lever</strong>
+                  <strong>
+                    {targetQtyValue > 0 ? formatNumber(targetQtyValue, isCrypto ? 2 : 0) : "--"}{" "}
+                    {isCrypto ? "units" : "shares"}
+                  </strong>
                 </div>
                 <input
                   type="range"
                   min="0"
-                  max="100"
-                  value={targetPercent}
-                  onChange={(event) => setTargetPercent(Number(event.target.value))}
+                  max={targetSliderMax}
+                  step={targetSliderStep}
+                  value={targetQtyValue}
+                  onChange={(event) => setTargetSize(event.target.value)}
                   className="algo-v2-range"
                 />
                 <div className="algo-v2-slider-scale">
-                  <span>0%</span>
-                  <span>Current: {currentPercent}%</span>
-                  <span>100%</span>
+                  <span>Smaller</span>
+                  <span>
+                    Current: {formatNumber(Math.abs(currentQty), isCrypto ? 2 : 0)}{" "}
+                    {isCrypto ? "units" : "shares"}
+                  </span>
+                  <span>Larger</span>
                 </div>
               </div>
 
@@ -451,23 +520,36 @@ export function AlgoControllerV2({
                   <span className="algo-v2-stat-label">Pending Change</span>
                   <strong className={pendingChange >= 0 ? "is-positive" : "is-negative"}>
                     {pendingChange >= 0 ? "+" : ""}
-                    {pendingChange}%
+                    {formatNumber(pendingChange, isCrypto ? 2 : 0)} {isCrypto ? "units" : "shares"}
                   </strong>
                 </div>
                 <div>
-                  <span className="algo-v2-stat-label">Position</span>
-                  <strong>{formatNumber(currentQty, 4)} shares</strong>
+                  <span className="algo-v2-stat-label">Current Position</span>
+                  <strong>
+                    {formatNumber(currentQty, isCrypto ? 4 : 0)} {isCrypto ? "units" : "shares"}
+                  </strong>
                 </div>
                 <div>
-                  <span className="algo-v2-stat-label">Snapshot</span>
-                  <strong>{formatTimestamp(snapshot?.latestTradeTimestamp ?? null)}</strong>
+                  <span className="algo-v2-stat-label">Ready To Play</span>
+                  <strong>{normalizedSymbol && targetQtyValue > 0 ? "Yes" : "Add market + size"}</strong>
                 </div>
               </div>
             </section>
 
             <aside className="algo-v2-side-card">
-              <h3 className="algo-v2-mini-title">Live Inputs</h3>
+              <h3 className="algo-v2-mini-title">Trade Setup</h3>
               <div className="algo-v2-mini-list">
+                <div>
+                  <span>Selected market</span>
+                  <strong>{normalizedSymbol || "--"}</strong>
+                </div>
+                <div>
+                  <span>Selected size</span>
+                  <strong>
+                    {targetQtyValue > 0 ? formatNumber(targetQtyValue, isCrypto ? 2 : 0) : "--"}{" "}
+                    {isCrypto ? "units" : "shares"}
+                  </strong>
+                </div>
                 <div>
                   <span>Latest price</span>
                   <strong>{snapshot ? formatMoney(snapshot.latestPrice) : "--"}</strong>
@@ -477,12 +559,12 @@ export function AlgoControllerV2({
                   <strong>{activeController?.status ?? "UNSET"}</strong>
                 </div>
                 <div>
-                  <span>Strategy</span>
-                  <strong>{activeController?.strategyType ?? "NONE"}</strong>
-                </div>
-                <div>
                   <span>Daily P&amp;L</span>
                   <strong>{snapshot ? formatSignedMoney(snapshot.dailyPnL) : "--"}</strong>
+                </div>
+                <div>
+                  <span>Snapshot</span>
+                  <strong>{formatTimestamp(snapshot?.latestTradeTimestamp ?? null)}</strong>
                 </div>
               </div>
             </aside>

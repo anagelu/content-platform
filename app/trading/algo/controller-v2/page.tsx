@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { getAlpacaControllerHistory, getAlpacaExecutionState } from "../actions";
 import { AlgoControllerV2 } from "./algo-controller-v2";
 
+type ControllerHistory = Awaited<ReturnType<typeof getAlpacaControllerHistory>>;
+type ExecutionState = Awaited<ReturnType<typeof getAlpacaExecutionState>>;
+
 export default async function TradingAlgoControllerV2Page({
   searchParams,
 }: {
@@ -15,11 +18,23 @@ export default async function TradingAlgoControllerV2Page({
     redirect("/login");
   }
 
-  const [controllers, executionState, params] = await Promise.all([
-    getAlpacaControllerHistory(),
-    getAlpacaExecutionState(),
-    searchParams ? searchParams : Promise.resolve(undefined),
-  ]);
+  const params = searchParams ? await searchParams : undefined;
+
+  let controllers: ControllerHistory = [];
+  let executionState: ExecutionState = { positions: [], openOrders: [], recentOrders: [] };
+  let initialError = "";
+
+  try {
+    [controllers, executionState] = await Promise.all([
+      getAlpacaControllerHistory(),
+      getAlpacaExecutionState(),
+    ]);
+  } catch (error) {
+    initialError =
+      error instanceof Error
+        ? error.message
+        : "Unable to load the latest Alpaca state right now.";
+  }
 
   const totalUnrealizedPl = executionState.positions.reduce(
     (sum, position) => sum + position.unrealizedPl,
@@ -55,6 +70,7 @@ export default async function TradingAlgoControllerV2Page({
           initialControllers={controllers}
           initialPositions={executionState.positions}
           initialPnl={totalUnrealizedPl}
+          initialError={initialError}
         />
       </div>
     </main>
