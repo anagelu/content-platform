@@ -210,7 +210,9 @@ export function AlgoControllerV2({
   const router = useRouter();
   const controllerSymbols = initialControllers.map((controller) => controller.symbol);
   const positionSymbols = initialPositions.map((position) => position.symbol);
-  const availableSymbols = Array.from(new Set([initialSymbol, ...controllerSymbols, ...positionSymbols])).filter(Boolean);
+  const suggestedSymbols = Array.from(
+    new Set([initialSymbol, ...controllerSymbols, ...positionSymbols]),
+  ).filter(Boolean);
 
   const [mode, setMode] = useState<ControllerMode>("standard");
   const [symbol, setSymbol] = useState(initialSymbol);
@@ -361,18 +363,19 @@ export function AlgoControllerV2({
 
         <div className="algo-v2-controls-row">
           <label className="algo-v2-field">
-            <span className="algo-v2-field-label">Symbol</span>
-            <select
-              className="form-select"
+            <span className="algo-v2-field-label">Market Ticker</span>
+            <input
+              className="form-input"
               value={symbol}
-              onChange={(event) => setSymbol(event.target.value)}
-            >
-              {availableSymbols.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
+              list="algo-v2-market-suggestions"
+              placeholder="SPY or BTC/USD"
+              onChange={(event) => setSymbol(event.target.value.toUpperCase())}
+            />
+            <datalist id="algo-v2-market-suggestions">
+              {suggestedSymbols.map((option) => (
+                <option key={option} value={option} />
               ))}
-            </select>
+            </datalist>
           </label>
 
           <div className="algo-v2-mode-toggle" role="tablist" aria-label="Controller mode">
