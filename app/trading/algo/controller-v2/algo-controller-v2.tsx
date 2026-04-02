@@ -251,6 +251,7 @@ export function AlgoControllerV2({
   const [bias, setBias] = useState<Bias>("bullish");
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [controllers, setControllers] = useState(initialControllers);
+  const [positions, setPositions] = useState(initialPositions);
   const [error, setError] = useState(initialError);
   const [actionNotice, setActionNotice] = useState("");
   const [isBusy, setIsBusy] = useState(false);
@@ -261,8 +262,8 @@ export function AlgoControllerV2({
     [controllers, normalizedSymbol],
   );
   const activePosition = useMemo(
-    () => initialPositions.find((position) => position.symbol === normalizedSymbol) ?? null,
-    [initialPositions, normalizedSymbol],
+    () => positions.find((position) => position.symbol === normalizedSymbol) ?? null,
+    [positions, normalizedSymbol],
   );
   const isCrypto = isCryptoLikeSymbol(normalizedSymbol);
   const targetQtyValue = Math.max(Number(targetSize) || 0, 0);
@@ -374,6 +375,28 @@ export function AlgoControllerV2({
         setControllers((current) => {
           const next = current.filter((controller) => controller.symbol !== result.controller?.symbol);
           return result.controller ? [result.controller, ...next] : next;
+        });
+        setPositions((current) => {
+          const next = current.filter((position) => position.symbol !== normalizedSymbol);
+          const snapshotPosition = result.snapshot.position;
+
+          if (!snapshotPosition || snapshotPosition.qty === 0) {
+            return next;
+          }
+
+          return [
+            {
+              symbol: normalizedSymbol,
+              qty: snapshotPosition.qty,
+              availableQty: snapshotPosition.qty,
+              heldForOrdersQty: 0,
+              marketValue: snapshotPosition.marketValue,
+              avgEntryPrice: snapshotPosition.avgEntryPrice,
+              side: snapshotPosition.qty >= 0 ? "long" : "short",
+              unrealizedPl: snapshotPosition.unrealizedPl,
+            },
+            ...next,
+          ];
         });
         router.refresh();
       } catch (commandError) {

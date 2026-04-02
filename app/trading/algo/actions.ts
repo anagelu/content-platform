@@ -498,8 +498,21 @@ export async function runAlpacaTradeController(input: {
       allOrdersReachedFinalState =
         allOrdersReachedFinalState && resolution.reachedFinalState;
       actionSummary = `Submitted buy order for ${buyQty} ${normalized.symbol}.`;
-    } else if (normalized.strategyType === "NONE" && currentQty >= normalized.targetQty) {
-      actionSummary = `Controller is already at or above the target size for ${normalized.symbol}.`;
+    } else if (normalized.strategyType === "NONE" && currentQty > normalized.targetQty) {
+      const sellQty = currentQty - normalized.targetQty;
+      const resolution = await submitTrackedPaperOrder({
+        userId,
+        symbol: normalized.symbol,
+        qty: sellQty,
+        side: "sell",
+        clientOrderId: `controller-${input.command.toLowerCase()}-${normalized.symbol.toLowerCase().replaceAll("/", "-")}-${Date.now()}`,
+      });
+      orders.push(resolution.order);
+      allOrdersReachedFinalState =
+        allOrdersReachedFinalState && resolution.reachedFinalState;
+      actionSummary = `Submitted sell order for ${sellQty} ${normalized.symbol} to match the target size.`;
+    } else if (normalized.strategyType === "NONE" && currentQty === normalized.targetQty) {
+      actionSummary = `Controller is already at the target size for ${normalized.symbol}.`;
     } else {
       actionSummary =
         input.command === "RESUME"
@@ -525,18 +538,20 @@ export async function runAlpacaTradeController(input: {
   }
 
   if (input.command === "PAUSE" || input.command === "EJECT") {
-    if (currentQty > 0) {
+    if (currentQty !== 0) {
+      const exitQty = Math.abs(currentQty);
+      const exitSide = currentQty > 0 ? "sell" : "buy";
       const resolution = await submitTrackedPaperOrder({
         userId,
         symbol: normalized.symbol,
-        qty: currentQty,
-        side: "sell",
+        qty: exitQty,
+        side: exitSide,
         clientOrderId: `controller-${input.command.toLowerCase()}-${normalized.symbol.toLowerCase().replaceAll("/", "-")}-${Date.now()}`,
       });
       orders.push(resolution.order);
       allOrdersReachedFinalState =
         allOrdersReachedFinalState && resolution.reachedFinalState;
-      actionSummary = `Submitted sell order to exit ${currentQty} ${normalized.symbol}.`;
+      actionSummary = `Submitted ${exitSide} order to flatten ${exitQty} ${normalized.symbol}.`;
     } else {
       actionSummary = `No open position was found for ${normalized.symbol}, so the controller state was updated without sending a sell order.`;
     }
