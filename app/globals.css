@@ -999,6 +999,18 @@ main {
   .home-sidebar {
     position: static;
   }
+
+  .algo-v2-panel-grid,
+  .algo-v2-turbo-grid,
+  .algo-v2-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .algo-v2-topbar,
+  .algo-v2-controls-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 @media (max-width: 960px) {
@@ -1151,6 +1163,520 @@ main {
 .controller-button-ejected .controller-button-badge,
 .controller-button-pending .controller-button-badge {
   background: rgba(255, 255, 255, 0.72);
+}
+
+.algo-v2-shell {
+  margin-top: 1.5rem;
+}
+
+.algo-v2-stage {
+  display: grid;
+  gap: 1rem;
+  padding: 1.2rem;
+  border-radius: 28px;
+  border: 1px solid rgba(217, 207, 190, 0.88);
+  background:
+    radial-gradient(circle at top left, rgba(69, 124, 255, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 240, 232, 0.94));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.84),
+    0 20px 42px rgba(73, 52, 24, 0.08);
+}
+
+.algo-v2-topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem 1.1rem;
+  border-radius: 20px;
+  border: 1px solid rgba(214, 222, 236, 0.9);
+  background: linear-gradient(180deg, rgba(252, 254, 255, 0.98), rgba(240, 245, 252, 0.92));
+}
+
+.algo-v2-topbar-left,
+.algo-v2-topbar-right {
+  display: flex;
+  gap: 0.9rem;
+  align-items: center;
+}
+
+.algo-v2-symbol-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #6a46e5, #8b5cf6);
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 800;
+  box-shadow: 0 10px 24px rgba(106, 70, 229, 0.28);
+}
+
+.algo-v2-title {
+  margin: 0 0 0.12rem;
+  font-size: clamp(1.3rem, 2.2vw, 1.8rem);
+  line-height: 1.08;
+}
+
+.algo-v2-subtitle {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+.algo-v2-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin: 0 0.4rem 0 0.8rem;
+  border-radius: 999px;
+}
+
+.algo-v2-dot:first-child {
+  margin-left: 0;
+}
+
+.algo-v2-dot.is-green {
+  background: #22c55e;
+}
+
+.algo-v2-dot.is-blue {
+  background: #60a5fa;
+}
+
+.algo-v2-pnl-label {
+  color: #6b7280;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.algo-v2-pnl {
+  font-size: clamp(1.35rem, 2.4vw, 1.85rem);
+  line-height: 1;
+}
+
+.algo-v2-pnl.is-positive,
+.algo-v2-health-value.is-positive,
+.algo-v2-health-callout .is-positive,
+.algo-v2-stat-row .is-positive {
+  color: #15803d;
+}
+
+.algo-v2-pnl.is-negative,
+.algo-v2-health-value.is-negative,
+.algo-v2-health-callout .is-negative,
+.algo-v2-stat-row .is-negative {
+  color: #b91c1c;
+}
+
+.algo-v2-health-value.is-neutral,
+.algo-v2-health-callout .is-neutral {
+  color: #a16207;
+}
+
+.algo-v2-controls-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: end;
+}
+
+.algo-v2-field {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 180px;
+}
+
+.algo-v2-field-label {
+  color: #7c4f18;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.algo-v2-mode-toggle {
+  display: inline-flex;
+  padding: 0.3rem;
+  border-radius: 18px;
+  border: 1px solid rgba(209, 213, 219, 0.92);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 245, 249, 0.92));
+  box-shadow: 0 8px 20px rgba(148, 163, 184, 0.12);
+}
+
+.algo-v2-mode-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.82rem 1.4rem;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: #374151;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.algo-v2-mode-button.is-active.is-standard {
+  background: linear-gradient(180deg, #3791ff, #1d4ed8);
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(29, 78, 216, 0.24);
+}
+
+.algo-v2-mode-button.is-active.is-turbo {
+  background: linear-gradient(180deg, #ef4444, #dc2626);
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(220, 38, 38, 0.24);
+}
+
+.algo-v2-mode-tag {
+  padding: 0.18rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.algo-v2-panel-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.9fr);
+  gap: 1rem;
+}
+
+.algo-v2-main-card,
+.algo-v2-side-card {
+  padding: 1.25rem 1.3rem;
+  border-radius: 24px;
+  border: 1px solid rgba(214, 222, 236, 0.9);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 252, 0.92));
+  box-shadow: 0 16px 34px rgba(148, 163, 184, 0.12);
+}
+
+.algo-v2-panel-heading {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.algo-v2-panel-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 800;
+  box-shadow: 0 10px 20px rgba(59, 130, 246, 0.2);
+}
+
+.algo-v2-panel-icon.is-standard {
+  background: linear-gradient(180deg, #60a5fa, #2563eb);
+}
+
+.algo-v2-panel-icon.is-turbo {
+  background: linear-gradient(180deg, #fb7185, #dc2626);
+}
+
+.algo-v2-panel-title,
+.algo-v2-mini-title {
+  margin: 0 0 0.2rem;
+}
+
+.algo-v2-panel-copy {
+  margin: 0;
+  color: #6b7280;
+  line-height: 1.55;
+}
+
+.algo-v2-gauge-shell {
+  position: relative;
+  width: min(100%, 360px);
+  height: 210px;
+  margin: 0 auto 1rem;
+}
+
+.algo-v2-gauge-arc {
+  position: absolute;
+  inset: 0;
+  border-radius: 360px 360px 0 0;
+  background:
+    conic-gradient(from 180deg, #dc2626 0deg, #f59e0b 58deg, #fef08a 102deg, #84cc16 140deg, #166534 180deg);
+  clip-path: inset(0 0 48% 0);
+  box-shadow:
+    inset 0 0 0 10px rgba(255, 255, 255, 0.72),
+    0 12px 28px rgba(17, 24, 39, 0.12);
+}
+
+.algo-v2-gauge-arc::after {
+  content: "";
+  position: absolute;
+  inset: 34px;
+  border-radius: 999px 999px 0 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(240, 244, 251, 0.94));
+  clip-path: inset(0 0 40% 0);
+}
+
+.algo-v2-gauge-needle {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  width: 10px;
+  height: 118px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #334155, #0f172a);
+  transform-origin: 50% 100%;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.22);
+}
+
+.algo-v2-gauge-core {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  width: 34px;
+  height: 34px;
+  margin-left: -17px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #475569, #0f172a);
+  border: 4px solid #cbd5e1;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.22);
+}
+
+.algo-v2-health-summary {
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.algo-v2-health-summary p,
+.algo-v2-health-callout p {
+  margin: 0.3rem 0 0;
+  color: #6b7280;
+  line-height: 1.55;
+}
+
+.algo-v2-health-meter-card {
+  padding: 0.95rem 1rem;
+  margin-bottom: 1rem;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #6b7280, #475569);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.algo-v2-meter-label {
+  margin: 0 0 0.55rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.algo-v2-health-meter {
+  position: relative;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.32);
+  background: rgba(15, 23, 42, 0.16);
+  overflow: hidden;
+}
+
+.algo-v2-health-meter-track {
+  position: absolute;
+  inset: 4px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #dc2626 0%, #f59e0b 30%, #fde047 55%, #22c55e 100%);
+}
+
+.algo-v2-health-meter-thumb {
+  position: absolute;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  margin-top: -10px;
+  margin-left: -10px;
+  border-radius: 999px;
+  background: #fff;
+  border: 2px solid rgba(15, 23, 42, 0.18);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.22);
+}
+
+.algo-v2-health-meter-scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.algo-v2-bias-row {
+  margin-bottom: 1rem;
+}
+
+.algo-v2-bias-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.algo-v2-bias-button {
+  padding: 0.82rem 0.9rem;
+  border-radius: 14px;
+  border: 1px solid rgba(209, 213, 219, 0.92);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 244, 246, 0.92));
+  color: #374151;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.algo-v2-bias-button.is-active.is-bearish {
+  background: linear-gradient(180deg, #f87171, #dc2626);
+  color: #fff;
+}
+
+.algo-v2-bias-button.is-active.is-neutral {
+  background: linear-gradient(180deg, #d1d5db, #9ca3af);
+  color: #111827;
+}
+
+.algo-v2-bias-button.is-active.is-bullish {
+  background: linear-gradient(180deg, #4ade80, #15803d);
+  color: #fff;
+}
+
+.algo-v2-slider-card {
+  padding: 1rem 1.05rem;
+  border-radius: 18px;
+  border: 1px solid rgba(214, 222, 236, 0.92);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.92));
+}
+
+.algo-v2-slider-header,
+.algo-v2-slider-scale,
+.algo-v2-stat-row,
+.algo-v2-mini-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+}
+
+.algo-v2-range {
+  width: 100%;
+  margin: 0.9rem 0 0.6rem;
+  accent-color: #2563eb;
+}
+
+.algo-v2-range.is-purple {
+  accent-color: #7c3aed;
+}
+
+.algo-v2-slider-scale {
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.algo-v2-stat-row {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(203, 213, 225, 0.78);
+}
+
+.algo-v2-stat-row > div,
+.algo-v2-mini-list {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.algo-v2-stat-label {
+  color: #6b7280;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.algo-v2-turbo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.algo-v2-contract-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.algo-v2-contract-card {
+  display: grid;
+  gap: 0.18rem;
+  padding: 0.9rem 0.95rem;
+  border-radius: 16px;
+  border: 1px solid rgba(203, 213, 225, 0.88);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 244, 246, 0.92));
+}
+
+.algo-v2-contract-card span {
+  color: #6b7280;
+  font-size: 0.92rem;
+}
+
+.algo-v2-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.algo-v2-action-button {
+  display: grid;
+  gap: 0.25rem;
+  min-height: 6.8rem;
+  padding: 1rem 1.1rem;
+  border: none;
+  border-radius: 20px;
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 16px 32px rgba(30, 41, 59, 0.16);
+}
+
+.algo-v2-action-button.is-primary {
+  background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+}
+
+.algo-v2-action-button.is-positive {
+  background: linear-gradient(180deg, #22c55e, #15803d);
+}
+
+.algo-v2-action-button.is-danger {
+  background: linear-gradient(180deg, #f87171, #dc2626);
+}
+
+.algo-v2-action-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.algo-v2-action-label {
+  font-size: 1.55rem;
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.algo-v2-action-copy {
+  color: rgba(255, 255, 255, 0.88);
+  line-height: 1.45;
 }
 
 .brand-lockup {
@@ -1919,7 +2445,9 @@ main {
   .book-reader-outline-header,
   .book-reader-sequence-bar,
   .book-reader-panel-header,
-  .book-reader-folio {
+  .book-reader-folio,
+  .algo-v2-topbar,
+  .algo-v2-controls-row {
     flex-direction: column;
   }
 
@@ -1935,6 +2463,11 @@ main {
 
   .share-panel-header {
     flex-direction: column;
+  }
+
+  .algo-v2-bias-buttons,
+  .algo-v2-mode-toggle {
+    width: 100%;
   }
 
   .about-story-index {
@@ -2732,20 +3265,6 @@ main {
   color: #3f382f;
 }
 
-.book-reader-story-bible {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin: 0 0 1rem;
-}
-
-.book-reader-story-bible-card {
-  padding: 0.8rem 0.85rem;
-  border-radius: 14px;
-  border: 1px solid rgba(221, 200, 167, 0.72);
-  background: rgba(255, 252, 246, 0.8);
-}
-
 .book-reader-nav {
   display: grid;
   gap: 0.7rem;
@@ -2920,20 +3439,6 @@ main {
   align-items: flex-start;
 }
 
-.book-reader-context-band {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin: 1rem 0 0.85rem;
-}
-
-.book-reader-context-card {
-  padding: 0.8rem 0.85rem;
-  border-radius: 14px;
-  border: 1px solid rgba(221, 200, 167, 0.72);
-  background: rgba(255, 252, 246, 0.82);
-}
-
 .book-reader-label {
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2965,11 +3470,6 @@ main {
   font-weight: 600;
 }
 
-.book-reader-chip-setting {
-  background: rgba(124, 79, 24, 0.12);
-  color: #7c4f18;
-}
-
 .book-reader-summary {
   margin: 0.95rem 0 1.2rem;
   color: #54473a;
@@ -2996,20 +3496,10 @@ main {
 
 .book-reader-prose p {
   margin: 0 0 1.35rem;
-  text-wrap: pretty;
 }
 
 .book-reader-prose p:first-of-type {
   font-size: 1.12rem;
-}
-
-.book-reader-prose p:first-of-type::first-letter {
-  float: left;
-  margin: 0.08rem 0.38rem 0 0;
-  color: #7c4f18;
-  font-size: 3.2rem;
-  line-height: 0.9;
-  font-weight: 700;
 }
 
 .book-reader-prose h1,
@@ -3283,6 +3773,9 @@ main {
   .book-workbench,
   .book-reader-layout,
   .book-page-hero,
+  .algo-v2-panel-grid,
+  .algo-v2-turbo-grid,
+  .algo-v2-actions,
   .about-hero,
   .trading-grid,
   .trading-detail-grid,
@@ -3296,11 +3789,11 @@ main {
   .about-story-card,
   .about-hero-panel,
   .book-page-hero,
-  .book-reader-panel {
+  .book-reader-panel,
+  .algo-v2-stage,
+  .algo-v2-main-card,
+  .algo-v2-side-card {
     padding: 1.15rem;
   }
 
-  .book-reader-prose p:first-of-type::first-letter {
-    font-size: 2.6rem;
-  }
 }
