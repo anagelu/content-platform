@@ -48,6 +48,10 @@ export type AlpacaPaperStrategySnapshot = {
   latestTradeTimestamp: string;
   quoteTimestamp: string;
   lastBarTimestamp: string | null;
+  trendStrength: number;
+  priceChangePercent: number;
+  relativeVolume: number | null;
+  signalAgeSeconds: number | null;
 };
 
 function parsePositiveNumber(value: string | undefined, fallback: number) {
@@ -252,6 +256,66 @@ function buildNoStrategyDecision(): AlpacaPaperStrategyDecision {
   };
 }
 
+function calculatePriceChangePercent(currentPrice: number, referencePrice: number | null) {
+  if (!referencePrice || referencePrice <= 0) {
+    return 0;
+  }
+
+  return ((currentPrice - referencePrice) / referencePrice) * 100;
+}
+
+function calculateTrendStrength(closes: number[], latestPrice: number) {
+  if (closes.length === 0) {
+    return 0;
+  }
+
+  const recentWindow = closes.slice(-5);
+  const baselineWindow = closes.slice(-20);
+  const recentAverage = calculateSimpleMovingAverage(recentWindow);
+  const baselineAverage = calculateSimpleMovingAverage(baselineWindow);
+
+  if (baselineAverage <= 0) {
+    return 0;
+  }
+
+  const priceVsBaseline = ((latestPrice - baselineAverage) / baselineAverage) * 100;
+  const momentum = recentAverage > 0 ? ((latestPrice - recentAverage) / recentAverage) * 100 : 0;
+
+  return Math.max(-1, Math.min(1, (priceVsBaseline * 0.65 + momentum * 0.35) / 4));
+}
+
+function calculateRelativeVolume(volumes: number[]) {
+  if (volumes.length < 2) {
+    return null;
+  }
+
+  const latestVolume = volumes.at(-1) ?? 0;
+  const baselineVolumes = volumes.slice(0, -1);
+  const averageVolume = calculateSimpleMovingAverage(baselineVolumes);
+
+  if (averageVolume <= 0) {
+    return null;
+  }
+
+  return latestVolume / averageVolume;
+}
+
+function calculateSignalAgeSeconds(...timestamps: Array<string | null | undefined>) {
+  const timestamp = timestamps.find((value): value is string => Boolean(value));
+
+  if (!timestamp) {
+    return null;
+  }
+
+  const ageMs = Date.now() - new Date(timestamp).getTime();
+
+  if (!Number.isFinite(ageMs) || ageMs < 0) {
+    return null;
+  }
+
+  return Math.round(ageMs / 1000);
+}
+
 export async function getAlpacaPaperStrategySnapshot(input?: {
   symbol?: string;
   strategyType?: AlpacaPaperStrategyType;
@@ -351,7 +415,21 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
   }
 
   const closes = bars.map((bar) => bar.close);
+  const volumes = bars.map((bar) => bar.volume);
   const hasLongPosition = Boolean(position && position.qty > 0);
+  const previousClose = closes.at(-2) ?? null;
+  const priceChangePercent = Number(
+    calculatePriceChangePercent(latestPrice, previousClose).toFixed(2),
+  );
+  const trendStrength = Number(calculateTrendStrength(closes, latestPrice).toFixed(3));
+  const relativeVolumeRaw = calculateRelativeVolume(volumes);
+  const relativeVolume =
+    relativeVolumeRaw === null ? null : Number(relativeVolumeRaw.toFixed(2));
+  const signalAgeSeconds = calculateSignalAgeSeconds(
+    trade.timestamp,
+    quote.timestamp,
+    bars.at(-1)?.timestamp ?? null,
+  );
   const strategy =
     strategyType === "NONE"
       ? {
@@ -428,6 +506,10 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
       latestTradeTimestamp: trade.timestamp,
       quoteTimestamp: quote.timestamp,
       lastBarTimestamp: bars.at(-1)?.timestamp ?? null,
+      trendStrength,
+      priceChangePercent,
+      relativeVolume,
+      signalAgeSeconds,
     };
   }
 
@@ -461,5 +543,9 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
     latestTradeTimestamp: trade.timestamp,
     quoteTimestamp: quote.timestamp,
     lastBarTimestamp: bars.at(-1)?.timestamp ?? null,
+    trendStrength,
+    priceChangePercent,
+    relativeVolume,
+    signalAgeSeconds,
   };
 }

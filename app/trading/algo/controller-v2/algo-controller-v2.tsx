@@ -103,13 +103,27 @@ function getHealthScore(snapshot: Snapshot | null, positionPnl: number) {
     return 52;
   }
 
-  let score = snapshot.signal.action === "buy" ? 74 : snapshot.signal.action === "sell" ? 34 : 56;
+  const trendComponent = 20 + snapshot.trendStrength * 20;
+  const changeComponent = clamp(snapshot.priceChangePercent * 3, -10, 10);
+  const volumeComponent =
+    snapshot.relativeVolume === null
+      ? 12
+      : clamp((snapshot.relativeVolume - 1) * 18 + 12, 0, 24);
+  const timeComponent =
+    snapshot.signalAgeSeconds === null
+      ? 8
+      : clamp(15 - snapshot.signalAgeSeconds / 120, 0, 15);
+  const signalComponent =
+    snapshot.signal.action === "buy" ? 16 : snapshot.signal.action === "sell" ? -10 : 6;
+  const pnlComponent = positionPnl > 0 ? 7 : positionPnl < 0 ? -8 : 0;
 
-  if (positionPnl > 0) {
-    score += 8;
-  } else if (positionPnl < 0) {
-    score -= 10;
-  }
+  let score =
+    trendComponent +
+    changeComponent +
+    volumeComponent +
+    timeComponent +
+    signalComponent +
+    pnlComponent;
 
   if (snapshot.dailyPnL <= -Math.abs(snapshot.maxDailyLoss)) {
     score -= 20;
@@ -180,6 +194,39 @@ function getBiasButtonClass(currentBias: Bias, value: Bias) {
   return currentBias === value
     ? `algo-v2-bias-button is-active is-${value}`
     : "algo-v2-bias-button";
+}
+
+function formatPercent(value: number | null, maximumFractionDigits = 2) {
+  if (value === null || !Number.isFinite(value)) {
+    return "--";
+  }
+
+  const prefix = value > 0 ? "+" : "";
+  return `${prefix}${value.toFixed(maximumFractionDigits)}%`;
+}
+
+function formatRelativeVolume(value: number | null) {
+  if (value === null || !Number.isFinite(value)) {
+    return "--";
+  }
+
+  return `${value.toFixed(2)}x`;
+}
+
+function formatSignalAge(value: number | null) {
+  if (value === null || !Number.isFinite(value)) {
+    return "Unavailable";
+  }
+
+  if (value < 60) {
+    return `${value}s ago`;
+  }
+
+  if (value < 3600) {
+    return `${Math.round(value / 60)}m ago`;
+  }
+
+  return `${Math.round(value / 3600)}h ago`;
 }
 
 function buildTurboContracts({
@@ -553,8 +600,8 @@ export function AlgoControllerV2({
                   </strong>
                 </div>
                 <div>
-                  <span className="algo-v2-stat-label">Ready To Play</span>
-                  <strong>{normalizedSymbol && targetQtyValue > 0 ? "Yes" : "Add market + size"}</strong>
+                  <span className="algo-v2-stat-label">Signal Freshness</span>
+                  <strong>{formatSignalAge(snapshot?.signalAgeSeconds ?? null)}</strong>
                 </div>
               </div>
             </section>
@@ -578,6 +625,14 @@ export function AlgoControllerV2({
                   <strong>{snapshot ? formatMoney(snapshot.latestPrice) : "--"}</strong>
                 </div>
                 <div>
+                  <span>Price change</span>
+                  <strong>{formatPercent(snapshot?.priceChangePercent ?? null)}</strong>
+                </div>
+                <div>
+                  <span>Relative volume</span>
+                  <strong>{formatRelativeVolume(snapshot?.relativeVolume ?? null)}</strong>
+                </div>
+                <div>
                   <span>Controller state</span>
                   <strong>{activeController?.status ?? "UNSET"}</strong>
                 </div>
@@ -586,7 +641,7 @@ export function AlgoControllerV2({
                   <strong>{snapshot ? formatSignedMoney(snapshot.dailyPnL) : "--"}</strong>
                 </div>
                 <div>
-                  <span>Snapshot</span>
+                  <span>Signal time</span>
                   <strong>{formatTimestamp(snapshot?.latestTradeTimestamp ?? null)}</strong>
                 </div>
               </div>
@@ -698,6 +753,20 @@ export function AlgoControllerV2({
 
             <aside className="algo-v2-side-card">
               <h3 className="algo-v2-mini-title">Suggested Contracts</h3>
+              <div className="algo-v2-mini-list">
+                <div>
+                  <span>Price change</span>
+                  <strong>{formatPercent(snapshot?.priceChangePercent ?? null)}</strong>
+                </div>
+                <div>
+                  <span>Relative volume</span>
+                  <strong>{formatRelativeVolume(snapshot?.relativeVolume ?? null)}</strong>
+                </div>
+                <div>
+                  <span>Signal freshness</span>
+                  <strong>{formatSignalAge(snapshot?.signalAgeSeconds ?? null)}</strong>
+                </div>
+              </div>
               <div className="algo-v2-contract-list">
                 {turboContracts.map((contract) => (
                   <article key={contract.id} className="algo-v2-contract-card">
