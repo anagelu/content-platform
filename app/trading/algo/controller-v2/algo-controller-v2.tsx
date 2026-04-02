@@ -22,6 +22,16 @@ type GaugeResult = {
   reason: string;
   subscores: GaugeSubscore[];
 };
+type ConfluenceModel = {
+  gauges: GaugeResult[];
+  overallScore: number | null;
+  overallBand: string;
+  overallTone: string;
+  alignmentCount: number;
+  alignmentLabel: string;
+  reason: string;
+  isReady: boolean;
+};
 type StrategyProfile = {
   label: string;
   description: string;
@@ -397,31 +407,17 @@ function buildConfluenceModel({
   daysToExpiry: number;
   mode: ControllerMode;
   profile: StrategyProfile;
-}) {
+}): ConfluenceModel {
   if (!snapshot) {
-    const placeholderKeys: GaugeKey[] =
-      mode === "turbo"
-        ? ["trend", "momentum", "execution", "contractFitness"]
-        : ["trend", "momentum", "execution"];
-    const gauges = placeholderKeys.map((key) =>
-      createGauge(
-        key,
-        key === "contractFitness"
-          ? "Contract Fitness"
-          : key.charAt(0).toUpperCase() + key.slice(1),
-        [{ label: "Awaiting snapshot", score: 50 }],
-        { "Awaiting snapshot": 1 },
-      ),
-    );
-
     return {
-      gauges,
-      overallScore: 50,
-      overallBand: "Mixed",
+      gauges: [],
+      overallScore: null,
+      overallBand: "Unavailable",
       overallTone: "is-neutral",
       alignmentCount: 0,
-      alignmentLabel: `0 of ${gauges.length} aligned`,
-      reason: "Load a market snapshot to see confluence across the gauges.",
+      alignmentLabel: mode === "turbo" ? "0 of 4 aligned" : "0 of 3 aligned",
+      reason: "A live market snapshot is required before confluence can be scored.",
+      isReady: false,
     };
   }
 
@@ -569,6 +565,7 @@ function buildConfluenceModel({
         : alignmentCount >= Math.ceil(visibleGauges.length / 2)
           ? "Most gauges agree, but one area still needs confirmation."
           : "Confluence is thin right now, so the setup is still fragmented.",
+    isReady: true,
   };
 }
 
@@ -645,6 +642,7 @@ export function AlgoControllerV2({
   const [controllers, setControllers] = useState(initialControllers);
   const [positions, setPositions] = useState(initialPositions);
   const [error, setError] = useState(initialError);
+  const [isSnapshotLoading, setIsSnapshotLoading] = useState(false);
   const [actionNotice, setActionNotice] = useState("");
   const [isBusy, setIsBusy] = useState(false);
   const normalizedSymbol = normalizeMarketInput(symbol);
@@ -686,8 +684,11 @@ export function AlgoControllerV2({
 
     if (!normalizedSymbol) {
       setSnapshot(null);
+      setIsSnapshotLoading(false);
       return;
     }
+
+    setIsSnapshotLoading(true);
 
     startTransition(async () => {
       try {
@@ -709,11 +710,14 @@ export function AlgoControllerV2({
 
         setSnapshot(result);
         setBias(getDefaultBiasFromSignal(result.signal.action));
+        setIsSnapshotLoading(false);
       } catch (snapshotError) {
         if (cancelled) {
           return;
         }
 
+        setSnapshot(null);
+        setIsSnapshotLoading(false);
         setError(
           snapshotError instanceof Error
             ? snapshotError.message
@@ -747,6 +751,13 @@ export function AlgoControllerV2({
     targetDelta: deltaTarget,
     dte: daysToExpiry,
   });
+  const confluenceStatusReason = !normalizedSymbol
+    ? "Enter a market to begin scoring confluence."
+    : isSnapshotLoading
+      ? `Loading ${normalizedSymbol} snapshot...`
+      : error
+        ? `Confluence unavailable: ${error}`
+        : confluence.reason;
 
   async function handleControllerCommand(command: "PLAY" | "PAUSE" | "RESUME" | "EJECT") {
     setError("");
@@ -913,27 +924,38 @@ export function AlgoControllerV2({
                 <div className="algo-v2-confluence-header">
                   <div>
                     <p className="algo-v2-meter-label">Overall Confluence</p>
-                    <strong className={`algo-v2-confluence-score ${confluence.overallTone}`}>
-                      {confluence.overallScore} · {confluence.overallBand}
-                    </strong>
+                    {confluence.isReady ? (
+                      <strong className={`algo-v2-confluence-score ${confluence.overallTone}`}>
+                        {confluence.overallScore} · {confluence.overallBand}
+                      </strong>
+                    ) : (
+                      <strong className="algo-v2-confluence-score is-neutral">
+                        {isSnapshotLoading ? "Loading" : "Unavailable"}
+                      </strong>
+                    )}
                   </div>
                   <div className="algo-v2-confluence-meta">
                     <strong>{confluence.alignmentLabel}</strong>
                     <span>{STRATEGY_PROFILES[strategyProfile].label}</span>
                   </div>
                 </div>
-                <div className="algo-v2-health-meter">
-                  <div className="algo-v2-health-meter-track" />
-                  <div
-                    className="algo-v2-health-meter-thumb"
-                    style={{ left: `${confluence.overallScore}%` }}
-                  />
-                </div>
-                <p className="algo-v2-confluence-copy">{confluence.reason}</p>
+                {confluence.isReady ? (
+                  <div className="algo-v2-health-meter">
+                    <div className="algo-v2-health-meter-track" />
+                    <div
+                      className="algo-v2-health-meter-thumb"
+                      style={{ left: `${confluence.overallScore}%` }}
+                    />
+                  </div>
+                ) : (
+                  <div className="algo-v2-confluence-empty">Confluence will appear once a valid snapshot loads.</div>
+                )}
+                <p className="algo-v2-confluence-copy">{confluenceStatusReason}</p>
               </div>
 
-              <div className="algo-v2-mini-gauge-grid">
-                {confluence.gauges.map((gauge) => (
+              {confluence.isReady ? (
+                <div className="algo-v2-mini-gauge-grid">
+                  {confluence.gauges.map((gauge) => (
                   <article key={gauge.key} className="algo-v2-mini-gauge-card">
                     <div className="algo-v2-mini-gauge-top">
                       <div>
@@ -960,8 +982,9 @@ export function AlgoControllerV2({
                       </div>
                     </details>
                   </article>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : null}
 
               <div className="algo-v2-slider-card">
                 <div className="algo-v2-slider-header">
@@ -1069,32 +1092,45 @@ export function AlgoControllerV2({
                 <div className="algo-v2-confluence-header">
                   <div>
                     <p className="algo-v2-meter-label">Overall Confluence</p>
-                    <strong className={`algo-v2-confluence-score ${confluence.overallTone}`}>
-                      {confluence.overallScore} · {confluence.overallBand}
-                    </strong>
+                    {confluence.isReady ? (
+                      <strong className={`algo-v2-confluence-score ${confluence.overallTone}`}>
+                        {confluence.overallScore} · {confluence.overallBand}
+                      </strong>
+                    ) : (
+                      <strong className="algo-v2-confluence-score is-neutral">
+                        {isSnapshotLoading ? "Loading" : "Unavailable"}
+                      </strong>
+                    )}
                   </div>
                   <div className="algo-v2-confluence-meta">
                     <strong>{confluence.alignmentLabel}</strong>
                     <span>{STRATEGY_PROFILES[strategyProfile].label}</span>
                   </div>
                 </div>
-                <div className="algo-v2-health-meter">
-                  <div className="algo-v2-health-meter-track" />
-                  <div
-                    className="algo-v2-health-meter-thumb"
-                    style={{ left: `${confluence.overallScore}%` }}
-                  />
-                </div>
-                <div className="algo-v2-health-meter-scale">
-                  <span>Low</span>
-                  <span>Confluence Meter</span>
-                  <span>High</span>
-                </div>
-                <p className="algo-v2-confluence-copy">{confluence.reason}</p>
+                {confluence.isReady ? (
+                  <>
+                    <div className="algo-v2-health-meter">
+                      <div className="algo-v2-health-meter-track" />
+                      <div
+                        className="algo-v2-health-meter-thumb"
+                        style={{ left: `${confluence.overallScore}%` }}
+                      />
+                    </div>
+                    <div className="algo-v2-health-meter-scale">
+                      <span>Low</span>
+                      <span>Confluence Meter</span>
+                      <span>High</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="algo-v2-confluence-empty is-dark">Confluence will appear once a valid snapshot loads.</div>
+                )}
+                <p className="algo-v2-confluence-copy">{confluenceStatusReason}</p>
               </div>
 
-              <div className="algo-v2-mini-gauge-grid is-turbo">
-                {confluence.gauges.map((gauge) => (
+              {confluence.isReady ? (
+                <div className="algo-v2-mini-gauge-grid is-turbo">
+                  {confluence.gauges.map((gauge) => (
                   <article key={gauge.key} className="algo-v2-mini-gauge-card">
                     <div className="algo-v2-mini-gauge-top">
                       <div>
@@ -1121,8 +1157,9 @@ export function AlgoControllerV2({
                       </div>
                     </details>
                   </article>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : null}
 
               <div className="algo-v2-bias-row">
                 <h4 className="algo-v2-mini-title">Directional Bias</h4>

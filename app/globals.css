@@ -1443,6 +1443,22 @@ main {
   line-height: 1.5;
 }
 
+.algo-v2-confluence-empty {
+  margin-top: 0.75rem;
+  padding: 0.95rem 1rem;
+  border-radius: 16px;
+  border: 1px dashed rgba(148, 163, 184, 0.55);
+  background: rgba(248, 250, 252, 0.82);
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.algo-v2-confluence-empty.is-dark {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(15, 23, 42, 0.16);
+  color: rgba(255, 255, 255, 0.78);
+}
+
 .algo-v2-mini-gauge-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
