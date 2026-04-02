@@ -10,6 +10,24 @@ type Snapshot = Awaited<ReturnType<typeof getAlpacaAlgoSnapshot>>;
 type ControllerResult = Awaited<ReturnType<typeof runAlpacaTradeController>>;
 type ControllerMode = "standard" | "turbo";
 type Bias = "bearish" | "neutral" | "bullish";
+type GaugeKey = "trend" | "momentum" | "execution" | "contractFitness";
+type StrategyProfileKey = "trend-follow" | "breakout" | "mean-reversion";
+type GaugeSubscore = { label: string; score: number };
+type GaugeResult = {
+  key: GaugeKey;
+  label: string;
+  score: number;
+  band: string;
+  tone: string;
+  reason: string;
+  subscores: GaugeSubscore[];
+};
+type StrategyProfile = {
+  label: string;
+  description: string;
+  overallWeights: Record<GaugeKey, number>;
+  gaugeWeights: Record<GaugeKey, Record<string, number>>;
+};
 const COMMON_CRYPTO_BASE_SYMBOLS = new Set([
   "BTC",
   "ETH",
@@ -26,6 +44,122 @@ const COMMON_CRYPTO_BASE_SYMBOLS = new Set([
   "AAVE",
   "SHIB",
 ]);
+const STRATEGY_PROFILES: Record<StrategyProfileKey, StrategyProfile> = {
+  "trend-follow": {
+    label: "Trend-Follow",
+    description: "Leans on persistent direction with clean participation and safer execution.",
+    overallWeights: {
+      trend: 0.34,
+      momentum: 0.24,
+      execution: 0.26,
+      contractFitness: 0.16,
+    },
+    gaugeWeights: {
+      trend: {
+        emaAlignment: 0.34,
+        vwap: 0.2,
+        slope: 0.26,
+        structure: 0.2,
+      },
+      momentum: {
+        rsi: 0.18,
+        macd: 0.34,
+        roc: 0.22,
+        candleExpansion: 0.26,
+      },
+      execution: {
+        spreadQuality: 0.22,
+        relativeVolume: 0.32,
+        quoteStability: 0.22,
+        slippageRisk: 0.24,
+      },
+      contractFitness: {
+        delta: 0.2,
+        gamma: 0.12,
+        theta: 0.12,
+        vega: 0.1,
+        expirationFit: 0.22,
+        openInterestSpread: 0.24,
+      },
+    },
+  },
+  breakout: {
+    label: "Breakout",
+    description: "Rewards expanding momentum, participation, and decisive execution conditions.",
+    overallWeights: {
+      trend: 0.26,
+      momentum: 0.34,
+      execution: 0.24,
+      contractFitness: 0.16,
+    },
+    gaugeWeights: {
+      trend: {
+        emaAlignment: 0.24,
+        vwap: 0.18,
+        slope: 0.24,
+        structure: 0.34,
+      },
+      momentum: {
+        rsi: 0.16,
+        macd: 0.26,
+        roc: 0.24,
+        candleExpansion: 0.34,
+      },
+      execution: {
+        spreadQuality: 0.2,
+        relativeVolume: 0.36,
+        quoteStability: 0.16,
+        slippageRisk: 0.28,
+      },
+      contractFitness: {
+        delta: 0.24,
+        gamma: 0.16,
+        theta: 0.1,
+        vega: 0.1,
+        expirationFit: 0.18,
+        openInterestSpread: 0.22,
+      },
+    },
+  },
+  "mean-reversion": {
+    label: "Mean Reversion",
+    description: "Favors stretched conditions reverting with controlled entries and tighter timing.",
+    overallWeights: {
+      trend: 0.22,
+      momentum: 0.26,
+      execution: 0.32,
+      contractFitness: 0.2,
+    },
+    gaugeWeights: {
+      trend: {
+        emaAlignment: 0.18,
+        vwap: 0.32,
+        slope: 0.16,
+        structure: 0.34,
+      },
+      momentum: {
+        rsi: 0.34,
+        macd: 0.18,
+        roc: 0.26,
+        candleExpansion: 0.22,
+      },
+      execution: {
+        spreadQuality: 0.24,
+        relativeVolume: 0.24,
+        quoteStability: 0.28,
+        slippageRisk: 0.24,
+      },
+      contractFitness: {
+        delta: 0.16,
+        gamma: 0.18,
+        theta: 0.16,
+        vega: 0.12,
+        expirationFit: 0.22,
+        openInterestSpread: 0.16,
+      },
+    },
+  },
+};
 
 function formatMoney(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -98,62 +232,36 @@ function getDefaultBiasFromSignal(signalAction: Snapshot["signal"]["action"]): B
   return "neutral";
 }
 
-function getHealthScore(snapshot: Snapshot | null, positionPnl: number) {
-  if (!snapshot) {
-    return 52;
+function getScoreTone(score: number) {
+  if (score >= 80) {
+    return "is-strong";
   }
 
-  const trendComponent = 20 + snapshot.trendStrength * 20;
-  const changeComponent = clamp(snapshot.priceChangePercent * 3, -10, 10);
-  const volumeComponent =
-    snapshot.relativeVolume === null
-      ? 12
-      : clamp((snapshot.relativeVolume - 1) * 18 + 12, 0, 24);
-  const timeComponent =
-    snapshot.signalAgeSeconds === null
-      ? 8
-      : clamp(15 - snapshot.signalAgeSeconds / 120, 0, 15);
-  const signalComponent =
-    snapshot.signal.action === "buy" ? 16 : snapshot.signal.action === "sell" ? -10 : 6;
-  const pnlComponent = positionPnl > 0 ? 7 : positionPnl < 0 ? -8 : 0;
-
-  let score =
-    trendComponent +
-    changeComponent +
-    volumeComponent +
-    timeComponent +
-    signalComponent +
-    pnlComponent;
-
-  if (snapshot.dailyPnL <= -Math.abs(snapshot.maxDailyLoss)) {
-    score -= 20;
-  }
-
-  return clamp(score, 5, 95);
-}
-
-function getHealthLabel(score: number) {
-  if (score >= 68) {
-    return "Favorable";
-  }
-
-  if (score >= 42) {
-    return "Neutral";
-  }
-
-  return "Weak";
-}
-
-function getHealthTone(score: number) {
-  if (score >= 68) {
+  if (score >= 60) {
     return "is-positive";
   }
 
-  if (score >= 42) {
+  if (score >= 40) {
     return "is-neutral";
   }
 
   return "is-negative";
+}
+
+function getScoreBand(score: number) {
+  if (score >= 80) {
+    return "Strong";
+  }
+
+  if (score >= 60) {
+    return "Favorable";
+  }
+
+  if (score >= 40) {
+    return "Mixed";
+  }
+
+  return "Weak";
 }
 
 function getPrimaryCommand(
@@ -229,6 +337,241 @@ function formatSignalAge(value: number | null) {
   return `${Math.round(value / 3600)}h ago`;
 }
 
+function weightedScore(subscores: GaugeSubscore[], weights: Record<string, number>) {
+  let totalWeight = 0;
+  let total = 0;
+
+  for (const subscore of subscores) {
+    const weight = weights[subscore.label] ?? 0;
+    totalWeight += weight;
+    total += subscore.score * weight;
+  }
+
+  if (totalWeight <= 0) {
+    return 50;
+  }
+
+  return total / totalWeight;
+}
+
+function createGauge(
+  key: GaugeKey,
+  label: string,
+  subscores: GaugeSubscore[],
+  weights: Record<string, number>,
+) {
+  const score = Math.round(clamp(weightedScore(subscores, weights), 0, 100));
+  const band = getScoreBand(score);
+  const tone = getScoreTone(score);
+  const strongest = [...subscores].sort((left, right) => right.score - left.score)[0];
+  const weakest = [...subscores].sort((left, right) => left.score - right.score)[0];
+  const reason =
+    weakest && weakest.score < 45
+      ? `${strongest.label} is supportive, but ${weakest.label} is keeping this setup from full alignment.`
+      : `${strongest.label} is carrying the setup and the indicator group is broadly aligned.`;
+
+  return {
+    key,
+    label,
+    score,
+    band,
+    tone,
+    reason,
+    subscores,
+  } satisfies GaugeResult;
+}
+
+function buildConfluenceModel({
+  snapshot,
+  positionPnl,
+  isCrypto,
+  targetDelta,
+  daysToExpiry,
+  mode,
+  profile,
+}: {
+  snapshot: Snapshot | null;
+  positionPnl: number;
+  isCrypto: boolean;
+  targetDelta: number;
+  daysToExpiry: number;
+  mode: ControllerMode;
+  profile: StrategyProfile;
+}) {
+  if (!snapshot) {
+    const placeholderKeys: GaugeKey[] =
+      mode === "turbo"
+        ? ["trend", "momentum", "execution", "contractFitness"]
+        : ["trend", "momentum", "execution"];
+    const gauges = placeholderKeys.map((key) =>
+      createGauge(
+        key,
+        key === "contractFitness"
+          ? "Contract Fitness"
+          : key.charAt(0).toUpperCase() + key.slice(1),
+        [{ label: "Awaiting snapshot", score: 50 }],
+        { "Awaiting snapshot": 1 },
+      ),
+    );
+
+    return {
+      gauges,
+      overallScore: 50,
+      overallBand: "Mixed",
+      overallTone: "is-neutral",
+      alignmentCount: 0,
+      alignmentLabel: `0 of ${gauges.length} aligned`,
+      reason: "Load a market snapshot to see confluence across the gauges.",
+    };
+  }
+
+  const trendSubscores: GaugeSubscore[] = [
+    {
+      label: "EMA alignment",
+      score: clamp(
+        52 +
+          snapshot.trendStrength * 30 +
+          (snapshot.signal.action === "buy" ? 12 : snapshot.signal.action === "sell" ? -10 : 0),
+        0,
+        100,
+      ),
+    },
+    {
+      label: "VWAP",
+      score: clamp(50 + snapshot.trendStrength * 24 + snapshot.priceChangePercent * 2.2, 0, 100),
+    },
+    {
+      label: "Slope",
+      score: clamp(50 + snapshot.trendStrength * 38, 0, 100),
+    },
+    {
+      label: "Structure",
+      score: clamp(48 + snapshot.trendStrength * 24 + (positionPnl > 0 ? 8 : positionPnl < 0 ? -8 : 0), 0, 100),
+    },
+  ];
+  const momentumSubscores: GaugeSubscore[] = [
+    {
+      label: "RSI",
+      score: clamp(50 + snapshot.priceChangePercent * 6, 0, 100),
+    },
+    {
+      label: "MACD",
+      score: clamp(
+        50 + snapshot.trendStrength * 30 + (snapshot.signal.action === "buy" ? 10 : snapshot.signal.action === "sell" ? -10 : 0),
+        0,
+        100,
+      ),
+    },
+    {
+      label: "ROC",
+      score: clamp(50 + snapshot.priceChangePercent * 7, 0, 100),
+    },
+    {
+      label: "Candle expansion",
+      score: clamp(
+        40 + (snapshot.relativeVolume ?? 1) * 20 + Math.abs(snapshot.priceChangePercent) * 5,
+        0,
+        100,
+      ),
+    },
+  ];
+  const executionSubscores: GaugeSubscore[] = [
+    {
+      label: "Spread quality",
+      score: clamp((isCrypto ? 58 : 76) + ((snapshot.relativeVolume ?? 1) - 1) * 10, 0, 100),
+    },
+    {
+      label: "Relative volume",
+      score: clamp(snapshot.relativeVolume === null ? 50 : 34 + snapshot.relativeVolume * 24, 0, 100),
+    },
+    {
+      label: "Quote stability",
+      score: clamp(snapshot.signalAgeSeconds === null ? 58 : 92 - snapshot.signalAgeSeconds / 18, 0, 100),
+    },
+    {
+      label: "Slippage risk",
+      score: clamp(
+        (isCrypto ? 54 : 74) +
+          ((snapshot.relativeVolume ?? 1) - 1) * 16 -
+          Math.abs(snapshot.priceChangePercent) * 3,
+        0,
+        100,
+      ),
+    },
+  ];
+  const contractFitnessSubscores: GaugeSubscore[] = [
+    {
+      label: "Delta",
+      score: clamp(100 - Math.abs(targetDelta - 0.35) * 220, 0, 100),
+    },
+    {
+      label: "Gamma",
+      score: clamp(82 - Math.abs(daysToExpiry - 18) * 1.4 - Math.abs(targetDelta - 0.35) * 55, 0, 100),
+    },
+    {
+      label: "Theta",
+      score: clamp(86 - Math.max(14 - daysToExpiry, 0) * 2.4 - Math.max(daysToExpiry - 35, 0) * 1.2, 0, 100),
+    },
+    {
+      label: "Vega",
+      score: clamp(80 - Math.abs(daysToExpiry - 28) * 0.9, 0, 100),
+    },
+    {
+      label: "Expiration fit",
+      score: clamp(94 - Math.abs(daysToExpiry - 21) * 1.6, 0, 100),
+    },
+    {
+      label: "Open interest / spread width",
+      score: clamp((snapshot.relativeVolume === null ? 52 : 42 + snapshot.relativeVolume * 22) - (isCrypto ? 8 : 0), 0, 100),
+    },
+  ];
+
+  const gauges: GaugeResult[] = [
+    createGauge("trend", "Trend", trendSubscores, profile.gaugeWeights.trend),
+    createGauge("momentum", "Momentum", momentumSubscores, profile.gaugeWeights.momentum),
+    createGauge("execution", "Execution", executionSubscores, profile.gaugeWeights.execution),
+  ];
+
+  if (mode === "turbo") {
+    gauges.push(
+      createGauge(
+        "contractFitness",
+        "Contract Fitness",
+        contractFitnessSubscores,
+        profile.gaugeWeights.contractFitness,
+      ),
+    );
+  }
+
+  const visibleGauges = gauges.filter((gauge) => mode === "turbo" || gauge.key !== "contractFitness");
+  const overallWeightTotal = visibleGauges.reduce(
+    (sum, gauge) => sum + profile.overallWeights[gauge.key],
+    0,
+  );
+  const overallScore = Math.round(
+    visibleGauges.reduce(
+      (sum, gauge) => sum + gauge.score * profile.overallWeights[gauge.key],
+      0,
+    ) / overallWeightTotal,
+  );
+  const alignmentCount = visibleGauges.filter((gauge) => gauge.score >= 60).length;
+
+  return {
+    gauges: visibleGauges,
+    overallScore,
+    overallBand: getScoreBand(overallScore),
+    overallTone: getScoreTone(overallScore),
+    alignmentCount,
+    alignmentLabel: `${alignmentCount} of ${visibleGauges.length} aligned`,
+    reason:
+      alignmentCount === visibleGauges.length
+        ? "All visible gauges are leaning the same way, which is the cleanest setup."
+        : alignmentCount >= Math.ceil(visibleGauges.length / 2)
+          ? "Most gauges agree, but one area still needs confirmation."
+          : "Confluence is thin right now, so the setup is still fragmented.",
+  };
+}
+
 function buildTurboContracts({
   symbol,
   latestPrice,
@@ -289,6 +632,8 @@ export function AlgoControllerV2({
   ).filter(Boolean);
 
   const [mode, setMode] = useState<ControllerMode>("standard");
+  const [strategyProfile, setStrategyProfile] =
+    useState<StrategyProfileKey>("trend-follow");
   const [symbol, setSymbol] = useState(normalizeMarketInput(initialSymbol));
   const [targetSize, setTargetSize] = useState(
     String(initialControllers.find((controller) => controller.symbol === initialSymbol)?.targetQty ?? 10),
@@ -385,8 +730,15 @@ export function AlgoControllerV2({
   const currentQty = snapshot?.position?.qty ?? activePosition?.qty ?? 0;
   const pendingChange = targetQtyValue - Math.abs(currentQty);
   const positionPnl = snapshot?.position?.unrealizedPl ?? activePosition?.unrealizedPl ?? initialPnl;
-  const healthScore = getHealthScore(snapshot, positionPnl);
-  const healthLabel = getHealthLabel(healthScore);
+  const confluence = buildConfluenceModel({
+    snapshot,
+    positionPnl,
+    isCrypto,
+    targetDelta: deltaTarget,
+    daysToExpiry,
+    mode,
+    profile: STRATEGY_PROFILES[strategyProfile],
+  });
   const primaryCommand = getPrimaryCommand(activeController);
   const turboContracts = buildTurboContracts({
     symbol: normalizedSymbol || "SPY",
@@ -510,6 +862,21 @@ export function AlgoControllerV2({
             />
           </label>
 
+          <label className="algo-v2-field">
+            <span className="algo-v2-field-label">Strategy Profile</span>
+            <select
+              className="form-input"
+              value={strategyProfile}
+              onChange={(event) => setStrategyProfile(event.target.value as StrategyProfileKey)}
+            >
+              {Object.entries(STRATEGY_PROFILES).map(([key, profile]) => (
+                <option key={key} value={key}>
+                  {profile.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <div className="algo-v2-mode-toggle" role="tablist" aria-label="Controller mode">
             <button
               type="button"
@@ -537,25 +904,63 @@ export function AlgoControllerV2({
                 <div>
                   <h3 className="algo-v2-panel-title">Standard Mode</h3>
                   <p className="algo-v2-panel-copy">
-                    Simple, fast position control for stocks and ETFs.
+                    Simple, fast position control for stocks and ETFs with compact confluence checks.
                   </p>
                 </div>
               </div>
 
-              <div className="algo-v2-gauge-shell">
-                <div className="algo-v2-gauge-arc" />
-                <div
-                  className="algo-v2-gauge-needle"
-                  style={{ transform: `translateX(-50%) rotate(${healthScore * 1.8 - 90}deg)` }}
-                />
-                <div className="algo-v2-gauge-core" />
+              <div className="algo-v2-confluence-card">
+                <div className="algo-v2-confluence-header">
+                  <div>
+                    <p className="algo-v2-meter-label">Overall Confluence</p>
+                    <strong className={`algo-v2-confluence-score ${confluence.overallTone}`}>
+                      {confluence.overallScore} · {confluence.overallBand}
+                    </strong>
+                  </div>
+                  <div className="algo-v2-confluence-meta">
+                    <strong>{confluence.alignmentLabel}</strong>
+                    <span>{STRATEGY_PROFILES[strategyProfile].label}</span>
+                  </div>
+                </div>
+                <div className="algo-v2-health-meter">
+                  <div className="algo-v2-health-meter-track" />
+                  <div
+                    className="algo-v2-health-meter-thumb"
+                    style={{ left: `${confluence.overallScore}%` }}
+                  />
+                </div>
+                <p className="algo-v2-confluence-copy">{confluence.reason}</p>
               </div>
 
-              <div className="algo-v2-health-summary">
-                <strong className={`algo-v2-health-value ${getHealthTone(healthScore)}`}>
-                  Trade Health: {healthLabel}
-                </strong>
-                <p>{snapshot?.signal.reason || "Waiting for a fresh reading from the algo snapshot."}</p>
+              <div className="algo-v2-mini-gauge-grid">
+                {confluence.gauges.map((gauge) => (
+                  <article key={gauge.key} className="algo-v2-mini-gauge-card">
+                    <div className="algo-v2-mini-gauge-top">
+                      <div>
+                        <p className="algo-v2-meter-label">{gauge.label}</p>
+                        <strong className={`algo-v2-mini-gauge-score ${gauge.tone}`}>
+                          {gauge.score}
+                        </strong>
+                      </div>
+                      <span className={`algo-v2-gauge-band ${gauge.tone}`}>{gauge.band}</span>
+                    </div>
+                    <div className="algo-v2-mini-track">
+                      <span style={{ width: `${gauge.score}%` }} />
+                    </div>
+                    <p className="algo-v2-mini-gauge-copy">{gauge.reason}</p>
+                    <details className="algo-v2-gauge-debug">
+                      <summary>Debug subscores</summary>
+                      <div className="algo-v2-debug-list">
+                        {gauge.subscores.map((subscore) => (
+                          <div key={subscore.label}>
+                            <span>{subscore.label}</span>
+                            <strong>{Math.round(subscore.score)}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  </article>
+                ))}
               </div>
 
               <div className="algo-v2-slider-card">
@@ -661,24 +1066,62 @@ export function AlgoControllerV2({
               </div>
 
               <div className="algo-v2-health-meter-card">
-                <p className="algo-v2-meter-label">Underlying Trade Health</p>
+                <div className="algo-v2-confluence-header">
+                  <div>
+                    <p className="algo-v2-meter-label">Overall Confluence</p>
+                    <strong className={`algo-v2-confluence-score ${confluence.overallTone}`}>
+                      {confluence.overallScore} · {confluence.overallBand}
+                    </strong>
+                  </div>
+                  <div className="algo-v2-confluence-meta">
+                    <strong>{confluence.alignmentLabel}</strong>
+                    <span>{STRATEGY_PROFILES[strategyProfile].label}</span>
+                  </div>
+                </div>
                 <div className="algo-v2-health-meter">
                   <div className="algo-v2-health-meter-track" />
                   <div
                     className="algo-v2-health-meter-thumb"
-                    style={{ left: `${healthScore}%` }}
+                    style={{ left: `${confluence.overallScore}%` }}
                   />
                 </div>
                 <div className="algo-v2-health-meter-scale">
                   <span>Low</span>
-                  <span>Trade Health Meter</span>
+                  <span>Confluence Meter</span>
                   <span>High</span>
                 </div>
+                <p className="algo-v2-confluence-copy">{confluence.reason}</p>
               </div>
 
-              <div className="algo-v2-health-callout">
-                <strong className={getHealthTone(healthScore)}>{healthLabel}</strong>
-                <p>{snapshot?.signal.reason || "Market conditions are still being assessed."}</p>
+              <div className="algo-v2-mini-gauge-grid is-turbo">
+                {confluence.gauges.map((gauge) => (
+                  <article key={gauge.key} className="algo-v2-mini-gauge-card">
+                    <div className="algo-v2-mini-gauge-top">
+                      <div>
+                        <p className="algo-v2-meter-label">{gauge.label}</p>
+                        <strong className={`algo-v2-mini-gauge-score ${gauge.tone}`}>
+                          {gauge.score}
+                        </strong>
+                      </div>
+                      <span className={`algo-v2-gauge-band ${gauge.tone}`}>{gauge.band}</span>
+                    </div>
+                    <div className="algo-v2-mini-track">
+                      <span style={{ width: `${gauge.score}%` }} />
+                    </div>
+                    <p className="algo-v2-mini-gauge-copy">{gauge.reason}</p>
+                    <details className="algo-v2-gauge-debug">
+                      <summary>Debug subscores</summary>
+                      <div className="algo-v2-debug-list">
+                        {gauge.subscores.map((subscore) => (
+                          <div key={subscore.label}>
+                            <span>{subscore.label}</span>
+                            <strong>{Math.round(subscore.score)}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  </article>
+                ))}
               </div>
 
               <div className="algo-v2-bias-row">
