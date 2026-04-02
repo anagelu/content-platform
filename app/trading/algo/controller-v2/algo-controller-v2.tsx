@@ -4,7 +4,7 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getAlpacaAlgoSnapshot, runAlpacaTradeController } from "../actions";
 import type { AlpacaTradeController } from "@/lib/alpaca-trade-controller";
-import type { AlpacaPosition } from "@/lib/alpaca";
+import type { AlpacaBarTimeframe, AlpacaPosition } from "@/lib/alpaca";
 
 type Snapshot = Awaited<ReturnType<typeof getAlpacaAlgoSnapshot>>;
 type ControllerResult = Awaited<ReturnType<typeof runAlpacaTradeController>>;
@@ -170,6 +170,13 @@ const STRATEGY_PROFILES: Record<StrategyProfileKey, StrategyProfile> = {
     },
   },
 };
+const ANALYSIS_TIMEFRAMES: Array<{ value: AlpacaBarTimeframe; label: string }> = [
+  { value: "1Min", label: "1 Min" },
+  { value: "5Min", label: "5 Min" },
+  { value: "15Min", label: "15 Min" },
+  { value: "1Hour", label: "1 Hour" },
+  { value: "1Day", label: "1 Day" },
+];
 
 function formatMoney(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -347,6 +354,47 @@ function formatSignalAge(value: number | null) {
   return `${Math.round(value / 3600)}h ago`;
 }
 
+function getTimeframeProfile(timeframe: AlpacaBarTimeframe) {
+  switch (timeframe) {
+    case "1Day":
+      return {
+        trendMultiplier: 1.3,
+        momentumMultiplier: 1.1,
+        freshnessPenaltyDivisor: 7200,
+        executionFreshnessDivisor: 1800,
+      };
+    case "1Hour":
+      return {
+        trendMultiplier: 1.15,
+        momentumMultiplier: 1.05,
+        freshnessPenaltyDivisor: 2400,
+        executionFreshnessDivisor: 900,
+      };
+    case "15Min":
+      return {
+        trendMultiplier: 1,
+        momentumMultiplier: 1,
+        freshnessPenaltyDivisor: 900,
+        executionFreshnessDivisor: 420,
+      };
+    case "5Min":
+      return {
+        trendMultiplier: 0.95,
+        momentumMultiplier: 1.05,
+        freshnessPenaltyDivisor: 420,
+        executionFreshnessDivisor: 180,
+      };
+    case "1Min":
+    default:
+      return {
+        trendMultiplier: 0.9,
+        momentumMultiplier: 1.1,
+        freshnessPenaltyDivisor: 180,
+        executionFreshnessDivisor: 90,
+      };
+  }
+}
+
 function weightedScore(subscores: GaugeSubscore[], weights: Record<string, number>) {
   let totalWeight = 0;
   let total = 0;
@@ -421,12 +469,14 @@ function buildConfluenceModel({
     };
   }
 
+  const timeframeProfile = getTimeframeProfile(snapshot.timeframe);
+
   const trendSubscores: GaugeSubscore[] = [
     {
       label: "EMA alignment",
       score: clamp(
         52 +
-          snapshot.trendStrength * 30 +
+          snapshot.trendStrength * 30 * timeframeProfile.trendMultiplier +
           (snapshot.signal.action === "buy" ? 12 : snapshot.signal.action === "sell" ? -10 : 0),
         0,
         100,
@@ -434,38 +484,54 @@ function buildConfluenceModel({
     },
     {
       label: "VWAP",
-      score: clamp(50 + snapshot.trendStrength * 24 + snapshot.priceChangePercent * 2.2, 0, 100),
+      score: clamp(
+        50 +
+          snapshot.trendStrength * 24 * timeframeProfile.trendMultiplier +
+          snapshot.priceChangePercent * 2.2,
+        0,
+        100,
+      ),
     },
     {
       label: "Slope",
-      score: clamp(50 + snapshot.trendStrength * 38, 0, 100),
+      score: clamp(50 + snapshot.trendStrength * 38 * timeframeProfile.trendMultiplier, 0, 100),
     },
     {
       label: "Structure",
-      score: clamp(48 + snapshot.trendStrength * 24 + (positionPnl > 0 ? 8 : positionPnl < 0 ? -8 : 0), 0, 100),
+      score: clamp(
+        48 +
+          snapshot.trendStrength * 24 * timeframeProfile.trendMultiplier +
+          (positionPnl > 0 ? 8 : positionPnl < 0 ? -8 : 0),
+        0,
+        100,
+      ),
     },
   ];
   const momentumSubscores: GaugeSubscore[] = [
     {
       label: "RSI",
-      score: clamp(50 + snapshot.priceChangePercent * 6, 0, 100),
+      score: clamp(50 + snapshot.priceChangePercent * 6 * timeframeProfile.momentumMultiplier, 0, 100),
     },
     {
       label: "MACD",
       score: clamp(
-        50 + snapshot.trendStrength * 30 + (snapshot.signal.action === "buy" ? 10 : snapshot.signal.action === "sell" ? -10 : 0),
+        50 +
+          snapshot.trendStrength * 30 * timeframeProfile.momentumMultiplier +
+          (snapshot.signal.action === "buy" ? 10 : snapshot.signal.action === "sell" ? -10 : 0),
         0,
         100,
       ),
     },
     {
       label: "ROC",
-      score: clamp(50 + snapshot.priceChangePercent * 7, 0, 100),
+      score: clamp(50 + snapshot.priceChangePercent * 7 * timeframeProfile.momentumMultiplier, 0, 100),
     },
     {
       label: "Candle expansion",
       score: clamp(
-        40 + (snapshot.relativeVolume ?? 1) * 20 + Math.abs(snapshot.priceChangePercent) * 5,
+        40 +
+          (snapshot.relativeVolume ?? 1) * 20 +
+          Math.abs(snapshot.priceChangePercent) * 5 * timeframeProfile.momentumMultiplier,
         0,
         100,
       ),
@@ -482,7 +548,13 @@ function buildConfluenceModel({
     },
     {
       label: "Quote stability",
-      score: clamp(snapshot.signalAgeSeconds === null ? 58 : 92 - snapshot.signalAgeSeconds / 18, 0, 100),
+      score: clamp(
+        snapshot.signalAgeSeconds === null
+          ? 58
+          : 92 - snapshot.signalAgeSeconds / timeframeProfile.executionFreshnessDivisor,
+        0,
+        100,
+      ),
     },
     {
       label: "Slippage risk",
@@ -632,6 +704,9 @@ export function AlgoControllerV2({
   const [strategyProfile, setStrategyProfile] =
     useState<StrategyProfileKey>("trend-follow");
   const [symbol, setSymbol] = useState(normalizeMarketInput(initialSymbol));
+  const [analysisTimeframe, setAnalysisTimeframe] = useState<AlpacaBarTimeframe>(
+    initialControllers.find((controller) => controller.symbol === initialSymbol)?.strategyTimeframe ?? "1Day",
+  );
   const [targetSize, setTargetSize] = useState(
     String(initialControllers.find((controller) => controller.symbol === initialSymbol)?.targetQty ?? 10),
   );
@@ -678,6 +753,12 @@ export function AlgoControllerV2({
   }, [activeController?.targetQty, activePosition?.qty, minimumTargetQty, normalizedSymbol]);
 
   useEffect(() => {
+    if (activeController?.strategyTimeframe) {
+      setAnalysisTimeframe(activeController.strategyTimeframe);
+    }
+  }, [activeController?.strategyTimeframe, normalizedSymbol]);
+
+  useEffect(() => {
     let cancelled = false;
 
     setError("");
@@ -695,7 +776,7 @@ export function AlgoControllerV2({
         const result = await getAlpacaAlgoSnapshot({
           symbol: normalizedSymbol,
           strategyType: activeController?.strategyType ?? "NONE",
-          strategyTimeframe: activeController?.strategyTimeframe ?? "1Min",
+          strategyTimeframe: analysisTimeframe,
           fastPeriod: activeController?.fastPeriod ?? 5,
           slowPeriod: activeController?.slowPeriod ?? 20,
           bollingerLength: activeController?.bollingerLength ?? 20,
@@ -729,7 +810,7 @@ export function AlgoControllerV2({
     return () => {
       cancelled = true;
     };
-  }, [activeController, normalizedSymbol]);
+  }, [activeController, analysisTimeframe, normalizedSymbol]);
 
   const currentQty = snapshot?.position?.qty ?? activePosition?.qty ?? 0;
   const pendingChange = targetQtyValue - Math.abs(currentQty);
@@ -771,7 +852,7 @@ export function AlgoControllerV2({
           command,
           targetQty: Math.max(targetQtyValue, minimumTargetQty),
           strategyType: activeController?.strategyType ?? "NONE",
-          strategyTimeframe: activeController?.strategyTimeframe ?? "1Min",
+          strategyTimeframe: analysisTimeframe,
           fastPeriod: activeController?.fastPeriod ?? 5,
           slowPeriod: activeController?.slowPeriod ?? 20,
           bollingerLength: activeController?.bollingerLength ?? 20,
@@ -883,6 +964,21 @@ export function AlgoControllerV2({
               {Object.entries(STRATEGY_PROFILES).map(([key, profile]) => (
                 <option key={key} value={key}>
                   {profile.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="algo-v2-field">
+            <span className="algo-v2-field-label">Analysis Timeframe</span>
+            <select
+              className="form-input"
+              value={analysisTimeframe}
+              onChange={(event) => setAnalysisTimeframe(event.target.value as AlpacaBarTimeframe)}
+            >
+              {ANALYSIS_TIMEFRAMES.map((timeframe) => (
+                <option key={timeframe.value} value={timeframe.value}>
+                  {timeframe.label}
                 </option>
               ))}
             </select>
@@ -1047,6 +1143,10 @@ export function AlgoControllerV2({
                     {targetQtyValue > 0 ? formatNumber(targetQtyValue, isCrypto ? 2 : 0) : "--"}{" "}
                     {isCrypto ? "units" : "shares"}
                   </strong>
+                </div>
+                <div>
+                  <span>Analysis timeframe</span>
+                  <strong>{analysisTimeframe}</strong>
                 </div>
                 <div>
                   <span>Latest price</span>
