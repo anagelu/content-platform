@@ -129,8 +129,38 @@ function normalizeMarketInput(value: string) {
   return value.replace(/\s+/g, "").toUpperCase();
 }
 
-function isCryptoLikeSymbol(symbol: string) {
+function canonicalizeMarketSymbol(symbol: string) {
   const normalized = normalizeMarketInput(symbol);
+
+  if (!normalized) {
+    return "";
+  }
+
+  if (normalized.includes("/")) {
+    return normalized;
+  }
+
+  if (normalized.endsWith("USD") && normalized.length > 3) {
+    return `${normalized.slice(0, -3)}/USD`;
+  }
+
+  if (normalized.endsWith("USDT") && normalized.length > 4) {
+    return `${normalized.slice(0, -4)}/USDT`;
+  }
+
+  if (normalized.endsWith("USDC") && normalized.length > 4) {
+    return `${normalized.slice(0, -4)}/USDC`;
+  }
+
+  if (COMMON_CRYPTO_BASE_SYMBOLS.has(normalized)) {
+    return `${normalized}/USD`;
+  }
+
+  return normalized;
+}
+
+function isCryptoLikeSymbol(symbol: string) {
+  const normalized = canonicalizeMarketSymbol(symbol);
   return normalized.includes("/") || COMMON_CRYPTO_BASE_SYMBOLS.has(normalized);
 }
 
@@ -610,14 +640,20 @@ export function AlgoControllerV2({
   const [isSnapshotLoading, setIsSnapshotLoading] = useState(false);
   const [actionNotice, setActionNotice] = useState("");
   const [isBusy, setIsBusy] = useState(false);
-  const normalizedSymbol = normalizeMarketInput(symbol);
+  const normalizedSymbol = canonicalizeMarketSymbol(symbol);
 
   const activeController = useMemo(
-    () => controllers.find((controller) => controller.symbol === normalizedSymbol) ?? null,
+    () =>
+      controllers.find(
+        (controller) => canonicalizeMarketSymbol(controller.symbol) === normalizedSymbol,
+      ) ?? null,
     [controllers, normalizedSymbol],
   );
   const activePosition = useMemo(
-    () => positions.find((position) => position.symbol === normalizedSymbol) ?? null,
+    () =>
+      positions.find(
+        (position) => canonicalizeMarketSymbol(position.symbol) === normalizedSymbol,
+      ) ?? null,
     [positions, normalizedSymbol],
   );
   const isCrypto = isCryptoLikeSymbol(normalizedSymbol);
@@ -750,11 +786,40 @@ export function AlgoControllerV2({
         setSnapshot(result.snapshot);
         setActionNotice(result.actionSummary);
         setControllers((current) => {
-          const next = current.filter((controller) => controller.symbol !== result.controller?.symbol);
-          return result.controller ? [result.controller, ...next] : next;
+          const next = current.filter(
+            (controller) =>
+              canonicalizeMarketSymbol(controller.symbol) !== normalizedSymbol,
+          );
+
+          if (result.controller) {
+            return [result.controller, ...next];
+          }
+
+          if (activeController) {
+            return [
+              {
+                ...activeController,
+                symbol: normalizedSymbol,
+                status:
+                  command === "PLAY" || command === "RESUME"
+                    ? "ACTIVE"
+                    : command === "PAUSE"
+                      ? "PAUSED"
+                      : "EJECTED",
+                targetQty: Math.max(targetQtyValue, minimumTargetQty),
+                strategyTimeframe: analysisTimeframe,
+                lastCommand: command,
+              },
+              ...next,
+            ];
+          }
+
+          return next;
         });
         setPositions((current) => {
-          const next = current.filter((position) => position.symbol !== normalizedSymbol);
+          const next = current.filter(
+            (position) => canonicalizeMarketSymbol(position.symbol) !== normalizedSymbol,
+          );
           const snapshotPosition = result.snapshot.position;
 
           if (!snapshotPosition || snapshotPosition.qty === 0) {

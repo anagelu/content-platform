@@ -586,6 +586,7 @@ export async function runAlpacaTradeController(input: {
   });
   const controller = await getAlpacaTradeController(userId, normalized.symbol);
   revalidatePath("/trading/algo");
+  revalidatePath("/trading/algo/controller-v2");
 
   return {
     controller,
