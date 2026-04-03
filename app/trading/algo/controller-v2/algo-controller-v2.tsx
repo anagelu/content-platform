@@ -1,7 +1,6 @@
 "use client";
 
 import { startTransition, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { getAlpacaAlgoSnapshot, runAlpacaTradeController } from "../actions";
 import type { AlpacaTradeController } from "@/lib/alpaca-trade-controller";
 import type { AlpacaBarTimeframe, AlpacaPosition } from "@/lib/alpaca";
@@ -615,7 +614,6 @@ export function AlgoControllerV2({
   initialPnl: number;
   initialError: string;
 }) {
-  const router = useRouter();
   const controllerSymbols = initialControllers.map((controller) => controller.symbol);
   const positionSymbols = initialPositions.map((position) => position.symbol);
   const suggestedSymbols = Array.from(
@@ -657,11 +655,11 @@ export function AlgoControllerV2({
     [positions, normalizedSymbol],
   );
   const isCrypto = isCryptoLikeSymbol(normalizedSymbol);
-  const targetQtyValue = Math.max(Number(targetSize) || 0, 0);
+  const orderQtyValue = Math.max(Number(targetSize) || 0, 0);
   const minimumTargetQty = isCrypto ? 0.01 : 1;
   const targetSliderMax = Math.max(
     isCrypto ? 5 : 100,
-    targetQtyValue > 0 ? targetQtyValue * 2 : isCrypto ? 5 : 100,
+    orderQtyValue > 0 ? orderQtyValue * 2 : isCrypto ? 5 : 100,
   );
   const targetSliderStep = isCrypto ? 0.01 : 1;
 
@@ -739,7 +737,7 @@ export function AlgoControllerV2({
   }, [activeController, analysisTimeframe, normalizedSymbol]);
 
   const currentQty = snapshot?.position?.qty ?? activePosition?.qty ?? 0;
-  const pendingChange = targetQtyValue - Math.abs(currentQty);
+  const pendingChange = orderQtyValue;
   const positionPnl = snapshot?.position?.unrealizedPl ?? activePosition?.unrealizedPl ?? initialPnl;
   const confluence = buildConfluenceModel({
     snapshot,
@@ -761,6 +759,11 @@ export function AlgoControllerV2({
       : error
         ? `Confluence unavailable: ${error}`
         : confluence.reason;
+  const resultingTargetQty = Math.max(
+    (primaryCommand.command === "PLAY" ? Math.abs(currentQty) + orderQtyValue : orderQtyValue) ||
+      minimumTargetQty,
+    minimumTargetQty,
+  );
 
   async function handleControllerCommand(command: "PLAY" | "PAUSE" | "RESUME" | "EJECT") {
     setError("");
@@ -769,10 +772,15 @@ export function AlgoControllerV2({
 
     startTransition(async () => {
       try {
+        const targetQtyForCommand =
+          command === "PLAY"
+            ? Math.max(Math.abs(currentQty) + orderQtyValue, minimumTargetQty)
+            : Math.max(orderQtyValue, minimumTargetQty);
+
         const result: ControllerResult = await runAlpacaTradeController({
           symbol: normalizedSymbol,
           command,
-          targetQty: Math.max(targetQtyValue, minimumTargetQty),
+          targetQty: targetQtyForCommand,
           strategyType: activeController?.strategyType ?? "NONE",
           strategyTimeframe: analysisTimeframe,
           fastPeriod: activeController?.fastPeriod ?? 5,
@@ -806,7 +814,7 @@ export function AlgoControllerV2({
                     : command === "PAUSE"
                       ? "PAUSED"
                       : "EJECTED",
-                targetQty: Math.max(targetQtyValue, minimumTargetQty),
+                targetQty: targetQtyForCommand,
                 strategyTimeframe: analysisTimeframe,
                 lastCommand: command,
               },
@@ -840,7 +848,6 @@ export function AlgoControllerV2({
             ...next,
           ];
         });
-        router.refresh();
       } catch (commandError) {
         setError(
           commandError instanceof Error
@@ -894,7 +901,7 @@ export function AlgoControllerV2({
 
           <label className="algo-v2-field">
             <span className="algo-v2-field-label">
-              Target Position Size {isCrypto ? "(units)" : "(shares)"}
+              Order Size {isCrypto ? "(units)" : "(shares)"}
             </span>
             <input
               className="form-input"
@@ -1020,9 +1027,9 @@ export function AlgoControllerV2({
 
               <div className="algo-v2-slider-card">
                 <div className="algo-v2-slider-header">
-                  <strong>Sizing Lever</strong>
+                  <strong>Order Size Lever</strong>
                   <strong>
-                    {targetQtyValue > 0 ? formatNumber(targetQtyValue, isCrypto ? 2 : 0) : "--"}{" "}
+                    {orderQtyValue > 0 ? formatNumber(orderQtyValue, isCrypto ? 2 : 0) : "--"}{" "}
                     {isCrypto ? "units" : "shares"}
                   </strong>
                 </div>
@@ -1031,14 +1038,14 @@ export function AlgoControllerV2({
                   min="0"
                   max={targetSliderMax}
                   step={targetSliderStep}
-                  value={targetQtyValue}
+                  value={orderQtyValue}
                   onChange={(event) => setTargetSize(event.target.value)}
                   className="algo-v2-range"
                 />
                 <div className="algo-v2-slider-scale">
                   <span>Smaller</span>
                   <span>
-                    Current: {formatNumber(Math.abs(currentQty), isCrypto ? 2 : 0)}{" "}
+                    Resulting position: {formatNumber(resultingTargetQty, isCrypto ? 2 : 0)}{" "}
                     {isCrypto ? "units" : "shares"}
                   </span>
                   <span>Larger</span>
@@ -1047,10 +1054,9 @@ export function AlgoControllerV2({
 
               <div className="algo-v2-stat-row">
                 <div>
-                  <span className="algo-v2-stat-label">Pending Change</span>
-                  <strong className={pendingChange >= 0 ? "is-positive" : "is-negative"}>
-                    {pendingChange >= 0 ? "+" : ""}
-                    {formatNumber(pendingChange, isCrypto ? 2 : 0)} {isCrypto ? "units" : "shares"}
+                  <span className="algo-v2-stat-label">Order Amount</span>
+                  <strong className="is-positive">
+                    +{formatNumber(pendingChange, isCrypto ? 2 : 0)} {isCrypto ? "units" : "shares"}
                   </strong>
                 </div>
                 <div>
@@ -1076,8 +1082,14 @@ export function AlgoControllerV2({
                 <div>
                   <span>Selected size</span>
                   <strong>
-                    {targetQtyValue > 0 ? formatNumber(targetQtyValue, isCrypto ? 2 : 0) : "--"}{" "}
+                    {orderQtyValue > 0 ? formatNumber(orderQtyValue, isCrypto ? 2 : 0) : "--"}{" "}
                     {isCrypto ? "units" : "shares"}
+                  </strong>
+                </div>
+                <div>
+                  <span>Resulting target</span>
+                  <strong>
+                    {formatNumber(resultingTargetQty, isCrypto ? 2 : 0)} {isCrypto ? "units" : "shares"}
                   </strong>
                 </div>
                 <div>
