@@ -236,6 +236,136 @@ function isStoryBookType(value: string) {
   return /novel|story|fiction|novella|fantasy|romance|thriller/i.test(value);
 }
 
+type StoryCharacterContext = {
+  id?: string;
+  name?: string;
+  role?: string;
+  goal?: string;
+  conflict?: string;
+  arc?: string;
+  voice?: string;
+  notes?: string;
+};
+
+type StorySettingContext = {
+  id?: string;
+  name?: string;
+  purpose?: string;
+  description?: string;
+  sensoryNotes?: string;
+  rules?: string;
+};
+
+function parseJsonArray<T>(value: string) {
+  if (!value.trim()) {
+    return [] as T[];
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function formatStoryCharacters(value: string) {
+  const characters = parseJsonArray<StoryCharacterContext>(value)
+    .filter((character) =>
+      [
+        character.name,
+        character.role,
+        character.goal,
+        character.conflict,
+        character.arc,
+        character.voice,
+        character.notes,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .trim(),
+    )
+    .map((character) => {
+      const lines = [
+        `- ${character.name?.trim() || "Untitled character"}`,
+        `  Role: ${character.role?.trim() || "(not specified)"}`,
+        `  Goal: ${character.goal?.trim() || "(not specified)"}`,
+        `  Conflict: ${character.conflict?.trim() || "(not specified)"}`,
+        `  Arc: ${character.arc?.trim() || "(not specified)"}`,
+        `  Voice: ${character.voice?.trim() || "(not specified)"}`,
+        `  Notes: ${character.notes?.trim() || "(none)"}`,
+      ];
+
+      return lines.join("\n");
+    });
+
+  return characters.length > 0 ? characters.join("\n\n") : "(none)";
+}
+
+function formatStorySettings(value: string) {
+  const settings = parseJsonArray<StorySettingContext>(value)
+    .filter((setting) =>
+      [
+        setting.name,
+        setting.purpose,
+        setting.description,
+        setting.sensoryNotes,
+        setting.rules,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .trim(),
+    )
+    .map((setting) => {
+      const lines = [
+        `- ${setting.name?.trim() || "Untitled setting"}`,
+        `  Purpose: ${setting.purpose?.trim() || "(not specified)"}`,
+        `  Description: ${setting.description?.trim() || "(not specified)"}`,
+        `  Sensory notes: ${setting.sensoryNotes?.trim() || "(not specified)"}`,
+        `  Rules: ${setting.rules?.trim() || "(none)"}`,
+      ];
+
+      return lines.join("\n");
+    });
+
+  return settings.length > 0 ? settings.join("\n\n") : "(none)";
+}
+
+function formatPovCharacterContext(
+  povCharacterName: string,
+  selectedCharacterProfilesJson: string,
+  characterProfilesJson: string,
+) {
+  const allCharacters = [
+    ...parseJsonArray<StoryCharacterContext>(selectedCharacterProfilesJson),
+    ...parseJsonArray<StoryCharacterContext>(characterProfilesJson),
+  ];
+  const normalizedPovName = povCharacterName.trim().toLowerCase();
+  const povCharacter = normalizedPovName
+    ? allCharacters.find(
+        (character) => character.name?.trim().toLowerCase() === normalizedPovName,
+      )
+    : null;
+
+  if (!povCharacterName.trim() && !povCharacter) {
+    return "(not specified)";
+  }
+
+  if (!povCharacter) {
+    return `Name: ${povCharacterName.trim()}`;
+  }
+
+  return [
+    `Name: ${povCharacter.name?.trim() || povCharacterName.trim() || "Unknown POV"}`,
+    `Role: ${povCharacter.role?.trim() || "(not specified)"}`,
+    `Goal: ${povCharacter.goal?.trim() || "(not specified)"}`,
+    `Conflict: ${povCharacter.conflict?.trim() || "(not specified)"}`,
+    `Arc: ${povCharacter.arc?.trim() || "(not specified)"}`,
+    `Voice: ${povCharacter.voice?.trim() || "(not specified)"}`,
+    `Notes: ${povCharacter.notes?.trim() || "(none)"}`,
+  ].join("\n");
+}
+
 function getResponseText(payload: unknown) {
   if (!payload || typeof payload !== "object") {
     return "";
@@ -946,7 +1076,32 @@ export async function refineBookSectionWithAi({
 }: GenerateBookSectionRefineInput): Promise<GenerateBookSectionRefineOutput> {
   const combinedSectionText = [sectionSummary, sectionContent].filter(Boolean).join("\n\n").trim();
   const hasLocalDraft = Boolean(combinedSectionText);
-  const storyMode = isStoryBookType(bookType);
+  const storyMode = Boolean(
+    isStoryBookType(bookType) ||
+      [
+        storySynopsis,
+        storyStructureNotes,
+        characterProfilesJson,
+        settingProfilesJson,
+        selectedCharacterProfilesJson,
+        selectedSettingProfilesJson,
+        sceneGoal,
+        sceneConflict,
+        povCharacterName,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .trim(),
+  );
+  const formattedCharacterProfiles = formatStoryCharacters(characterProfilesJson);
+  const formattedSettingProfiles = formatStorySettings(settingProfilesJson);
+  const formattedSelectedCharacters = formatStoryCharacters(selectedCharacterProfilesJson);
+  const formattedSelectedSettings = formatStorySettings(selectedSettingProfilesJson);
+  const formattedPovCharacter = formatPovCharacterContext(
+    povCharacterName,
+    selectedCharacterProfilesJson,
+    characterProfilesJson,
+  );
 
   if (
     !combinedSectionText &&
@@ -981,8 +1136,8 @@ export async function refineBookSectionWithAi({
   const provider = await getAiProvider();
   const systemInstruction = storyMode
     ? hasLocalDraft
-      ? "You are a fiction editor and scene writer helping refine one chapter or subsection of a novel. Return JSON only with keys kind, title, summary, and content. Write actual narrative prose for the selected section only. Preserve the current section's role, POV, tone, and story direction while improving voice, scene flow, specificity, and immersion. Use the wider book context only as background. Do not rewrite other chapters, do not return outlining notes, and do not add meta commentary about AI."
-      : "You are a fiction writer helping draft one chapter or subsection of a novel from planning context. Return JSON only with keys kind, title, summary, and content. Write actual narrative prose for the selected section only, not an outline, prompt, or editorial note. Use the section title, summary, POV, scene goal, scene conflict, characters, settings, and wider story context to produce book-ready prose. Keep the scope local to this section, do not rewrite other chapters, and do not add meta commentary about AI."
+      ? "You are a fiction editor and scene writer helping refine one chapter or subsection of a novel. Return JSON only with keys kind, title, summary, and content. Write actual narrative prose for the selected section only. Preserve the current section's role, POV, tone, and story direction while improving voice, scene flow, specificity, and immersion. Treat the selected characters, selected settings, POV profile, scene goal, and scene conflict as primary constraints, and use the wider book context only as background. Do not rewrite other chapters, do not return outlining notes, and do not add meta commentary about AI."
+      : "You are a fiction writer helping draft one chapter or subsection of a novel from planning context. Return JSON only with keys kind, title, summary, and content. Write actual narrative prose for the selected section only, not an outline, prompt, or editorial note. Treat the selected characters, selected settings, POV profile, scene goal, and scene conflict as the main context for what happens on the page, and use the wider story bible only as supporting continuity. Keep the scope local to this section, do not rewrite other chapters, and do not add meta commentary about AI."
     : "You are a cost-conscious book editor. Refine only the requested section while preserving its role in the larger book. Return JSON only with keys kind, title, summary, and content. Keep the same section scope, improve clarity and flow, and avoid changing unrelated chapters or introducing meta commentary about AI.";
   const actionLabel = storyMode
     ? hasLocalDraft
@@ -1014,19 +1169,19 @@ Story structure notes:
 ${storyStructureNotes || "(none)"}
 
 Character profiles:
-${characterProfilesJson || "(none)"}
+${formattedCharacterProfiles}
 
 Setting profiles:
-${settingProfilesJson || "(none)"}
+${formattedSettingProfiles}
 
 Characters selected for this section:
-${selectedCharacterProfilesJson || "(none)"}
+${formattedSelectedCharacters}
 
 Settings selected for this section:
-${selectedSettingProfilesJson || "(none)"}
+${formattedSelectedSettings}
 
 Primary POV character:
-${povCharacterName || "(not specified)"}
+${formattedPovCharacter}
 
 Scene goal:
 ${sceneGoal || "(none)"}
