@@ -65,15 +65,6 @@ const ANALYSIS_TIMEFRAMES: Array<{ value: AlpacaBarTimeframe; label: string }> =
   { value: "1Day", label: "1 Day" },
   { value: "1Week", label: "1 Week" },
 ];
-const TIMEFRAME_LENS_ORDER: AlpacaBarTimeframe[] = [
-  "1Min",
-  "5Min",
-  "15Min",
-  "30Min",
-  "1Hour",
-  "1Day",
-  "1Week",
-];
 const MARKET_LENS_STOPS: Array<{ offset: MarketLensOffset; label: string }> = [
   { offset: -2, label: "In 2" },
   { offset: -1, label: "In 1" },
@@ -81,6 +72,8 @@ const MARKET_LENS_STOPS: Array<{ offset: MarketLensOffset; label: string }> = [
   { offset: 1, label: "Out 1" },
   { offset: 2, label: "Out 2" },
 ];
+const FAVORABLE_GAUGE_THRESHOLD = 61;
+const STRONG_GAUGE_THRESHOLD = 81;
 const GAUGE_WEIGHTS: Record<GaugeKey, Record<string, number>> = {
   trend: {
     "EMA alignment": 0.25,
@@ -212,11 +205,11 @@ function getDefaultBiasFromSignal(signalAction: Snapshot["signal"]["action"]): B
 }
 
 function getScoreTone(score: number) {
-  if (score >= 81) {
+  if (score >= STRONG_GAUGE_THRESHOLD) {
     return "is-strong";
   }
 
-  if (score >= 61) {
+  if (score >= FAVORABLE_GAUGE_THRESHOLD) {
     return "is-positive";
   }
 
@@ -228,11 +221,11 @@ function getScoreTone(score: number) {
 }
 
 function getScoreBand(score: number) {
-  if (score >= 81) {
+  if (score >= STRONG_GAUGE_THRESHOLD) {
     return "Strong";
   }
 
-  if (score >= 61) {
+  if (score >= FAVORABLE_GAUGE_THRESHOLD) {
     return "Favorable";
   }
 
@@ -437,13 +430,59 @@ function getTimeframeProfile(timeframe: AlpacaBarTimeframe) {
 }
 
 function getShiftedTimeframe(base: AlpacaBarTimeframe, offset: MarketLensOffset) {
-  const baseIndex = TIMEFRAME_LENS_ORDER.indexOf(base);
+  const lensMap: Record<AlpacaBarTimeframe, Record<MarketLensOffset, AlpacaBarTimeframe>> = {
+    "1Min": {
+      [-2]: "1Min",
+      [-1]: "1Min",
+      [0]: "1Min",
+      [1]: "5Min",
+      [2]: "15Min",
+    },
+    "5Min": {
+      [-2]: "1Min",
+      [-1]: "1Min",
+      [0]: "5Min",
+      [1]: "15Min",
+      [2]: "30Min",
+    },
+    "15Min": {
+      [-2]: "1Min",
+      [-1]: "5Min",
+      [0]: "15Min",
+      [1]: "30Min",
+      [2]: "1Hour",
+    },
+    "30Min": {
+      [-2]: "5Min",
+      [-1]: "15Min",
+      [0]: "30Min",
+      [1]: "1Hour",
+      [2]: "1Day",
+    },
+    "1Hour": {
+      [-2]: "15Min",
+      [-1]: "30Min",
+      [0]: "1Hour",
+      [1]: "1Day",
+      [2]: "1Week",
+    },
+    "1Day": {
+      [-2]: "30Min",
+      [-1]: "1Hour",
+      [0]: "1Day",
+      [1]: "1Week",
+      [2]: "1Week",
+    },
+    "1Week": {
+      [-2]: "1Hour",
+      [-1]: "1Day",
+      [0]: "1Week",
+      [1]: "1Week",
+      [2]: "1Week",
+    },
+  };
 
-  if (baseIndex === -1) {
-    return base;
-  }
-
-  return TIMEFRAME_LENS_ORDER[clamp(baseIndex + offset, 0, TIMEFRAME_LENS_ORDER.length - 1)];
+  return lensMap[base]?.[offset] ?? base;
 }
 
 function getLensSummary(score: number, offset: MarketLensOffset) {
@@ -821,8 +860,8 @@ function buildConfluenceModel({
     gauges.reduce((sum, gauge) => sum + gauge.score * overallWeights[gauge.key], 0) /
       overallWeightTotal,
   );
-  const alignmentCount = gauges.filter((gauge) => gauge.score >= 65).length;
-  const strongCount = gauges.filter((gauge) => gauge.score >= 80).length;
+  const alignmentCount = gauges.filter((gauge) => gauge.score >= FAVORABLE_GAUGE_THRESHOLD).length;
+  const strongCount = gauges.filter((gauge) => gauge.score >= STRONG_GAUGE_THRESHOLD).length;
 
   return {
     gauges,
@@ -1045,8 +1084,12 @@ export function AlgoControllerV2({
           ) / enabledWeightTotal,
         )
       : null;
-  const favorableEnabledCount = enabledGauges.filter((gauge) => gauge.score >= 65).length;
-  const strongEnabledCount = enabledGauges.filter((gauge) => gauge.score >= 80).length;
+  const favorableEnabledCount = enabledGauges.filter(
+    (gauge) => gauge.score >= FAVORABLE_GAUGE_THRESHOLD,
+  ).length;
+  const strongEnabledCount = enabledGauges.filter(
+    (gauge) => gauge.score >= STRONG_GAUGE_THRESHOLD,
+  ).length;
   const displayedOverallScore = confluence.isReady ? overallScoreFromEnabledGauges : null;
   const displayedOverallBand =
     displayedOverallScore === null ? "Unavailable" : getScoreBand(displayedOverallScore);
