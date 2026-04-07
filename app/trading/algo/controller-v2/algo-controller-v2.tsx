@@ -4,6 +4,7 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import {
   getAlpacaAlgoSnapshot,
   getTurboOptionCandidates,
+  runTurboOptionControllerCommand,
   runAlpacaTradeController,
   submitTurboOptionPaperTrade,
 } from "../actions";
@@ -1006,6 +1007,8 @@ export function AlgoControllerV2({
   const [daysToExpiry, setDaysToExpiry] = useState(30);
   const [autoBiasEnabled, setAutoBiasEnabled] = useState(true);
   const [bias, setBias] = useState<Bias>("bullish");
+  const [selectedTurboContractSymbol, setSelectedTurboContractSymbol] = useState("");
+  const [turboContractStatus, setTurboContractStatus] = useState<"UNSET" | "ACTIVE" | "PAUSED" | "EJECTED">("UNSET");
   const [gaugeToggles, setGaugeToggles] = useState<GaugeToggleState>({
     trend: true,
     momentum: true,
@@ -1221,6 +1224,12 @@ export function AlgoControllerV2({
   });
   const primaryCommand = getPrimaryCommand(activeController);
   const turboContracts = turboCandidates?.suggestions ?? [];
+  const selectedTurboContract =
+    turboContracts.find((contract) => contract.symbol === selectedTurboContractSymbol) ?? turboContracts[0] ?? null;
+  const selectedTurboPosition = selectedTurboContract
+    ? positions.find((position) => canonicalizeMarketSymbol(position.symbol) === selectedTurboContract.symbol)
+    : null;
+  const turboCurrentQty = Math.max(0, Math.abs(selectedTurboPosition?.qty ?? 0));
   const leadTurboContract = turboContracts[0] ?? null;
   const turboFitScore =
     leadTurboContract && displayedOverallScore !== null
@@ -1252,6 +1261,45 @@ export function AlgoControllerV2({
       minimumTargetQty,
     minimumTargetQty,
   );
+
+  useEffect(() => {
+    if (turboContracts.length === 0) {
+      setSelectedTurboContractSymbol("");
+      if (mode === "turbo") {
+        setTurboContractStatus("UNSET");
+      }
+      return;
+    }
+
+    const hasSelection = turboContracts.some((contract) => contract.symbol === selectedTurboContractSymbol);
+
+    if (!hasSelection) {
+      setSelectedTurboContractSymbol(turboContracts[0].symbol);
+      setTurboContractStatus("UNSET");
+    }
+  }, [mode, selectedTurboContractSymbol, turboContracts]);
+
+  const turboPrimaryCommand =
+    turboContractStatus === "ACTIVE" || turboCurrentQty > 0
+      ? {
+          command: "PAUSE" as const,
+          label: "Pause Risk",
+          helper: "Flatten the selected option contract while keeping it armed for resume.",
+          tone: "algo-v2-action-button is-primary",
+        }
+      : turboContractStatus === "PAUSED"
+        ? {
+            command: "RESUME" as const,
+            label: "Resume Position",
+            helper: "Re-enter the selected option contract at the chosen contract size.",
+            tone: "algo-v2-action-button is-positive",
+          }
+        : {
+            command: "PLAY" as const,
+            label: "Play Position",
+            helper: "Enter the selected option contract using the size you set above.",
+            tone: "algo-v2-action-button is-positive",
+          };
 
   useEffect(() => {
     if (!autoBiasEnabled || mode !== "turbo") {
@@ -1376,6 +1424,48 @@ export function AlgoControllerV2({
           tradeError instanceof Error
             ? tradeError.message
             : "Unable to submit the Turbo option order right now.",
+        );
+      } finally {
+        setIsBusy(false);
+      }
+    });
+  }
+
+  async function handleTurboPrimaryCommand(command: "PLAY" | "PAUSE" | "RESUME" | "EJECT") {
+    if (!selectedTurboContract) {
+      setError("Select a suggested contract first.");
+      return;
+    }
+
+    setError("");
+    setActionNotice("");
+    setIsBusy(true);
+
+    startTransition(async () => {
+      try {
+        const qty = Math.max(1, Math.round(orderQtyValue || 1));
+        const result = await runTurboOptionControllerCommand({
+          contractSymbol: selectedTurboContract.symbol,
+          command,
+          targetQty: qty,
+        });
+
+        setActionNotice(result.success);
+        setTurboContractStatus(result.status);
+        setPositions((current) => {
+          const next = current.filter((position) => position.symbol !== selectedTurboContract.symbol);
+
+          if (!result.position || result.position.qty === 0) {
+            return next;
+          }
+
+          return [result.position, ...next];
+        });
+      } catch (commandError) {
+        setError(
+          commandError instanceof Error
+            ? commandError.message
+            : "Unable to run the Turbo option controller right now.",
         );
       } finally {
         setIsBusy(false);
