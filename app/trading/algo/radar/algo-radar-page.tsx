@@ -62,6 +62,7 @@ const ANALYSIS_TIMEFRAMES: Array<{ value: AlpacaBarTimeframe; label: string }> =
   { value: "1Day", label: "1 Day" },
   { value: "1Week", label: "1 Week" },
 ];
+const RADAR_STORAGE_KEY = "algo-radar-v1";
 const FAVORABLE_GAUGE_THRESHOLD = 61;
 const STRONG_GAUGE_THRESHOLD = 81;
 const GAUGE_WEIGHTS: Record<GaugeKey, Record<string, number>> = {
@@ -658,11 +659,127 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState("");
   const [lastScanCount, setLastScanCount] = useState(0);
+  const [hasRestoredState, setHasRestoredState] = useState(false);
 
   const parsedWatchlist = useMemo(() => parseWatchlist(watchlistInput), [watchlistInput]);
 
   useEffect(() => {
-    if (initialSymbols.length === 0) {
+    try {
+      const raw = window.localStorage.getItem(RADAR_STORAGE_KEY);
+
+      if (!raw) {
+        setHasRestoredState(true);
+        return;
+      }
+
+      const saved = JSON.parse(raw) as Partial<{
+        watchlistInput: string;
+        analysisTimeframe: AlpacaBarTimeframe;
+        confluenceSensitivity: number;
+        overallThreshold: number;
+        thresholds: Record<GaugeKey, number>;
+        enabledGauges: Record<GaugeKey, boolean>;
+        showOnlyMatches: boolean;
+      }>;
+
+      if (typeof saved.watchlistInput === "string" && saved.watchlistInput.trim()) {
+        setWatchlistInput(saved.watchlistInput);
+      }
+
+      if (saved.analysisTimeframe && ANALYSIS_TIMEFRAMES.some((item) => item.value === saved.analysisTimeframe)) {
+        setAnalysisTimeframe(saved.analysisTimeframe);
+      }
+
+      if (typeof saved.confluenceSensitivity === "number") {
+        setConfluenceSensitivity(clamp(saved.confluenceSensitivity, 0, 100));
+      }
+
+      if (typeof saved.overallThreshold === "number") {
+        setOverallThreshold(clamp(saved.overallThreshold, 0, 100));
+      }
+
+      if (saved.thresholds) {
+        setThresholds((current) => ({
+          trend:
+            typeof saved.thresholds?.trend === "number"
+              ? clamp(saved.thresholds.trend, 0, 100)
+              : current.trend,
+          momentum:
+            typeof saved.thresholds?.momentum === "number"
+              ? clamp(saved.thresholds.momentum, 0, 100)
+              : current.momentum,
+          execution:
+            typeof saved.thresholds?.execution === "number"
+              ? clamp(saved.thresholds.execution, 0, 100)
+              : current.execution,
+          timeframeConfluence:
+            typeof saved.thresholds?.timeframeConfluence === "number"
+              ? clamp(saved.thresholds.timeframeConfluence, 0, 100)
+              : current.timeframeConfluence,
+        }));
+      }
+
+      if (saved.enabledGauges) {
+        setEnabledGauges((current) => ({
+          trend:
+            typeof saved.enabledGauges?.trend === "boolean"
+              ? saved.enabledGauges.trend
+              : current.trend,
+          momentum:
+            typeof saved.enabledGauges?.momentum === "boolean"
+              ? saved.enabledGauges.momentum
+              : current.momentum,
+          execution:
+            typeof saved.enabledGauges?.execution === "boolean"
+              ? saved.enabledGauges.execution
+              : current.execution,
+          timeframeConfluence:
+            typeof saved.enabledGauges?.timeframeConfluence === "boolean"
+              ? saved.enabledGauges.timeframeConfluence
+              : current.timeframeConfluence,
+        }));
+      }
+
+      if (typeof saved.showOnlyMatches === "boolean") {
+        setShowOnlyMatches(saved.showOnlyMatches);
+      }
+    } catch {
+      // Ignore invalid local state and fall back to the seeded defaults.
+    } finally {
+      setHasRestoredState(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasRestoredState) {
+      return;
+    }
+
+    window.localStorage.setItem(
+      RADAR_STORAGE_KEY,
+      JSON.stringify({
+        watchlistInput,
+        analysisTimeframe,
+        confluenceSensitivity,
+        overallThreshold,
+        thresholds,
+        enabledGauges,
+        showOnlyMatches,
+      }),
+    );
+  }, [
+    analysisTimeframe,
+    confluenceSensitivity,
+    enabledGauges,
+    hasRestoredState,
+    overallThreshold,
+    showOnlyMatches,
+    thresholds,
+    watchlistInput,
+  ]);
+
+  useEffect(() => {
+    if (!hasRestoredState || parseWatchlist(watchlistInput).length === 0) {
       return;
     }
 
@@ -670,7 +787,7 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
       void handleScan();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hasRestoredState]);
 
   async function handleScan() {
     const symbols = parseWatchlist(watchlistInput);
