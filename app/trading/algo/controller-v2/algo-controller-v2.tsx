@@ -30,6 +30,7 @@ type ConfluenceModel = {
   reason: string;
   isReady: boolean;
 };
+type GaugeToggleState = Record<GaugeKey, boolean>;
 const COMMON_CRYPTO_BASE_SYMBOLS = new Set([
   "BTC",
   "ETH",
@@ -672,6 +673,11 @@ export function AlgoControllerV2({
   const [deltaTarget, setDeltaTarget] = useState(0.4);
   const [daysToExpiry, setDaysToExpiry] = useState(30);
   const [bias, setBias] = useState<Bias>("bullish");
+  const [gaugeToggles, setGaugeToggles] = useState<GaugeToggleState>({
+    trend: true,
+    momentum: true,
+    execution: true,
+  });
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [controllers, setControllers] = useState(initialControllers);
   const [positions, setPositions] = useState(initialPositions);
@@ -784,6 +790,36 @@ export function AlgoControllerV2({
     snapshot,
     isCrypto,
   });
+  const enabledGauges = confluence.gauges.filter((gauge) => gaugeToggles[gauge.key]);
+  const enabledOverallWeights = getOverallWeights();
+  const enabledWeightTotal = enabledGauges.reduce(
+    (sum, gauge) => sum + enabledOverallWeights[gauge.key],
+    0,
+  );
+  const overallScoreFromEnabledGauges =
+    enabledGauges.length > 0 && enabledWeightTotal > 0
+      ? Math.round(
+          enabledGauges.reduce(
+            (sum, gauge) => sum + gauge.score * enabledOverallWeights[gauge.key],
+            0,
+          ) / enabledWeightTotal,
+        )
+      : null;
+  const favorableEnabledCount = enabledGauges.filter((gauge) => gauge.score >= 65).length;
+  const strongEnabledCount = enabledGauges.filter((gauge) => gauge.score >= 80).length;
+  const displayedOverallScore = confluence.isReady ? overallScoreFromEnabledGauges : null;
+  const displayedOverallBand =
+    displayedOverallScore === null ? "Unavailable" : getScoreBand(displayedOverallScore);
+  const displayedOverallTone =
+    displayedOverallScore === null ? "is-neutral" : getScoreTone(displayedOverallScore);
+  const displayedAlignmentLabel =
+    enabledGauges.length > 0
+      ? `${favorableEnabledCount} of ${enabledGauges.length} favorable`
+      : "0 of 0 favorable";
+  const displayedConfluenceReason =
+    enabledGauges.length > 0
+      ? getConfluenceReason(favorableEnabledCount, strongEnabledCount, enabledGauges.length)
+      : "Turn on at least one gauge to calculate confluence.";
   const primaryCommand = getPrimaryCommand(activeController);
   const turboContracts = buildTurboContracts({
     symbol: normalizedSymbol || "SPY",
@@ -798,7 +834,7 @@ export function AlgoControllerV2({
       ? `Loading ${normalizedSymbol} snapshot...`
       : error
         ? `Confluence unavailable: ${error}`
-        : confluence.reason;
+        : displayedConfluenceReason;
   const resultingTargetQty = Math.max(
     (primaryCommand.command === "PLAY" ? Math.abs(currentQty) + orderQtyValue : orderQtyValue) ||
       minimumTargetQty,
@@ -1004,8 +1040,8 @@ export function AlgoControllerV2({
                   <div>
                     <p className="algo-v2-meter-label">Overall Confluence</p>
                     {confluence.isReady ? (
-                      <strong className={`algo-v2-confluence-score ${confluence.overallTone}`}>
-                        {confluence.overallScore} · {confluence.overallBand}
+                      <strong className={`algo-v2-confluence-score ${displayedOverallTone}`}>
+                        {displayedOverallScore} · {displayedOverallBand}
                       </strong>
                     ) : (
                       <strong className="algo-v2-confluence-score is-neutral">
@@ -1014,16 +1050,16 @@ export function AlgoControllerV2({
                     )}
                   </div>
                   <div className="algo-v2-confluence-meta">
-                    <strong>{confluence.alignmentLabel}</strong>
+                    <strong>{displayedAlignmentLabel}</strong>
                     <span>Market conditions</span>
                   </div>
                 </div>
-                {confluence.isReady ? (
+                {confluence.isReady && displayedOverallScore !== null ? (
                   <div className="algo-v2-health-meter">
                     <div className="algo-v2-health-meter-track" />
                     <div
                       className="algo-v2-health-meter-thumb"
-                      style={{ left: `${confluence.overallScore}%` }}
+                      style={{ left: `${displayedOverallScore}%` }}
                     />
                   </div>
                 ) : (
@@ -1035,7 +1071,10 @@ export function AlgoControllerV2({
               {confluence.isReady ? (
                 <div className="algo-v2-mini-gauge-grid">
                   {confluence.gauges.map((gauge) => (
-                  <article key={gauge.key} className="algo-v2-mini-gauge-card">
+                  <article
+                    key={gauge.key}
+                    className={gaugeToggles[gauge.key] ? "algo-v2-mini-gauge-card" : "algo-v2-mini-gauge-card is-disabled"}
+                  >
                     <div className="algo-v2-mini-gauge-top">
                       <div>
                         <p className="algo-v2-meter-label">{gauge.label}</p>
@@ -1045,6 +1084,19 @@ export function AlgoControllerV2({
                       </div>
                       <span className={`algo-v2-gauge-band ${gauge.tone}`}>{gauge.band}</span>
                     </div>
+                    <label className="algo-v2-gauge-toggle">
+                      <span>{gaugeToggles[gauge.key] ? "On" : "Off"}</span>
+                      <input
+                        type="checkbox"
+                        checked={gaugeToggles[gauge.key]}
+                        onChange={() =>
+                          setGaugeToggles((current) => ({
+                            ...current,
+                            [gauge.key]: !current[gauge.key],
+                          }))
+                        }
+                      />
+                    </label>
                     <div className="algo-v2-mini-track">
                       <span style={{ width: `${gauge.score}%` }} />
                     </div>
@@ -1181,8 +1233,8 @@ export function AlgoControllerV2({
                   <div>
                     <p className="algo-v2-meter-label">Overall Confluence</p>
                     {confluence.isReady ? (
-                      <strong className={`algo-v2-confluence-score ${confluence.overallTone}`}>
-                        {confluence.overallScore} · {confluence.overallBand}
+                      <strong className={`algo-v2-confluence-score ${displayedOverallTone}`}>
+                        {displayedOverallScore} · {displayedOverallBand}
                       </strong>
                     ) : (
                       <strong className="algo-v2-confluence-score is-neutral">
@@ -1191,17 +1243,17 @@ export function AlgoControllerV2({
                     )}
                   </div>
                   <div className="algo-v2-confluence-meta">
-                    <strong>{confluence.alignmentLabel}</strong>
+                    <strong>{displayedAlignmentLabel}</strong>
                     <span>Market conditions</span>
                   </div>
                 </div>
-                {confluence.isReady ? (
+                {confluence.isReady && displayedOverallScore !== null ? (
                   <>
                     <div className="algo-v2-health-meter">
                       <div className="algo-v2-health-meter-track" />
                       <div
                         className="algo-v2-health-meter-thumb"
-                        style={{ left: `${confluence.overallScore}%` }}
+                        style={{ left: `${displayedOverallScore}%` }}
                       />
                     </div>
                     <div className="algo-v2-health-meter-scale">
@@ -1219,7 +1271,10 @@ export function AlgoControllerV2({
               {confluence.isReady ? (
                 <div className="algo-v2-mini-gauge-grid is-turbo">
                   {confluence.gauges.map((gauge) => (
-                  <article key={gauge.key} className="algo-v2-mini-gauge-card">
+                  <article
+                    key={gauge.key}
+                    className={gaugeToggles[gauge.key] ? "algo-v2-mini-gauge-card" : "algo-v2-mini-gauge-card is-disabled"}
+                  >
                     <div className="algo-v2-mini-gauge-top">
                       <div>
                         <p className="algo-v2-meter-label">{gauge.label}</p>
@@ -1229,6 +1284,19 @@ export function AlgoControllerV2({
                       </div>
                       <span className={`algo-v2-gauge-band ${gauge.tone}`}>{gauge.band}</span>
                     </div>
+                    <label className="algo-v2-gauge-toggle">
+                      <span>{gaugeToggles[gauge.key] ? "On" : "Off"}</span>
+                      <input
+                        type="checkbox"
+                        checked={gaugeToggles[gauge.key]}
+                        onChange={() =>
+                          setGaugeToggles((current) => ({
+                            ...current,
+                            [gauge.key]: !current[gauge.key],
+                          }))
+                        }
+                      />
+                    </label>
                     <div className="algo-v2-mini-track">
                       <span style={{ width: `${gauge.score}%` }} />
                     </div>
