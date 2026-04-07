@@ -1836,6 +1836,164 @@ main {
   gap: 0.85rem;
 }
 
+.radar-shell {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.radar-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.5fr) repeat(2, minmax(150px, 0.7fr)) minmax(220px, 1fr) auto;
+  gap: 1rem;
+  align-items: start;
+}
+
+.radar-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.radar-field-wide {
+  min-width: 220px;
+}
+
+.radar-field-watchlist {
+  min-width: 0;
+}
+
+.radar-watchlist-input {
+  min-height: 8.5rem;
+  resize: vertical;
+  white-space: pre-wrap;
+}
+
+.radar-actions {
+  display: grid;
+  gap: 0.75rem;
+  align-content: start;
+}
+
+.radar-inline-toggle {
+  min-height: 42px;
+}
+
+.radar-detector-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.radar-detector-card {
+  padding: 1rem;
+  border-radius: 16px;
+  border: 1px solid #dbe3f0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 248, 252, 0.94));
+}
+
+.radar-detector-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: start;
+  margin-bottom: 0.75rem;
+}
+
+.radar-results-section {
+  display: grid;
+  gap: 1rem;
+}
+
+.radar-results-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: start;
+}
+
+.radar-empty {
+  margin: 0;
+}
+
+.radar-results-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.radar-result-card {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1.05rem 1.1rem;
+  border-radius: 18px;
+  border: 1px solid #d8dee9;
+  background: linear-gradient(180deg, #fffefb, #f5f7fb);
+  box-shadow: 0 10px 22px rgba(58, 47, 31, 0.06);
+}
+
+.radar-result-top,
+.radar-overall-row,
+.radar-result-meta,
+.radar-mini-gauge-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.85rem;
+  align-items: start;
+}
+
+.radar-gauge-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.radar-mini-gauge {
+  padding: 0.8rem 0.85rem;
+  border-radius: 14px;
+  border: 1px solid rgba(219, 227, 240, 0.96);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.radar-mini-gauge-top span {
+  color: #594f43;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.radar-result-meta {
+  color: #6b7280;
+  font-size: 0.86rem;
+  padding-top: 0.15rem;
+  border-top: 1px solid rgba(219, 227, 240, 0.92);
+}
+
+@media (max-width: 1180px) {
+  .radar-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .radar-detector-grid,
+  .radar-results-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .radar-toolbar,
+  .radar-detector-grid,
+  .radar-results-grid,
+  .radar-gauge-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .radar-result-top,
+  .radar-overall-row,
+  .radar-result-meta,
+  .radar-mini-gauge-top,
+  .radar-results-header {
+    flex-direction: column;
+  }
+}
+
 .algo-v2-contract-list {
   display: grid;
   gap: 0.75rem;

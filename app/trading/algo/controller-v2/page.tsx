@@ -60,6 +60,9 @@ export default async function TradingAlgoControllerV2Page({
           <Link href="/trading/algo" className="button-link secondary">
             Back to Algo Workspace
           </Link>
+          <Link href="/trading/algo/radar" className="button-link secondary">
+            Open Radar
+          </Link>
           <Link href="/trading" className="button-link secondary">
             Back to Trading
           </Link>
