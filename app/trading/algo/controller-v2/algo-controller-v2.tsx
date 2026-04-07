@@ -945,6 +945,7 @@ export function AlgoControllerV2({
   );
   const [deltaTarget, setDeltaTarget] = useState(0.4);
   const [daysToExpiry, setDaysToExpiry] = useState(30);
+  const [autoBiasEnabled, setAutoBiasEnabled] = useState(true);
   const [bias, setBias] = useState<Bias>("bullish");
   const [gaugeToggles, setGaugeToggles] = useState<GaugeToggleState>({
     trend: true,
@@ -1154,6 +1155,17 @@ export function AlgoControllerV2({
     enabledGauges.length > 0
       ? getConfluenceReason(favorableEnabledCount, strongEnabledCount, enabledGauges.length)
       : "Turn on at least one gauge to calculate confluence.";
+  const autoBiasSuggestion: Bias =
+    displayedOverallScore !== null && displayedOverallScore >= FAVORABLE_GAUGE_THRESHOLD
+      ? (confluence.gauges.find((gauge) => gauge.key === "trend")?.score ?? 50) >=
+          FAVORABLE_GAUGE_THRESHOLD
+        ? "bullish"
+        : (confluence.gauges.find((gauge) => gauge.key === "execution")?.score ?? 50) < 40
+          ? "neutral"
+          : "bullish"
+      : displayedOverallScore !== null && displayedOverallScore <= 45
+        ? "bearish"
+        : "neutral";
   const primaryCommand = getPrimaryCommand(activeController);
   const turboContracts = turboCandidates?.suggestions ?? [];
   const leadTurboContract = turboContracts[0] ?? null;
@@ -1187,6 +1199,14 @@ export function AlgoControllerV2({
       minimumTargetQty,
     minimumTargetQty,
   );
+
+  useEffect(() => {
+    if (!autoBiasEnabled || mode !== "turbo") {
+      return;
+    }
+
+    setBias(autoBiasSuggestion);
+  }, [autoBiasEnabled, autoBiasSuggestion, mode]);
 
   async function handleControllerCommand(command: "PLAY" | "PAUSE" | "RESUME" | "EJECT") {
     setError("");
@@ -1710,6 +1730,14 @@ export function AlgoControllerV2({
                     <strong>{turboBiasHeadline}</strong>
                   </div>
                   <p className="algo-v2-mini-gauge-copy">{turboBiasCopy}</p>
+                  <label className="algo-v2-gauge-toggle">
+                    <span>{autoBiasEnabled ? "Auto Bias On" : "Auto Bias Off"}</span>
+                    <input
+                      type="checkbox"
+                      checked={autoBiasEnabled}
+                      onChange={(event) => setAutoBiasEnabled(event.target.checked)}
+                    />
+                  </label>
                   <div className="algo-v2-bias-buttons is-rail">
                     <button
                       type="button"
