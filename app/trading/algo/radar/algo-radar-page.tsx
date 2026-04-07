@@ -63,6 +63,12 @@ const ANALYSIS_TIMEFRAMES: Array<{ value: AlpacaBarTimeframe; label: string }> =
   { value: "1Week", label: "1 Week" },
 ];
 const RADAR_STORAGE_KEY = "algo-radar-v1";
+const AUTO_SCAN_SYMBOL_CAP = 10;
+const AUTO_SCAN_INTERVALS = [
+  { value: 60, label: "60s" },
+  { value: 120, label: "2m" },
+  { value: 300, label: "5m" },
+] as const;
 const FAVORABLE_GAUGE_THRESHOLD = 61;
 const STRONG_GAUGE_THRESHOLD = 81;
 const GAUGE_WEIGHTS: Record<GaugeKey, Record<string, number>> = {
@@ -655,11 +661,14 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
     timeframeConfluence: true,
   });
   const [showOnlyMatches, setShowOnlyMatches] = useState(false);
+  const [autoScanEnabled, setAutoScanEnabled] = useState(false);
+  const [autoScanIntervalSeconds, setAutoScanIntervalSeconds] = useState<number>(60);
   const [results, setResults] = useState<RadarResult[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState("");
   const [lastScanCount, setLastScanCount] = useState(0);
   const [hasRestoredState, setHasRestoredState] = useState(false);
+  const [scanNotice, setScanNotice] = useState("");
 
   const parsedWatchlist = useMemo(() => parseWatchlist(watchlistInput), [watchlistInput]);
 
@@ -680,6 +689,8 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
         thresholds: Record<GaugeKey, number>;
         enabledGauges: Record<GaugeKey, boolean>;
         showOnlyMatches: boolean;
+        autoScanEnabled: boolean;
+        autoScanIntervalSeconds: number;
       }>;
 
       if (typeof saved.watchlistInput === "string" && saved.watchlistInput.trim()) {
@@ -743,6 +754,17 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
       if (typeof saved.showOnlyMatches === "boolean") {
         setShowOnlyMatches(saved.showOnlyMatches);
       }
+
+      if (typeof saved.autoScanEnabled === "boolean") {
+        setAutoScanEnabled(saved.autoScanEnabled);
+      }
+
+      if (
+        typeof saved.autoScanIntervalSeconds === "number" &&
+        AUTO_SCAN_INTERVALS.some((item) => item.value === saved.autoScanIntervalSeconds)
+      ) {
+        setAutoScanIntervalSeconds(saved.autoScanIntervalSeconds);
+      }
     } catch {
       // Ignore invalid local state and fall back to the seeded defaults.
     } finally {
@@ -765,9 +787,13 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
         thresholds,
         enabledGauges,
         showOnlyMatches,
+        autoScanEnabled,
+        autoScanIntervalSeconds,
       }),
     );
   }, [
+    autoScanEnabled,
+    autoScanIntervalSeconds,
     analysisTimeframe,
     confluenceSensitivity,
     enabledGauges,
@@ -789,8 +815,29 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasRestoredState]);
 
+  useEffect(() => {
+    if (!hasRestoredState || !autoScanEnabled || isScanning) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      startTransition(() => {
+        void handleScan();
+      });
+    }, autoScanIntervalSeconds * 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoScanEnabled, autoScanIntervalSeconds, hasRestoredState, isScanning]);
+
   async function handleScan() {
-    const symbols = parseWatchlist(watchlistInput);
+    const parsedSymbols = parseWatchlist(watchlistInput);
+    const symbols =
+      autoScanEnabled && parsedSymbols.length > AUTO_SCAN_SYMBOL_CAP
+        ? parsedSymbols.slice(0, AUTO_SCAN_SYMBOL_CAP)
+        : parsedSymbols;
 
     if (symbols.length === 0) {
       setError("Add at least one ticker or market pair to scan.");
@@ -799,6 +846,7 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
     }
 
     setError("");
+    setScanNotice("");
     setIsScanning(true);
 
     try {
@@ -859,6 +907,13 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
 
       setResults(nextResults);
       setLastScanCount(symbols.length);
+      if (autoScanEnabled && parsedSymbols.length > AUTO_SCAN_SYMBOL_CAP) {
+        setScanNotice(
+          `Auto Scan is capped at the first ${AUTO_SCAN_SYMBOL_CAP} symbols to keep the radar responsive on your current hosting setup.`,
+        );
+      } else {
+        setScanNotice("");
+      }
     } catch (scanError) {
       setError(
         scanError instanceof Error
@@ -960,6 +1015,29 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
           <label className="checkbox-label radar-inline-toggle">
             <input
               type="checkbox"
+              checked={autoScanEnabled}
+              onChange={(event) => setAutoScanEnabled(event.target.checked)}
+            />
+            Auto Scan
+          </label>
+          <label className="radar-field">
+            <span className="algo-v2-field-label">Interval</span>
+            <select
+              className="form-input"
+              value={autoScanIntervalSeconds}
+              onChange={(event) => setAutoScanIntervalSeconds(Number(event.target.value))}
+              disabled={!autoScanEnabled}
+            >
+              {AUTO_SCAN_INTERVALS.map((interval) => (
+                <option key={interval.value} value={interval.value}>
+                  {interval.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="checkbox-label radar-inline-toggle">
+            <input
+              type="checkbox"
               checked={showOnlyMatches}
               onChange={(event) => setShowOnlyMatches(event.target.checked)}
             />
@@ -967,6 +1045,11 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
           </label>
         </div>
       </div>
+
+      <p className="meta">
+        Auto Scan is best kept to about {AUTO_SCAN_SYMBOL_CAP} symbols or fewer on this setup. When it is on,
+        the radar scans the first {AUTO_SCAN_SYMBOL_CAP} symbols in your watchlist at the selected interval.
+      </p>
 
       <div className="radar-detector-grid">
         {(
@@ -1042,6 +1125,7 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
         </div>
 
         {error ? <p className="form-error">{error}</p> : null}
+        {scanNotice ? <p className="form-help">{scanNotice}</p> : null}
 
         {visibleResults.length === 0 ? (
           <div className="radar-empty card">
