@@ -17,7 +17,7 @@ type ControllerResult = Awaited<ReturnType<typeof runAlpacaTradeController>>;
 type AutomationCycleResult = Awaited<ReturnType<typeof runAlpacaAutomationNow>>;
 type SupportedAssetClass = "stocks" | "crypto" | "forex";
 type StrategyType = "NONE" | "SMA" | "EMA" | "BOLLINGER";
-type StrategyTimeframe = "1Min" | "5Min" | "15Min" | "1Hour" | "1Day";
+type StrategyTimeframe = "1Min" | "5Min" | "15Min" | "30Min" | "1Hour" | "1Day" | "1Week";
 const CRYPTO_MIN_ORDER_VALUE_USD = 10;
 const STRATEGY_TIMEFRAME_OPTIONS: Array<{
   value: StrategyTimeframe;
@@ -27,8 +27,10 @@ const STRATEGY_TIMEFRAME_OPTIONS: Array<{
   { value: "1Min", label: "1 Minute", chartValue: "1m" },
   { value: "5Min", label: "5 Minutes", chartValue: "5m" },
   { value: "15Min", label: "15 Minutes", chartValue: "15m" },
+  { value: "30Min", label: "30 Minutes", chartValue: "30m" },
   { value: "1Hour", label: "1 Hour", chartValue: "1h" },
   { value: "1Day", label: "1 Day", chartValue: "1d" },
+  { value: "1Week", label: "1 Week", chartValue: "1W" },
 ];
 
 const STRATEGY_DESCRIPTIONS: Record<

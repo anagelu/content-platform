@@ -51,8 +51,10 @@ const ANALYSIS_TIMEFRAMES: Array<{ value: AlpacaBarTimeframe; label: string }> =
   { value: "1Min", label: "1 Min" },
   { value: "5Min", label: "5 Min" },
   { value: "15Min", label: "15 Min" },
+  { value: "30Min", label: "30 Min" },
   { value: "1Hour", label: "1 Hour" },
   { value: "1Day", label: "1 Day" },
+  { value: "1Week", label: "1 Week" },
 ];
 const GAUGE_WEIGHTS: Record<GaugeKey, Record<string, number>> = {
   trend: {
@@ -411,6 +413,32 @@ function scoreFromInversePercent(value: number | null, strongThreshold: number, 
   return clamp(90 - progress * 70, 20, 90);
 }
 
+function applySensitivityToScore(rawScore: number, sensitivity: number) {
+  const bias = (sensitivity - 50) / 50;
+
+  if (bias === 0) {
+    return clamp(rawScore, 0, 100);
+  }
+
+  if (bias < 0) {
+    return clamp(
+      rawScore >= 50
+        ? rawScore + (100 - rawScore) * Math.abs(bias) * 0.35
+        : rawScore + (50 - rawScore) * Math.abs(bias) * 0.15,
+      0,
+      100,
+    );
+  }
+
+  return clamp(
+    rawScore >= 50
+      ? rawScore - (rawScore - 50) * bias * 0.45
+      : rawScore - (50 - rawScore) * bias * 0.15,
+    0,
+    100,
+  );
+}
+
 function weightedScore(subscores: GaugeSubscore[], weights: Record<string, number>) {
   let totalWeight = 0;
   let total = 0;
@@ -433,8 +461,11 @@ function createGauge(
   label: string,
   subscores: GaugeSubscore[],
   weights: Record<string, number>,
+  sensitivity: number,
 ) {
-  const score = Math.round(clamp(weightedScore(subscores, weights), 0, 100));
+  const score = Math.round(
+    applySensitivityToScore(clamp(weightedScore(subscores, weights), 0, 100), sensitivity),
+  );
   const band = getScoreBand(score);
   const tone = getScoreTone(score);
   const reason = getGaugeReason(label, score);
@@ -453,9 +484,11 @@ function createGauge(
 function buildConfluenceModel({
   snapshot,
   isCrypto,
+  sensitivity,
 }: {
   snapshot: Snapshot | null;
   isCrypto: boolean;
+  sensitivity: number;
 }): ConfluenceModel {
   if (!snapshot) {
     return {
@@ -579,9 +612,9 @@ function buildConfluenceModel({
     },
   ];
   const gauges: GaugeResult[] = [
-    createGauge("trend", "Trend", trendSubscores, GAUGE_WEIGHTS.trend),
-    createGauge("momentum", "Momentum", momentumSubscores, GAUGE_WEIGHTS.momentum),
-    createGauge("execution", "Execution", executionSubscores, GAUGE_WEIGHTS.execution),
+    createGauge("trend", "Trend", trendSubscores, GAUGE_WEIGHTS.trend, sensitivity),
+    createGauge("momentum", "Momentum", momentumSubscores, GAUGE_WEIGHTS.momentum, sensitivity),
+    createGauge("execution", "Execution", executionSubscores, GAUGE_WEIGHTS.execution, sensitivity),
   ];
   const overallWeights = getOverallWeights();
   const overallWeightTotal = gauges.reduce((sum, gauge) => sum + overallWeights[gauge.key], 0);
@@ -667,6 +700,7 @@ export function AlgoControllerV2({
   const [analysisTimeframe, setAnalysisTimeframe] = useState<AlpacaBarTimeframe>(
     initialControllers.find((controller) => controller.symbol === initialSymbol)?.strategyTimeframe ?? "1Day",
   );
+  const [confluenceSensitivity, setConfluenceSensitivity] = useState(50);
   const [targetSize, setTargetSize] = useState(
     String(initialControllers.find((controller) => controller.symbol === initialSymbol)?.targetQty ?? 10),
   );
@@ -789,6 +823,7 @@ export function AlgoControllerV2({
   const confluence = buildConfluenceModel({
     snapshot,
     isCrypto,
+    sensitivity: confluenceSensitivity,
   });
   const enabledGauges = confluence.gauges.filter((gauge) => gaugeToggles[gauge.key]);
   const enabledOverallWeights = getOverallWeights();
@@ -1003,6 +1038,30 @@ export function AlgoControllerV2({
             </select>
           </label>
 
+          <label className="algo-v2-field algo-v2-field-wide">
+            <span className="algo-v2-field-label">Confluence Sensitivity</span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={confluenceSensitivity}
+              onChange={(event) => setConfluenceSensitivity(Number(event.target.value))}
+              className="algo-v2-range"
+            />
+            <div className="algo-v2-slider-scale">
+              <span>Fast</span>
+              <span>
+                {confluenceSensitivity < 35
+                  ? "Fast"
+                  : confluenceSensitivity > 65
+                    ? "Strict"
+                    : "Balanced"}
+              </span>
+              <span>Strict</span>
+            </div>
+          </label>
+
           <div className="algo-v2-mode-toggle" role="tablist" aria-label="Controller mode">
             <button
               type="button"
@@ -1187,6 +1246,16 @@ export function AlgoControllerV2({
                 <div>
                   <span>Analysis timeframe</span>
                   <strong>{analysisTimeframe}</strong>
+                </div>
+                <div>
+                  <span>Confluence mode</span>
+                  <strong>
+                    {confluenceSensitivity < 35
+                      ? "Fast"
+                      : confluenceSensitivity > 65
+                        ? "Strict"
+                        : "Balanced"}
+                  </strong>
                 </div>
                 <div>
                   <span>Latest price</span>

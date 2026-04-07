@@ -9,7 +9,7 @@ export type AlpacaTradeController = {
   status: AlpacaTradeControllerStatus;
   targetQty: number;
   strategyType: "NONE" | "SMA" | "EMA" | "BOLLINGER";
-  strategyTimeframe: "1Min" | "5Min" | "15Min" | "1Hour" | "1Day";
+  strategyTimeframe: "1Min" | "5Min" | "15Min" | "30Min" | "1Hour" | "1Day" | "1Week";
   fastPeriod: number;
   slowPeriod: number;
   bollingerLength: number;
@@ -83,7 +83,7 @@ export async function upsertAlpacaTradeController(input: {
   status: AlpacaTradeControllerStatus;
   targetQty: number;
   strategyType: "NONE" | "SMA" | "EMA" | "BOLLINGER";
-  strategyTimeframe: "1Min" | "5Min" | "15Min" | "1Hour" | "1Day";
+  strategyTimeframe: "1Min" | "5Min" | "15Min" | "30Min" | "1Hour" | "1Day" | "1Week";
   fastPeriod: number;
   slowPeriod: number;
   bollingerLength: number;

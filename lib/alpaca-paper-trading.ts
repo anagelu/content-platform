@@ -348,6 +348,53 @@ function calculateSignalAgeSeconds(...timestamps: Array<string | null | undefine
   return Math.round(ageMs / 1000);
 }
 
+function getWeekStartKey(timestamp: string) {
+  const date = new Date(timestamp);
+  const utcDay = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() - utcDay + 1);
+  date.setUTCHours(0, 0, 0, 0);
+  return date.toISOString();
+}
+
+function aggregateBarsToWeekly(
+  bars: Array<{
+    symbol: string;
+    timestamp: string;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+  }>,
+) {
+  const weeklyBars = new Map<string, (typeof bars)[number]>();
+
+  for (const bar of bars) {
+    const key = getWeekStartKey(bar.timestamp);
+    const existing = weeklyBars.get(key);
+
+    if (!existing) {
+      weeklyBars.set(key, {
+        ...bar,
+        timestamp: key,
+      });
+      continue;
+    }
+
+    weeklyBars.set(key, {
+      ...existing,
+      high: Math.max(existing.high, bar.high),
+      low: Math.min(existing.low, bar.low),
+      close: bar.close,
+      volume: existing.volume + bar.volume,
+    });
+  }
+
+  return Array.from(weeklyBars.values()).sort((left, right) =>
+    left.timestamp.localeCompare(right.timestamp),
+  );
+}
+
 function calculateVwap(bars: Array<{ high: number; low: number; close: number; volume: number }>) {
   let weightedTotal = 0;
   let volumeTotal = 0;
@@ -523,7 +570,12 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
   const maxDailyLoss =
     input?.maxDailyLoss ??
     parsePositiveNumber(process.env.ALPACA_MAX_DAILY_LOSS, 25);
-  const barLimit = Math.max(slowPeriod, bollingerLength, 120);
+  const requestedTimeframe = timeframe;
+  const sourceTimeframe = requestedTimeframe === "1Week" ? "1Day" : requestedTimeframe;
+  const sourceBarLimit =
+    requestedTimeframe === "1Week"
+      ? Math.max((Math.max(slowPeriod, bollingerLength, 120) + 4) * 5, 520)
+      : Math.max(slowPeriod, bollingerLength, 120);
 
   if (
     (strategyType === "SMA" || strategyType === "EMA") &&
@@ -554,16 +606,16 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
       ? getCryptoBars(
           symbol,
           {
-            timeframe,
-            limit: barLimit,
+            timeframe: sourceTimeframe,
+            limit: sourceBarLimit,
           },
           credentials,
         )
       : getStockBars(
           symbol,
           {
-            timeframe,
-            limit: barLimit,
+            timeframe: sourceTimeframe,
+            limit: sourceBarLimit,
           },
           credentials,
         ),
@@ -578,15 +630,16 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
     quote.askPrice,
     quote.bidPrice,
     trade.price,
-    bars.at(-1)?.close,
+    (requestedTimeframe === "1Week" ? aggregateBarsToWeekly(bars) : bars).at(-1)?.close,
   );
 
   if (!latestPrice) {
     throw new Error(`Unable to determine a usable quote for ${symbol}.`);
   }
 
-  const closes = bars.map((bar) => bar.close);
-  const volumes = bars.map((bar) => bar.volume);
+  const normalizedBars = requestedTimeframe === "1Week" ? aggregateBarsToWeekly(bars) : bars;
+  const closes = normalizedBars.map((bar) => bar.close);
+  const volumes = normalizedBars.map((bar) => bar.volume);
   const hasLongPosition = Boolean(position && position.qty > 0);
   const previousClose = closes.at(-2) ?? null;
   const priceChangePercent = Number(
@@ -599,7 +652,7 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
   const signalAgeSeconds = calculateSignalAgeSeconds(
     trade.timestamp,
     quote.timestamp,
-    bars.at(-1)?.timestamp ?? null,
+    normalizedBars.at(-1)?.timestamp ?? null,
   );
   const quoteAgeSeconds = calculateSignalAgeSeconds(quote.timestamp);
   const spreadPercent =
@@ -615,9 +668,9 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
     emaShort !== null && emaShortLookback && emaShortLookback > 0
       ? ((emaShort - emaShortLookback) / emaShortLookback) * 100
       : null;
-  const vwapRaw = calculateVwap(bars);
+  const vwapRaw = calculateVwap(normalizedBars);
   const vwap = vwapRaw === null ? null : Number(vwapRaw.toFixed(4));
-  const structurePercentRaw = calculateStructurePercent(bars);
+  const structurePercentRaw = calculateStructurePercent(normalizedBars);
   const structurePercent =
     structurePercentRaw === null ? null : Number(structurePercentRaw.toFixed(2));
   const rsi14Raw = calculateRsi(closes, 14);
@@ -632,7 +685,7 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
       : Number(((macd.histogram / latestPrice) * 100).toFixed(4));
   const roc12Raw = calculateRoc(closes, 12);
   const roc12 = roc12Raw === null ? null : Number(roc12Raw.toFixed(2));
-  const candleExpansionRatioRaw = calculateCandleExpansionRatio(bars);
+  const candleExpansionRatioRaw = calculateCandleExpansionRatio(normalizedBars);
   const candleExpansionRatio =
     candleExpansionRatioRaw === null ? null : Number(candleExpansionRatioRaw.toFixed(2));
   const strategy =
@@ -682,7 +735,7 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
       mode: "analysis-only" as const,
       environment: credentials.environment,
       symbol,
-      timeframe,
+      timeframe: requestedTimeframe,
       strategyType,
       latestPrice,
       dailyPnL: Number(dailyPnL.toFixed(2)),
@@ -710,7 +763,7 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
       latestTradePrice: trade.price,
       latestTradeTimestamp: trade.timestamp,
       quoteTimestamp: quote.timestamp,
-      lastBarTimestamp: bars.at(-1)?.timestamp ?? null,
+      lastBarTimestamp: normalizedBars.at(-1)?.timestamp ?? null,
       trendStrength,
       priceChangePercent,
       relativeVolume,
@@ -736,7 +789,7 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
     mode: "analysis-only" as const,
     environment: credentials.environment,
     symbol,
-    timeframe,
+    timeframe: requestedTimeframe,
     strategyType,
     latestPrice,
     dailyPnL: Number(dailyPnL.toFixed(2)),
@@ -761,7 +814,7 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
     latestTradePrice: trade.price,
     latestTradeTimestamp: trade.timestamp,
     quoteTimestamp: quote.timestamp,
-    lastBarTimestamp: bars.at(-1)?.timestamp ?? null,
+    lastBarTimestamp: normalizedBars.at(-1)?.timestamp ?? null,
     trendStrength,
     priceChangePercent,
     relativeVolume,

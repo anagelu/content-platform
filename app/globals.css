@@ -1301,6 +1301,11 @@ main {
   min-width: 180px;
 }
 
+.algo-v2-field-wide {
+  min-width: 240px;
+  flex: 1 1 260px;
+}
+
 .algo-v2-field-label {
   color: #7c4f18;
   font-size: 0.75rem;

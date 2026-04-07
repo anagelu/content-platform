@@ -124,10 +124,12 @@ function normalizeControllerInput(input: {
   const symbol = normalizeAlpacaTradingSymbol(input.symbol);
   const targetQty = Number(input.targetQty);
   const strategyTimeframe: AlpacaBarTimeframe =
+    input.strategyTimeframe === "30Min" ||
     input.strategyTimeframe === "5Min" ||
     input.strategyTimeframe === "15Min" ||
     input.strategyTimeframe === "1Hour" ||
-    input.strategyTimeframe === "1Day"
+    input.strategyTimeframe === "1Day" ||
+    input.strategyTimeframe === "1Week"
       ? input.strategyTimeframe
       : "1Min";
   const strategyType: AlpacaPaperStrategyType =

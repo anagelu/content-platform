@@ -27,8 +27,10 @@ export type AlpacaBarTimeframe =
   | "1Min"
   | "5Min"
   | "15Min"
+  | "30Min"
   | "1Hour"
-  | "1Day";
+  | "1Day"
+  | "1Week";
 
 export type AlpacaCredentials = {
   keyId: string;
