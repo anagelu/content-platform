@@ -146,6 +146,36 @@ export type AlpacaOrderResolution = {
   order: AlpacaOrder;
   reachedFinalState: boolean;
 };
+export type AlpacaOptionContract = {
+  symbol: string;
+  underlyingSymbol: string;
+  rootSymbol: string;
+  type: "call" | "put";
+  style: "american" | "european" | "unknown";
+  expirationDate: string;
+  strikePrice: number;
+  size: number | null;
+  openInterest: number | null;
+  openInterestDate: string | null;
+  closePrice: number | null;
+  closePriceDate: string | null;
+};
+export type AlpacaOptionSnapshot = {
+  symbol: string;
+  latestTradePrice: number | null;
+  latestTradeSize: number | null;
+  latestTradeTimestamp: string | null;
+  latestBidPrice: number | null;
+  latestAskPrice: number | null;
+  bidSize: number | null;
+  askSize: number | null;
+  latestQuoteTimestamp: string | null;
+  impliedVolatility: number | null;
+  delta: number | null;
+  gamma: number | null;
+  theta: number | null;
+  vega: number | null;
+};
 
 type JsonRecord = Record<string, unknown>;
 
@@ -451,6 +481,96 @@ function mapSnapshot(symbol: string, payload: JsonRecord): AlpacaStockSnapshot {
     dailyVolume: parseFiniteNumber(dailyBar?.v),
     previousClose: parseFiniteNumber(prevDailyBar?.c),
     previousVolume: parseFiniteNumber(prevDailyBar?.v),
+  };
+}
+
+function mapOptionContract(payload: JsonRecord): AlpacaOptionContract {
+  const symbol = requireString(payload.symbol, "option contract symbol");
+  const underlyingSymbol = requireString(
+    payload.underlying_symbol ?? payload.underlying_asset_id ?? payload.root_symbol ?? symbol,
+    "option contract underlying symbol",
+  );
+  const rootSymbol =
+    typeof payload.root_symbol === "string" && payload.root_symbol.trim()
+      ? payload.root_symbol.trim().toUpperCase()
+      : underlyingSymbol;
+  const strikePrice = parseFiniteNumber(payload.strike_price);
+  const expirationDate =
+    typeof payload.expiration_date === "string" && payload.expiration_date.trim()
+      ? payload.expiration_date
+      : typeof payload.expiry === "string" && payload.expiry.trim()
+        ? payload.expiry
+        : "";
+
+  if (strikePrice === null || !expirationDate) {
+    throw new Error(`Received invalid option contract metadata for ${symbol}.`);
+  }
+
+  return {
+    symbol,
+    underlyingSymbol,
+    rootSymbol,
+    type: payload.type === "put" ? "put" : "call",
+    style:
+      payload.style === "american"
+        ? "american"
+        : payload.style === "european"
+          ? "european"
+          : "unknown",
+    expirationDate,
+    strikePrice,
+    size: parseFiniteNumber(payload.size),
+    openInterest: parseFiniteNumber(payload.open_interest),
+    openInterestDate:
+      typeof payload.open_interest_date === "string" ? payload.open_interest_date : null,
+    closePrice: parseFiniteNumber(payload.close_price),
+    closePriceDate: typeof payload.close_price_date === "string" ? payload.close_price_date : null,
+  };
+}
+
+function mapOptionSnapshot(symbol: string, payload: JsonRecord): AlpacaOptionSnapshot {
+  const latestTrade =
+    payload.latestTrade && typeof payload.latestTrade === "object"
+      ? (payload.latestTrade as JsonRecord)
+      : payload.latest_trade && typeof payload.latest_trade === "object"
+        ? (payload.latest_trade as JsonRecord)
+        : null;
+  const latestQuote =
+    payload.latestQuote && typeof payload.latestQuote === "object"
+      ? (payload.latestQuote as JsonRecord)
+      : payload.latest_quote && typeof payload.latest_quote === "object"
+        ? (payload.latest_quote as JsonRecord)
+        : null;
+  const greeks =
+    payload.greeks && typeof payload.greeks === "object"
+      ? (payload.greeks as JsonRecord)
+      : null;
+
+  return {
+    symbol,
+    latestTradePrice: parseFiniteNumber(latestTrade?.p ?? latestTrade?.price),
+    latestTradeSize: parseFiniteNumber(latestTrade?.s ?? latestTrade?.size),
+    latestTradeTimestamp:
+      typeof latestTrade?.t === "string"
+        ? latestTrade.t
+        : typeof latestTrade?.timestamp === "string"
+          ? latestTrade.timestamp
+          : null,
+    latestBidPrice: parseFiniteNumber(latestQuote?.bp ?? latestQuote?.bid_price),
+    latestAskPrice: parseFiniteNumber(latestQuote?.ap ?? latestQuote?.ask_price),
+    bidSize: parseFiniteNumber(latestQuote?.bs ?? latestQuote?.bid_size),
+    askSize: parseFiniteNumber(latestQuote?.as ?? latestQuote?.ask_size),
+    latestQuoteTimestamp:
+      typeof latestQuote?.t === "string"
+        ? latestQuote.t
+        : typeof latestQuote?.timestamp === "string"
+          ? latestQuote.timestamp
+          : null,
+    impliedVolatility: parseFiniteNumber(greeks?.iv ?? greeks?.implied_volatility),
+    delta: parseFiniteNumber(greeks?.delta),
+    gamma: parseFiniteNumber(greeks?.gamma),
+    theta: parseFiniteNumber(greeks?.theta),
+    vega: parseFiniteNumber(greeks?.vega),
   };
 }
 
@@ -911,6 +1031,128 @@ export async function getStockSnapshots(
     Object.entries(payload).map(([symbol, snapshot]) => [
       symbol,
       mapSnapshot(symbol, snapshot),
+    ]),
+  );
+}
+
+export async function listAlpacaOptionContracts(
+  {
+    underlyingSymbol,
+    type,
+    expirationDateGte,
+    expirationDateLte,
+    strikePriceGte,
+    strikePriceLte,
+    limit = 100,
+  }: {
+    underlyingSymbol: string;
+    type?: "call" | "put";
+    expirationDateGte?: string;
+    expirationDateLte?: string;
+    strikePriceGte?: number;
+    strikePriceLte?: number;
+    limit?: number;
+  },
+  credentials = getAlpacaCredentials(),
+): Promise<AlpacaOptionContract[]> {
+  const normalizedSymbol = underlyingSymbol.trim().toUpperCase();
+  const url = new URL(`${getTradingBaseUrl(credentials.environment)}/options/contracts`);
+  url.searchParams.set("underlying_symbols", normalizedSymbol);
+  url.searchParams.set("status", "active");
+  url.searchParams.set("limit", String(limit));
+
+  if (type) {
+    url.searchParams.set("type", type);
+  }
+
+  if (expirationDateGte) {
+    url.searchParams.set("expiration_date_gte", expirationDateGte);
+  }
+
+  if (expirationDateLte) {
+    url.searchParams.set("expiration_date_lte", expirationDateLte);
+  }
+
+  if (Number.isFinite(strikePriceGte)) {
+    url.searchParams.set("strike_price_gte", String(strikePriceGte));
+  }
+
+  if (Number.isFinite(strikePriceLte)) {
+    url.searchParams.set("strike_price_lte", String(strikePriceLte));
+  }
+
+  const payload = await createAlpacaRequest<{
+    option_contracts?: JsonRecord[];
+    contracts?: JsonRecord[];
+  }>({
+    credentials,
+    url: url.toString(),
+  });
+
+  const contracts = payload.option_contracts ?? payload.contracts ?? [];
+  return contracts.map(mapOptionContract);
+}
+
+export async function getAlpacaOptionChainSnapshots(
+  {
+    underlyingSymbol,
+    type,
+    expirationDateGte,
+    expirationDateLte,
+    strikePriceGte,
+    strikePriceLte,
+    limit = 100,
+    feed = process.env.ALPACA_OPTIONS_FEED?.trim() === "opra" ? "opra" : "indicative",
+  }: {
+    underlyingSymbol: string;
+    type?: "call" | "put";
+    expirationDateGte?: string;
+    expirationDateLte?: string;
+    strikePriceGte?: number;
+    strikePriceLte?: number;
+    limit?: number;
+    feed?: "opra" | "indicative";
+  },
+  credentials = getAlpacaCredentials(),
+): Promise<Record<string, AlpacaOptionSnapshot>> {
+  const normalizedSymbol = underlyingSymbol.trim().toUpperCase();
+  const url = new URL(
+    `https://data.alpaca.markets/v1beta1/options/snapshots/${encodeURIComponent(normalizedSymbol)}`,
+  );
+  url.searchParams.set("feed", feed);
+  url.searchParams.set("limit", String(limit));
+
+  if (type) {
+    url.searchParams.set("type", type);
+  }
+
+  if (expirationDateGte) {
+    url.searchParams.set("expiration_date_gte", expirationDateGte);
+  }
+
+  if (expirationDateLte) {
+    url.searchParams.set("expiration_date_lte", expirationDateLte);
+  }
+
+  if (Number.isFinite(strikePriceGte)) {
+    url.searchParams.set("strike_price_gte", String(strikePriceGte));
+  }
+
+  if (Number.isFinite(strikePriceLte)) {
+    url.searchParams.set("strike_price_lte", String(strikePriceLte));
+  }
+
+  const payload = await createAlpacaRequest<{
+    snapshots?: Record<string, JsonRecord>;
+  }>({
+    credentials,
+    url: url.toString(),
+  });
+
+  return Object.fromEntries(
+    Object.entries(payload.snapshots ?? {}).map(([symbol, snapshot]) => [
+      symbol,
+      mapOptionSnapshot(symbol, snapshot),
     ]),
   );
 }

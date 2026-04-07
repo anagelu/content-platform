@@ -12,7 +12,10 @@ import {
   type AlpacaBarTimeframe,
   type AlpacaOrder,
   getLatestCryptoTrade,
+  getLatestStockTrade,
+  getAlpacaOptionChainSnapshots,
   listAlpacaOrders,
+  listAlpacaOptionContracts,
   listAlpacaPositions,
   getAlpacaPosition,
   isAlpacaCryptoSymbol,
@@ -30,6 +33,10 @@ import {
   upsertAlpacaTradeController,
 } from "@/lib/alpaca-trade-controller";
 import { runAlpacaAutomationCycle } from "@/lib/alpaca-controller-automation";
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
 
 async function requireSignedInUser() {
   const session = await auth();
@@ -222,6 +229,142 @@ export async function getAlpacaAlgoSnapshot(input: {
     maxNotional: input.maxNotional,
     maxDailyLoss: input.maxDailyLoss,
   });
+}
+
+export async function getTurboOptionCandidates(input: {
+  underlyingSymbol: string;
+  bias: "bullish" | "neutral" | "bearish";
+  targetDelta: number;
+  daysToExpiry: number;
+}) {
+  await requireSignedInUser();
+
+  const underlyingSymbol = input.underlyingSymbol.trim().toUpperCase();
+
+  if (!underlyingSymbol) {
+    throw new Error("Add an underlying symbol first.");
+  }
+
+  if (isAlpacaCryptoSymbol(underlyingSymbol)) {
+    throw new Error("Turbo options suggestions currently support stocks and ETFs only.");
+  }
+
+  const optionType = input.bias === "bearish" ? "put" : "call";
+  const targetDelta = clampTurboDelta(input.targetDelta);
+  const targetDate = new Date();
+  targetDate.setDate(targetDate.getDate() + Math.max(1, Math.round(input.daysToExpiry)));
+  const minDate = new Date();
+  minDate.setDate(minDate.getDate() + Math.max(1, Math.round(input.daysToExpiry - 7)));
+  const maxDate = new Date();
+  maxDate.setDate(maxDate.getDate() + Math.max(2, Math.round(input.daysToExpiry + 7)));
+
+  const latestTrade = await getLatestStockTrade(underlyingSymbol);
+  const latestPrice = latestTrade.price;
+  const strikeWindow = latestPrice * 0.12;
+  const strikePriceGte = Math.max(1, latestPrice - strikeWindow);
+  const strikePriceLte = latestPrice + strikeWindow;
+  const expirationDateGte = minDate.toISOString().slice(0, 10);
+  const expirationDateLte = maxDate.toISOString().slice(0, 10);
+
+  const [contracts, snapshots] = await Promise.all([
+    listAlpacaOptionContracts({
+      underlyingSymbol,
+      type: optionType,
+      expirationDateGte,
+      expirationDateLte,
+      strikePriceGte,
+      strikePriceLte,
+      limit: 60,
+    }),
+    getAlpacaOptionChainSnapshots({
+      underlyingSymbol,
+      type: optionType,
+      expirationDateGte,
+      expirationDateLte,
+      strikePriceGte,
+      strikePriceLte,
+      limit: 60,
+    }),
+  ]);
+
+  const suggestions = contracts
+    .map((contract) => {
+      const snapshot = snapshots[contract.symbol];
+
+      if (!snapshot) {
+        return null;
+      }
+
+      const midPrice =
+        snapshot.latestBidPrice !== null && snapshot.latestAskPrice !== null
+          ? (snapshot.latestBidPrice + snapshot.latestAskPrice) / 2
+          : snapshot.latestTradePrice;
+      const deltaMagnitude = Math.abs(snapshot.delta ?? 0);
+      const deltaAlignment = clamp(100 - Math.abs(deltaMagnitude - targetDelta) * 240, 0, 100);
+      const dteDistance = Math.abs(daysBetween(contract.expirationDate, targetDate));
+      const dteAlignment = clamp(100 - dteDistance * 8, 20, 100);
+      const spreadPercent =
+        snapshot.latestBidPrice !== null &&
+        snapshot.latestAskPrice !== null &&
+        midPrice !== null &&
+        midPrice > 0
+          ? ((snapshot.latestAskPrice - snapshot.latestBidPrice) / midPrice) * 100
+          : null;
+      const spreadScore =
+        spreadPercent === null ? 55 : clamp(100 - spreadPercent * 18, 20, 100);
+      const liquidityScore = clamp(45 + (contract.openInterest ?? 0) / 12, 30, 100);
+      const fitScore = Math.round(
+        clamp(
+          deltaAlignment * 0.4 +
+            dteAlignment * 0.2 +
+            spreadScore * 0.25 +
+            liquidityScore * 0.15,
+          0,
+          100,
+        ),
+      );
+
+      return {
+        ...contract,
+        snapshot,
+        markPrice: midPrice,
+        spreadPercent,
+        fitScore,
+        breakevenPrice:
+          midPrice === null
+            ? null
+            : contract.type === "call"
+              ? contract.strikePrice + midPrice
+              : contract.strikePrice - midPrice,
+      };
+    })
+    .filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null)
+    .sort((left, right) => right.fitScore - left.fitScore)
+    .slice(0, 3);
+
+  return {
+    underlyingSymbol,
+    latestUnderlyingPrice: latestPrice,
+    targetDelta,
+    optionType,
+    targetExpirationDate: targetDate.toISOString().slice(0, 10),
+    suggestions,
+  };
+}
+
+function daysBetween(dateA: string, dateB: Date) {
+  const first = new Date(dateA);
+  const second = new Date(dateB);
+  const ms = Math.abs(first.getTime() - second.getTime());
+  return Math.round(ms / (1000 * 60 * 60 * 24));
+}
+
+function clampTurboDelta(value: number) {
+  if (!Number.isFinite(value)) {
+    return 0.4;
+  }
+
+  return Math.min(0.6, Math.max(0.2, value));
 }
 
 export async function submitAlpacaPaperOrder(input: {

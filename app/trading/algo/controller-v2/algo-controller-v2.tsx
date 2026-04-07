@@ -1,11 +1,16 @@
 "use client";
 
 import { startTransition, useEffect, useMemo, useState } from "react";
-import { getAlpacaAlgoSnapshot, runAlpacaTradeController } from "../actions";
+import {
+  getAlpacaAlgoSnapshot,
+  getTurboOptionCandidates,
+  runAlpacaTradeController,
+} from "../actions";
 import type { AlpacaTradeController } from "@/lib/alpaca-trade-controller";
 import type { AlpacaBarTimeframe, AlpacaPosition } from "@/lib/alpaca";
 
 type Snapshot = Awaited<ReturnType<typeof getAlpacaAlgoSnapshot>>;
+type TurboOptionCandidatesResult = Awaited<ReturnType<typeof getTurboOptionCandidates>>;
 type ControllerResult = Awaited<ReturnType<typeof runAlpacaTradeController>>;
 type ControllerMode = "standard" | "turbo";
 type Bias = "bearish" | "neutral" | "bullish";
@@ -103,7 +108,11 @@ const GAUGE_WEIGHTS: Record<GaugeKey, Record<string, number>> = {
   },
 };
 
-function formatMoney(value: number) {
+function formatMoney(value: number | null) {
+  if (value === null || !Number.isFinite(value)) {
+    return "--";
+  }
+
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -875,48 +884,33 @@ function buildConfluenceModel({
   };
 }
 
-function buildTurboContracts({
-  symbol,
-  latestPrice,
-  bias,
-  targetDelta,
-  dte,
-}: {
-  symbol: string;
-  latestPrice: number;
-  bias: Bias;
-  targetDelta: number;
-  dte: number;
-}) {
-  const roundedPrice = Math.round(latestPrice);
-  const direction = bias === "bearish" ? "P" : "C";
-  const sign = bias === "bearish" ? -1 : 1;
-  const strikeOffsets = [0, 1, 2];
-  const contractDate = new Date();
-  contractDate.setDate(contractDate.getDate() + dte);
-  const expiry = contractDate.toLocaleDateString("en-US", {
+function formatOptionExpiration(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });
+}
 
-  return strikeOffsets.map((offset) => {
-    const strike = roundedPrice + sign * Math.round((targetDelta * 20 + offset * 2) * (bias === "bearish" ? -1 : 1));
-    const delta = Number((targetDelta + offset * 0.04).toFixed(2));
-    const mark = Number((latestPrice * (0.0045 + offset * 0.0012)).toFixed(2));
-    const spreadLabel = offset === 0 ? "tight" : offset === 1 ? "workable" : "wider";
-    const spreadScore = offset === 0 ? 88 : offset === 1 ? 72 : 58;
-    const deltaAlignment = clamp(100 - Math.abs(delta - targetDelta) * 220, 45, 100);
-    const fitScore = Math.round(clamp(deltaAlignment * 0.6 + spreadScore * 0.4, 0, 100));
+function formatOptionSpreadLabel(value: number | null) {
+  if (value === null || !Number.isFinite(value)) {
+    return "quote pending";
+  }
 
-    return {
-      id: `${symbol}-${expiry}-${strike}${direction}`,
-      label: `${symbol} ${expiry} ${strike}${direction}`,
-      delta: bias === "bearish" ? -delta : delta,
-      mark,
-      spread: spreadLabel,
-      fitScore,
-    };
-  });
+  if (value <= 1.5) {
+    return "tight";
+  }
+
+  if (value <= 4) {
+    return "workable";
+  }
+
+  return "wider";
 }
 
 export function AlgoControllerV2({
@@ -958,6 +952,9 @@ export function AlgoControllerV2({
     timeframeConfluence: true,
   });
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [turboCandidates, setTurboCandidates] = useState<TurboOptionCandidatesResult | null>(null);
+  const [turboCandidatesError, setTurboCandidatesError] = useState("");
+  const [isTurboLoading, setIsTurboLoading] = useState(false);
   const [controllers, setControllers] = useState(initialControllers);
   const [positions, setPositions] = useState(initialPositions);
   const [error, setError] = useState(initialError);
@@ -1062,6 +1059,54 @@ export function AlgoControllerV2({
     };
   }, [activeController, analysisTimeframe, normalizedSymbol]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    if (mode !== "turbo" || !normalizedSymbol || isCrypto || bias === "neutral") {
+      setTurboCandidates(null);
+      setTurboCandidatesError("");
+      setIsTurboLoading(false);
+      return;
+    }
+
+    setIsTurboLoading(true);
+    setTurboCandidatesError("");
+
+    startTransition(async () => {
+      try {
+        const result = await getTurboOptionCandidates({
+          underlyingSymbol: normalizedSymbol,
+          bias,
+          targetDelta: deltaTarget,
+          daysToExpiry,
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        setTurboCandidates(result);
+        setIsTurboLoading(false);
+      } catch (turboError) {
+        if (cancelled) {
+          return;
+        }
+
+        setTurboCandidates(null);
+        setIsTurboLoading(false);
+        setTurboCandidatesError(
+          turboError instanceof Error
+            ? turboError.message
+            : "Unable to load Turbo option candidates right now.",
+        );
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bias, daysToExpiry, deltaTarget, isCrypto, mode, normalizedSymbol]);
+
   const currentQty = snapshot?.position?.qty ?? activePosition?.qty ?? 0;
   const pendingChange = orderQtyValue;
   const positionPnl = snapshot?.position?.unrealizedPl ?? activePosition?.unrealizedPl ?? initialPnl;
@@ -1109,13 +1154,7 @@ export function AlgoControllerV2({
       ? getConfluenceReason(favorableEnabledCount, strongEnabledCount, enabledGauges.length)
       : "Turn on at least one gauge to calculate confluence.";
   const primaryCommand = getPrimaryCommand(activeController);
-  const turboContracts = buildTurboContracts({
-    symbol: normalizedSymbol || "SPY",
-    latestPrice: snapshot?.latestPrice ?? activePosition?.avgEntryPrice ?? 500,
-    bias,
-    targetDelta: deltaTarget,
-    dte: daysToExpiry,
-  });
+  const turboContracts = turboCandidates?.suggestions ?? [];
   const leadTurboContract = turboContracts[0] ?? null;
   const turboFitScore =
     leadTurboContract && displayedOverallScore !== null
@@ -1828,6 +1867,12 @@ export function AlgoControllerV2({
                   <strong>{turboBiasHeadline}</strong>
                 </div>
                 <div>
+                  <span>Target expiry</span>
+                  <strong>
+                    {turboCandidates ? formatOptionExpiration(turboCandidates.targetExpirationDate) : "--"}
+                  </strong>
+                </div>
+                <div>
                   <span>Price change</span>
                   <strong>{formatPercent(snapshot?.priceChangePercent ?? null)}</strong>
                 </div>
@@ -1840,19 +1885,43 @@ export function AlgoControllerV2({
                   <strong>{formatSignalAge(snapshot?.signalAgeSeconds ?? null)}</strong>
                 </div>
               </div>
+              {turboCandidatesError ? <p className="form-error">{turboCandidatesError}</p> : null}
+              {isTurboLoading ? <p className="form-help">Loading live option candidates...</p> : null}
               <div className="algo-v2-contract-list">
-                {turboContracts.map((contract, index) => (
-                  <article
-                    key={contract.id}
-                    className={index === 0 ? "algo-v2-contract-card is-primary" : "algo-v2-contract-card"}
-                  >
-                    <strong>{contract.label}</strong>
-                    <span>Fit {contract.fitScore} · {index === 0 ? "best candidate" : "alternate"}</span>
-                    <span>Delta {contract.delta > 0 ? "+" : ""}{contract.delta.toFixed(2)}</span>
-                    <span>Mark {formatMoney(contract.mark)}</span>
-                    <span>Spread {contract.spread}</span>
-                  </article>
-                ))}
+                {turboContracts.length > 0 ? (
+                  turboContracts.map((contract, index) => (
+                    <article
+                      key={contract.symbol}
+                      className={index === 0 ? "algo-v2-contract-card is-primary" : "algo-v2-contract-card"}
+                    >
+                      <strong>
+                        {normalizedSymbol} {formatOptionExpiration(contract.expirationDate)}{" "}
+                        {Math.round(contract.strikePrice)}
+                        {contract.type === "call" ? "C" : "P"}
+                      </strong>
+                      <span>Fit {contract.fitScore} · {index === 0 ? "best candidate" : "alternate"}</span>
+                      <span>
+                        Delta {contract.snapshot.delta !== null && contract.snapshot.delta > 0 ? "+" : ""}
+                        {formatNumber(contract.snapshot.delta, 2)}
+                      </span>
+                      <span>Mark {formatMoney(contract.markPrice)}</span>
+                      <span>Spread {formatOptionSpreadLabel(contract.spreadPercent)}</span>
+                      <span>IV {formatPercent(contract.snapshot.impliedVolatility, 1)}</span>
+                      <span>Breakeven {formatMoney(contract.breakevenPrice)}</span>
+                    </article>
+                  ))
+                ) : (
+                  <div className="algo-v2-contract-card">
+                    <strong>No live contract candidates yet</strong>
+                    <span>
+                      {bias === "neutral"
+                        ? "Choose a bullish or bearish bias to fetch real option candidates."
+                        : isCrypto
+                          ? "Turbo options currently support stocks and ETFs only."
+                          : "Widen the delta target or time horizon and try again."}
+                    </span>
+                  </div>
+                )}
               </div>
             </aside>
           </div>
