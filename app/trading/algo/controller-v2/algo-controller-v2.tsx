@@ -302,6 +302,65 @@ function getConfluenceReason(favorableCount: number, strongCount: number, total:
   return "Current market conditions are not yet favorable.";
 }
 
+function getGaugeScore(gauges: GaugeResult[], key: GaugeKey) {
+  return gauges.find((gauge) => gauge.key === key)?.score ?? 50;
+}
+
+function deriveAutoBias({
+  snapshot,
+  confluence,
+  displayedOverallScore,
+}: {
+  snapshot: Snapshot | null;
+  confluence: ConfluenceModel;
+  displayedOverallScore: number | null;
+}): Bias {
+  if (!snapshot || !confluence.isReady) {
+    return "neutral";
+  }
+
+  const trendScore = getGaugeScore(confluence.gauges, "trend");
+  const momentumScore = getGaugeScore(confluence.gauges, "momentum");
+  const executionScore = getGaugeScore(confluence.gauges, "execution");
+  const timeframeScore = getGaugeScore(confluence.gauges, "timeframeConfluence");
+  const signalScore =
+    snapshot.signal.action === "buy" ? 16 : snapshot.signal.action === "sell" ? -16 : 0;
+  const slopeScore = (snapshot.emaShortSlopePercent ?? 0) * 90;
+  const priceChangeScore = (snapshot.priceChangePercent ?? 0) * 3.5;
+  const vwapScore =
+    snapshot.vwap && snapshot.vwap > 0
+      ? ((snapshot.latestPrice - snapshot.vwap) / snapshot.vwap) * 180
+      : 0;
+  const directionalComposite =
+    signalScore +
+    (trendScore - 50) * 1.15 +
+    (momentumScore - 50) * 0.95 +
+    (timeframeScore - 50) * 0.75 +
+    (executionScore - 50) * 0.2 +
+    slopeScore +
+    priceChangeScore +
+    vwapScore;
+
+  if (
+    directionalComposite >= 18 &&
+    trendScore >= 54 &&
+    timeframeScore >= 52 &&
+    (displayedOverallScore ?? 50) >= 50
+  ) {
+    return "bullish";
+  }
+
+  if (
+    directionalComposite <= -18 &&
+    trendScore <= 46 &&
+    timeframeScore <= 48
+  ) {
+    return "bearish";
+  }
+
+  return "neutral";
+}
+
 function getOverallWeights(): Record<GaugeKey, number> {
   return {
     trend: 0.25,
@@ -1155,17 +1214,11 @@ export function AlgoControllerV2({
     enabledGauges.length > 0
       ? getConfluenceReason(favorableEnabledCount, strongEnabledCount, enabledGauges.length)
       : "Turn on at least one gauge to calculate confluence.";
-  const autoBiasSuggestion: Bias =
-    displayedOverallScore !== null && displayedOverallScore >= FAVORABLE_GAUGE_THRESHOLD
-      ? (confluence.gauges.find((gauge) => gauge.key === "trend")?.score ?? 50) >=
-          FAVORABLE_GAUGE_THRESHOLD
-        ? "bullish"
-        : (confluence.gauges.find((gauge) => gauge.key === "execution")?.score ?? 50) < 40
-          ? "neutral"
-          : "bullish"
-      : displayedOverallScore !== null && displayedOverallScore <= 45
-        ? "bearish"
-        : "neutral";
+  const autoBiasSuggestion = deriveAutoBias({
+    snapshot,
+    confluence,
+    displayedOverallScore,
+  });
   const primaryCommand = getPrimaryCommand(activeController);
   const turboContracts = turboCandidates?.suggestions ?? [];
   const leadTurboContract = turboContracts[0] ?? null;
