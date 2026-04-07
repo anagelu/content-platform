@@ -1223,7 +1223,7 @@ export function AlgoControllerV2({
     displayedOverallScore,
   });
   const primaryCommand = getPrimaryCommand(activeController);
-  const turboContracts = turboCandidates?.suggestions ?? [];
+  const turboContracts = useMemo(() => turboCandidates?.suggestions ?? [], [turboCandidates]);
   const selectedTurboContract =
     turboContracts.find((contract) => contract.symbol === selectedTurboContractSymbol) ?? turboContracts[0] ?? null;
   const selectedTurboPosition = selectedTurboContract
@@ -1419,6 +1419,17 @@ export function AlgoControllerV2({
         });
 
         setActionNotice(result.success);
+        setSelectedTurboContractSymbol(contractSymbol);
+        setTurboContractStatus("ACTIVE");
+        setPositions((current) => {
+          const next = current.filter((position) => position.symbol !== contractSymbol);
+
+          if (!result.position || result.position.qty === 0) {
+            return next;
+          }
+
+          return [result.position, ...next];
+        });
       } catch (tradeError) {
         setError(
           tradeError instanceof Error
@@ -2066,6 +2077,14 @@ export function AlgoControllerV2({
                   <strong>{turboBiasHeadline}</strong>
                 </div>
                 <div>
+                  <span>Selected contract</span>
+                  <strong>
+                    {selectedTurboContract
+                      ? `${Math.round(selectedTurboContract.strikePrice)}${selectedTurboContract.type === "call" ? "C" : "P"}`
+                      : "--"}
+                  </strong>
+                </div>
+                <div>
                   <span>Target expiry</span>
                   <strong>
                     {turboCandidates ? formatOptionExpiration(turboCandidates.targetExpirationDate) : "--"}
@@ -2083,6 +2102,10 @@ export function AlgoControllerV2({
                   <span>Signal freshness</span>
                   <strong>{formatSignalAge(snapshot?.signalAgeSeconds ?? null)}</strong>
                 </div>
+                <div>
+                  <span>Contract state</span>
+                  <strong>{turboCurrentQty > 0 ? "ACTIVE" : turboContractStatus}</strong>
+                </div>
               </div>
               {turboCandidatesError ? <p className="form-error">{turboCandidatesError}</p> : null}
               {isTurboLoading ? <p className="form-help">Loading live option candidates...</p> : null}
@@ -2091,7 +2114,11 @@ export function AlgoControllerV2({
                   turboContracts.map((contract, index) => (
                     <article
                       key={contract.symbol}
-                      className={index === 0 ? "algo-v2-contract-card is-primary" : "algo-v2-contract-card"}
+                      className={
+                        contract.symbol === selectedTurboContract?.symbol
+                          ? "algo-v2-contract-card is-primary is-selected"
+                          : "algo-v2-contract-card"
+                      }
                     >
                       <strong>
                         {normalizedSymbol} {formatOptionExpiration(contract.expirationDate)}{" "}
@@ -2107,6 +2134,17 @@ export function AlgoControllerV2({
                       <span>Spread {formatOptionSpreadLabel(contract.spreadPercent)}</span>
                       <span>IV {formatPercent(contract.snapshot.impliedVolatility, 1)}</span>
                       <span>Breakeven {formatMoney(contract.breakevenPrice)}</span>
+                      <button
+                        type="button"
+                        className="algo-v2-contract-select-button"
+                        onClick={() => {
+                          setSelectedTurboContractSymbol(contract.symbol);
+                          setTurboContractStatus(turboCurrentQty > 0 && selectedTurboContract?.symbol === contract.symbol ? "ACTIVE" : "UNSET");
+                        }}
+                        disabled={isBusy}
+                      >
+                        {contract.symbol === selectedTurboContract?.symbol ? "Selected" : "Select Contract"}
+                      </button>
                       <button
                         type="button"
                         className="algo-v2-contract-trade-button"
@@ -2138,12 +2176,20 @@ export function AlgoControllerV2({
         <div className="algo-v2-actions">
           <button
             type="button"
-            className={primaryCommand.tone}
-            onClick={() => handleControllerCommand(primaryCommand.command)}
+            className={mode === "turbo" && !isCrypto ? turboPrimaryCommand.tone : primaryCommand.tone}
+            onClick={() =>
+              mode === "turbo" && !isCrypto
+                ? handleTurboPrimaryCommand(turboPrimaryCommand.command)
+                : handleControllerCommand(primaryCommand.command)
+            }
             disabled={isBusy}
           >
-            <span className="algo-v2-action-label">{primaryCommand.label}</span>
-            <span className="algo-v2-action-copy">{primaryCommand.helper}</span>
+            <span className="algo-v2-action-label">
+              {mode === "turbo" && !isCrypto ? turboPrimaryCommand.label : primaryCommand.label}
+            </span>
+            <span className="algo-v2-action-copy">
+              {mode === "turbo" && !isCrypto ? turboPrimaryCommand.helper : primaryCommand.helper}
+            </span>
           </button>
           <button
             type="button"

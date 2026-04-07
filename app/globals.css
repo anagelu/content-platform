@@ -2038,6 +2038,10 @@ main {
   box-shadow: 0 10px 20px rgba(59, 130, 246, 0.12);
 }
 
+.algo-v2-contract-card.is-selected {
+  border-color: rgba(59, 130, 246, 0.9);
+}
+
 .algo-v2-contract-card span {
   color: #6b7280;
   font-size: 0.92rem;
@@ -2056,10 +2060,27 @@ main {
   box-shadow: 0 10px 18px rgba(37, 99, 235, 0.22);
 }
 
+.algo-v2-contract-select-button {
+  margin-top: 0.45rem;
+  padding: 0.68rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  background: rgba(255, 255, 255, 0.9);
+  color: #1d4ed8;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .algo-v2-contract-trade-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   box-shadow: none;
+}
+
+.algo-v2-contract-select-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .algo-v2-actions {

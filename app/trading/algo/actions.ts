@@ -383,10 +383,104 @@ export async function submitTurboOptionPaperTrade(input: {
   revalidatePath("/trading/algo/controller-v2");
   revalidatePath("/trading/algo");
 
+  const position = await getAlpacaPosition(contractSymbol, credentials);
+
   return {
     success: `${side === "buy" ? "Buy" : "Sell"} order submitted for ${qty} contract${qty === 1 ? "" : "s"} of ${contractSymbol}.`,
     order: resolution.order,
     reachedFinalState: resolution.reachedFinalState,
+    position,
+  };
+}
+
+export async function runTurboOptionControllerCommand(input: {
+  contractSymbol: string;
+  command: "PLAY" | "PAUSE" | "RESUME" | "EJECT";
+  targetQty: number;
+}): Promise<{
+  success: string;
+  position: Awaited<ReturnType<typeof getAlpacaPosition>>;
+  status: "ACTIVE" | "PAUSED" | "EJECTED";
+}> {
+  const userId = await requireSignedInUser();
+  const credentials = getAlpacaCredentials();
+
+  if (credentials.environment !== "paper") {
+    throw new Error("Turbo option trading is restricted to Alpaca paper mode.");
+  }
+
+  const contractSymbol = input.contractSymbol.trim().toUpperCase();
+  const targetQty = Math.max(1, Math.round(Number(input.targetQty) || 0));
+
+  if (!contractSymbol) {
+    throw new Error("Missing option contract symbol.");
+  }
+
+  const position = await getAlpacaPosition(contractSymbol, credentials);
+  const currentQty = Math.max(0, Math.abs(position?.qty ?? 0));
+
+  if (input.command === "PAUSE" || input.command === "EJECT") {
+    if (currentQty <= 0) {
+      return {
+        success: `${contractSymbol} is already flat.`,
+        position: null,
+        status: input.command === "PAUSE" ? "PAUSED" : "EJECTED",
+      };
+    }
+
+    await submitTrackedPaperOrder({
+      userId,
+      symbol: contractSymbol,
+      qty: currentQty,
+      side: "sell",
+      clientOrderId: `turbo-option-${input.command.toLowerCase()}-${contractSymbol.toLowerCase()}-${Date.now()}`,
+    });
+
+    revalidatePath("/trading/algo/controller-v2");
+    revalidatePath("/trading/algo");
+
+    return {
+      success: `${contractSymbol} flattened via ${input.command.toLowerCase()}.`,
+      position: null,
+      status: input.command === "PAUSE" ? "PAUSED" : "EJECTED",
+    };
+  }
+
+  if (currentQty === targetQty) {
+    return {
+      success: `${contractSymbol} is already at the target size.`,
+      position: position,
+      status: "ACTIVE" as const,
+    };
+  }
+
+  if (currentQty > targetQty) {
+    await submitTrackedPaperOrder({
+      userId,
+      symbol: contractSymbol,
+      qty: currentQty - targetQty,
+      side: "sell",
+      clientOrderId: `turbo-option-trim-${contractSymbol.toLowerCase()}-${Date.now()}`,
+    });
+  } else {
+    await submitTrackedPaperOrder({
+      userId,
+      symbol: contractSymbol,
+      qty: targetQty - currentQty,
+      side: "buy",
+      clientOrderId: `turbo-option-${input.command.toLowerCase()}-${contractSymbol.toLowerCase()}-${Date.now()}`,
+    });
+  }
+
+  const refreshedPosition = await getAlpacaPosition(contractSymbol, credentials);
+
+  revalidatePath("/trading/algo/controller-v2");
+  revalidatePath("/trading/algo");
+
+  return {
+    success: `${contractSymbol} adjusted to ${targetQty} contract${targetQty === 1 ? "" : "s"}.`,
+    position: refreshedPosition,
+    status: "ACTIVE" as const,
   };
 }
 
