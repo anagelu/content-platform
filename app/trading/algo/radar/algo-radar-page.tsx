@@ -35,7 +35,10 @@ type RadarResult = {
   qualifies: boolean;
   statusLabel: string;
   statusTone: string;
+  matchStrength: number;
+  thresholdGap: number;
 };
+type RadarSortMode = "bestMatch" | "highestOverall" | "closestToTrigger";
 
 const COMMON_CRYPTO_BASE_SYMBOLS = new Set([
   "BTC",
@@ -663,6 +666,7 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
   const [showOnlyMatches, setShowOnlyMatches] = useState(false);
   const [autoScanEnabled, setAutoScanEnabled] = useState(false);
   const [autoScanIntervalSeconds, setAutoScanIntervalSeconds] = useState<number>(60);
+  const [sortMode, setSortMode] = useState<RadarSortMode>("bestMatch");
   const [results, setResults] = useState<RadarResult[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState("");
@@ -691,6 +695,7 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
         showOnlyMatches: boolean;
         autoScanEnabled: boolean;
         autoScanIntervalSeconds: number;
+        sortMode: RadarSortMode;
       }>;
 
       if (typeof saved.watchlistInput === "string" && saved.watchlistInput.trim()) {
@@ -765,6 +770,14 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
       ) {
         setAutoScanIntervalSeconds(saved.autoScanIntervalSeconds);
       }
+
+      if (
+        saved.sortMode === "bestMatch" ||
+        saved.sortMode === "highestOverall" ||
+        saved.sortMode === "closestToTrigger"
+      ) {
+        setSortMode(saved.sortMode);
+      }
     } catch {
       // Ignore invalid local state and fall back to the seeded defaults.
     } finally {
@@ -789,6 +802,7 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
         showOnlyMatches,
         autoScanEnabled,
         autoScanIntervalSeconds,
+        sortMode,
       }),
     );
   }, [
@@ -800,6 +814,7 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
     hasRestoredState,
     overallThreshold,
     showOnlyMatches,
+    sortMode,
     thresholds,
     watchlistInput,
   ]);
@@ -872,6 +887,20 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
           const matchedGaugeCount = activeGauges.filter(
             (gauge) => gauge.score >= thresholds[gauge.key],
           ).length;
+          const perGaugeAlignment = activeGauges.map((gauge) => {
+            const threshold = thresholds[gauge.key];
+            const delta = gauge.score - threshold;
+            const normalized = clamp(50 + delta * 2.5, 0, 100);
+
+            return {
+              key: gauge.key,
+              threshold,
+              delta,
+              normalized,
+            };
+          });
+          const overallDelta = (confluence.overallScore ?? 0) - overallThreshold;
+          const overallAlignment = clamp(50 + overallDelta * 2.5, 0, 100);
           const qualifies =
             activeGauges.length > 0 &&
             matchedGaugeCount === activeGauges.length &&
@@ -883,6 +912,15 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
                   ...activeGauges.map((gauge) => Math.max(thresholds[gauge.key] - gauge.score, 0)),
                   Math.max(overallThreshold - (confluence.overallScore ?? 0), 0),
                 );
+          const matchStrength = Math.round(
+            activeGauges.length === 0
+              ? 0
+              : [...perGaugeAlignment.map((item) => item.normalized), overallAlignment].reduce(
+                  (sum, value) => sum + value,
+                  0,
+                ) /
+                  (perGaugeAlignment.length + 1),
+          );
 
           return {
             symbol,
@@ -893,13 +931,39 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
             qualifies,
             statusLabel: qualifies ? "Alert-ready" : scoreGap <= 8 ? "Close" : "Not ready",
             statusTone: qualifies ? "pipeline-alert-success" : scoreGap <= 8 ? "pipeline-alert-warning" : "pipeline-alert-neutral",
+            matchStrength,
+            thresholdGap: scoreGap,
           } satisfies RadarResult;
         }),
       );
 
       nextResults.sort((left, right) => {
+        if (sortMode === "highestOverall") {
+          if ((right.confluence.overallScore ?? 0) !== (left.confluence.overallScore ?? 0)) {
+            return (right.confluence.overallScore ?? 0) - (left.confluence.overallScore ?? 0);
+          }
+
+          return right.matchStrength - left.matchStrength;
+        }
+
+        if (sortMode === "closestToTrigger") {
+          if (left.qualifies !== right.qualifies) {
+            return Number(right.qualifies) - Number(left.qualifies);
+          }
+
+          if (left.thresholdGap !== right.thresholdGap) {
+            return left.thresholdGap - right.thresholdGap;
+          }
+
+          return right.matchStrength - left.matchStrength;
+        }
+
         if (left.qualifies !== right.qualifies) {
           return Number(right.qualifies) - Number(left.qualifies);
+        }
+
+        if (right.matchStrength !== left.matchStrength) {
+          return right.matchStrength - left.matchStrength;
         }
 
         return (right.confluence.overallScore ?? 0) - (left.confluence.overallScore ?? 0);
@@ -1043,6 +1107,18 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
             />
             Show only alert-ready
           </label>
+          <label className="radar-field">
+            <span className="algo-v2-field-label">Sort By</span>
+            <select
+              className="form-input"
+              value={sortMode}
+              onChange={(event) => setSortMode(event.target.value as RadarSortMode)}
+            >
+              <option value="bestMatch">Best Match</option>
+              <option value="closestToTrigger">Closest to Trigger</option>
+              <option value="highestOverall">Highest Overall</option>
+            </select>
+          </label>
         </div>
       </div>
 
@@ -1159,6 +1235,12 @@ export function AlgoRadarPage({ initialSymbols }: { initialSymbols: string[] }) 
                   <span className="meta">
                     {result.matchedGaugeCount} of {result.enabledGaugeCount} detectors ready
                   </span>
+                </div>
+                <div className="radar-overall-row">
+                  <span className="meta">Match strength</span>
+                  <strong className={result.matchStrength >= FAVORABLE_GAUGE_THRESHOLD ? "is-positive" : ""}>
+                    {result.matchStrength}%
+                  </strong>
                 </div>
                 <p className="meta">{result.confluence.reason}</p>
 
