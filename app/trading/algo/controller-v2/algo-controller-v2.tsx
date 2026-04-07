@@ -903,13 +903,18 @@ function buildTurboContracts({
     const strike = roundedPrice + sign * Math.round((targetDelta * 20 + offset * 2) * (bias === "bearish" ? -1 : 1));
     const delta = Number((targetDelta + offset * 0.04).toFixed(2));
     const mark = Number((latestPrice * (0.0045 + offset * 0.0012)).toFixed(2));
+    const spreadLabel = offset === 0 ? "tight" : offset === 1 ? "workable" : "wider";
+    const spreadScore = offset === 0 ? 88 : offset === 1 ? 72 : 58;
+    const deltaAlignment = clamp(100 - Math.abs(delta - targetDelta) * 220, 45, 100);
+    const fitScore = Math.round(clamp(deltaAlignment * 0.6 + spreadScore * 0.4, 0, 100));
 
     return {
       id: `${symbol}-${expiry}-${strike}${direction}`,
       label: `${symbol} ${expiry} ${strike}${direction}`,
       delta: bias === "bearish" ? -delta : delta,
       mark,
-      spread: offset === 0 ? "tight" : offset === 1 ? "workable" : "wider",
+      spread: spreadLabel,
+      fitScore,
     };
   });
 }
@@ -1111,6 +1116,25 @@ export function AlgoControllerV2({
     targetDelta: deltaTarget,
     dte: daysToExpiry,
   });
+  const leadTurboContract = turboContracts[0] ?? null;
+  const turboFitScore =
+    leadTurboContract && displayedOverallScore !== null
+      ? Math.round(clamp(leadTurboContract.fitScore * 0.55 + displayedOverallScore * 0.45, 0, 100))
+      : leadTurboContract?.fitScore ?? displayedOverallScore ?? null;
+  const turboFitBand = turboFitScore === null ? "Unavailable" : getScoreBand(turboFitScore);
+  const turboFitTone = turboFitScore === null ? "is-neutral" : getScoreTone(turboFitScore);
+  const turboBiasHeadline =
+    bias === "bullish"
+      ? "Calls favored"
+      : bias === "bearish"
+        ? "Puts favored"
+        : "Neutral handoff";
+  const turboBiasCopy =
+    bias === "bullish"
+      ? "The controller is leaning toward call-side exposure with the current contract filters."
+      : bias === "bearish"
+        ? "The controller is leaning toward put-side exposure with the current contract filters."
+        : "Turbo is staged in a neutral handoff while you inspect direction and contract quality.";
   const confluenceStatusReason = !normalizedSymbol
     ? "Enter a market to begin scoring confluence."
     : isSnapshotLoading
@@ -1612,6 +1636,65 @@ export function AlgoControllerV2({
                 <p className="algo-v2-confluence-copy">{confluenceStatusReason}</p>
               </div>
 
+              <div className="algo-v2-turbo-overview">
+                <article className="algo-v2-turbo-rail-card">
+                  <div className="algo-v2-slider-header">
+                    <strong>Directional Rail</strong>
+                    <strong>{turboBiasHeadline}</strong>
+                  </div>
+                  <p className="algo-v2-mini-gauge-copy">{turboBiasCopy}</p>
+                  <div className="algo-v2-bias-buttons is-rail">
+                    <button
+                      type="button"
+                      className={getBiasButtonClass(bias, "bearish")}
+                      onClick={() => setBias("bearish")}
+                    >
+                      Put
+                    </button>
+                    <button
+                      type="button"
+                      className={getBiasButtonClass(bias, "neutral")}
+                      onClick={() => setBias("neutral")}
+                    >
+                      Transition
+                    </button>
+                    <button
+                      type="button"
+                      className={getBiasButtonClass(bias, "bullish")}
+                      onClick={() => setBias("bullish")}
+                    >
+                      Call
+                    </button>
+                  </div>
+                </article>
+
+                <article className="algo-v2-turbo-readiness-card">
+                  <div className="algo-v2-slider-header">
+                    <strong>Turbo Readiness</strong>
+                    <strong className={turboFitTone}>
+                      {turboFitScore ?? "--"} {turboFitBand !== "Unavailable" ? `· ${turboFitBand}` : ""}
+                    </strong>
+                  </div>
+                  <div className="algo-v2-mini-track">
+                    <span style={{ width: `${turboFitScore ?? 0}%` }} />
+                  </div>
+                  <div className="algo-v2-mini-list">
+                    <div>
+                      <span>Bias</span>
+                      <strong>{turboBiasHeadline}</strong>
+                    </div>
+                    <div>
+                      <span>Target delta</span>
+                      <strong>{deltaTarget.toFixed(2)}</strong>
+                    </div>
+                    <div>
+                      <span>Time horizon</span>
+                      <strong>{formatDteLabel(daysToExpiry)}</strong>
+                    </div>
+                  </div>
+                </article>
+              </div>
+
               {confluence.isReady ? (
                 <div className="algo-v2-mini-gauge-grid is-turbo">
                   {confluence.gauges.map((gauge) => (
@@ -1688,33 +1771,6 @@ export function AlgoControllerV2({
                 </div>
               ) : null}
 
-              <div className="algo-v2-bias-row">
-                <h4 className="algo-v2-mini-title">Directional Bias</h4>
-                <div className="algo-v2-bias-buttons">
-                  <button
-                    type="button"
-                    className={getBiasButtonClass(bias, "bearish")}
-                    onClick={() => setBias("bearish")}
-                  >
-                    Bearish
-                  </button>
-                  <button
-                    type="button"
-                    className={getBiasButtonClass(bias, "neutral")}
-                    onClick={() => setBias("neutral")}
-                  >
-                    Neutral
-                  </button>
-                  <button
-                    type="button"
-                    className={getBiasButtonClass(bias, "bullish")}
-                    onClick={() => setBias("bullish")}
-                  >
-                    Bullish
-                  </button>
-                </div>
-              </div>
-
               <div className="algo-v2-turbo-grid">
                 <div className="algo-v2-slider-card">
                   <div className="algo-v2-slider-header">
@@ -1762,6 +1818,16 @@ export function AlgoControllerV2({
               <h3 className="algo-v2-mini-title">Suggested Contracts</h3>
               <div className="algo-v2-mini-list">
                 <div>
+                  <span>Contract fit</span>
+                  <strong className={turboFitTone}>
+                    {turboFitScore ?? "--"} {turboFitBand !== "Unavailable" ? turboFitBand : ""}
+                  </strong>
+                </div>
+                <div>
+                  <span>Bias</span>
+                  <strong>{turboBiasHeadline}</strong>
+                </div>
+                <div>
                   <span>Price change</span>
                   <strong>{formatPercent(snapshot?.priceChangePercent ?? null)}</strong>
                 </div>
@@ -1775,9 +1841,13 @@ export function AlgoControllerV2({
                 </div>
               </div>
               <div className="algo-v2-contract-list">
-                {turboContracts.map((contract) => (
-                  <article key={contract.id} className="algo-v2-contract-card">
+                {turboContracts.map((contract, index) => (
+                  <article
+                    key={contract.id}
+                    className={index === 0 ? "algo-v2-contract-card is-primary" : "algo-v2-contract-card"}
+                  >
                     <strong>{contract.label}</strong>
+                    <span>Fit {contract.fitScore} · {index === 0 ? "best candidate" : "alternate"}</span>
                     <span>Delta {contract.delta > 0 ? "+" : ""}{contract.delta.toFixed(2)}</span>
                     <span>Mark {formatMoney(contract.mark)}</span>
                     <span>Spread {contract.spread}</span>
