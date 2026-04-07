@@ -1466,13 +1466,13 @@ main {
 
 .algo-v2-mini-gauge-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 0.8rem;
   margin-bottom: 1rem;
 }
 
 .algo-v2-mini-gauge-grid.is-turbo {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .algo-v2-mini-gauge-card {
@@ -1577,6 +1577,19 @@ main {
   margin-top: 0.7rem;
   border-top: 1px solid rgba(203, 213, 225, 0.76);
   padding-top: 0.65rem;
+}
+
+.algo-v2-lens-block {
+  margin-top: 0.7rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(203, 213, 225, 0.76);
+}
+
+.algo-v2-lens-copy {
+  margin: 0.45rem 0 0;
+  color: #6b7280;
+  font-size: 0.84rem;
+  line-height: 1.45;
 }
 
 .algo-v2-gauge-debug summary {
@@ -1787,6 +1800,14 @@ main {
 .algo-v2-slider-scale {
   color: #6b7280;
   font-size: 0.9rem;
+}
+
+.algo-v2-slider-scale-tight {
+  gap: 0.45rem;
+  align-items: center;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .algo-v2-stat-row {

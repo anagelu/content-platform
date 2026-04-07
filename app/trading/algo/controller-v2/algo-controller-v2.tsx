@@ -9,8 +9,16 @@ type Snapshot = Awaited<ReturnType<typeof getAlpacaAlgoSnapshot>>;
 type ControllerResult = Awaited<ReturnType<typeof runAlpacaTradeController>>;
 type ControllerMode = "standard" | "turbo";
 type Bias = "bearish" | "neutral" | "bullish";
-type GaugeKey = "trend" | "momentum" | "execution";
+type GaugeKey = "trend" | "momentum" | "execution" | "timeframeConfluence";
+type MarketLensOffset = -2 | -1 | 0 | 1 | 2;
 type GaugeSubscore = { label: string; score: number };
+type LensReadout = {
+  offset: MarketLensOffset;
+  label: string;
+  timeframe: AlpacaBarTimeframe;
+  score: number;
+  summary: string;
+};
 type GaugeResult = {
   key: GaugeKey;
   label: string;
@@ -19,6 +27,7 @@ type GaugeResult = {
   tone: string;
   reason: string;
   subscores: GaugeSubscore[];
+  lensReadouts?: LensReadout[];
 };
 type ConfluenceModel = {
   gauges: GaugeResult[];
@@ -56,6 +65,22 @@ const ANALYSIS_TIMEFRAMES: Array<{ value: AlpacaBarTimeframe; label: string }> =
   { value: "1Day", label: "1 Day" },
   { value: "1Week", label: "1 Week" },
 ];
+const TIMEFRAME_LENS_ORDER: AlpacaBarTimeframe[] = [
+  "1Min",
+  "5Min",
+  "15Min",
+  "30Min",
+  "1Hour",
+  "1Day",
+  "1Week",
+];
+const MARKET_LENS_STOPS: Array<{ offset: MarketLensOffset; label: string }> = [
+  { offset: -2, label: "In 2" },
+  { offset: -1, label: "In 1" },
+  { offset: 0, label: "Base" },
+  { offset: 1, label: "Out 1" },
+  { offset: 2, label: "Out 2" },
+];
 const GAUGE_WEIGHTS: Record<GaugeKey, Record<string, number>> = {
   trend: {
     "EMA alignment": 0.25,
@@ -74,6 +99,14 @@ const GAUGE_WEIGHTS: Record<GaugeKey, Record<string, number>> = {
     "relative volume": 0.25,
     "quote stability": 0.25,
     "slippage risk": 0.25,
+  },
+  timeframeConfluence: {
+    "higher trend": 0.2,
+    "structure agreement": 0.2,
+    "lower timing": 0.2,
+    alignment: 0.15,
+    conflict: 0.15,
+    "risk context": 0.1,
   },
 };
 
@@ -215,6 +248,14 @@ function getScoreBand(score: number) {
 }
 
 function getGaugeReason(label: string, score: number) {
+  if (label === "Timeframe Confluence") {
+    if (score >= 81) return "The setup remains strong when you zoom in and out.";
+    if (score >= 61) return "Nearby timeframes broadly support this setup.";
+    if (score >= 46) return "Timeframe agreement is mixed across nearby lenses.";
+    if (score >= 26) return "Nearby timeframes show weak agreement.";
+    return "Nearby timeframes are working against this setup.";
+  }
+
   if (label === "Trend") {
     if (score >= 81) return "Trend structure is strongly supportive.";
     if (score >= 61) return "Trend structure is supportive.";
@@ -260,9 +301,10 @@ function getConfluenceReason(favorableCount: number, strongCount: number, total:
 
 function getOverallWeights(): Record<GaugeKey, number> {
   return {
-    trend: 1 / 3,
-    momentum: 1 / 3,
-    execution: 1 / 3,
+    trend: 0.25,
+    momentum: 0.25,
+    execution: 0.25,
+    timeframeConfluence: 0.25,
   };
 }
 
@@ -341,6 +383,13 @@ function formatSignalAge(value: number | null) {
 
 function getTimeframeProfile(timeframe: AlpacaBarTimeframe) {
   switch (timeframe) {
+    case "1Week":
+      return {
+        trendMultiplier: 1.45,
+        momentumMultiplier: 1,
+        freshnessPenaltyDivisor: 43200,
+        executionFreshnessDivisor: 7200,
+      };
     case "1Day":
       return {
         trendMultiplier: 1.3,
@@ -354,6 +403,13 @@ function getTimeframeProfile(timeframe: AlpacaBarTimeframe) {
         momentumMultiplier: 1.05,
         freshnessPenaltyDivisor: 2400,
         executionFreshnessDivisor: 900,
+      };
+    case "30Min":
+      return {
+        trendMultiplier: 1.08,
+        momentumMultiplier: 1.02,
+        freshnessPenaltyDivisor: 1500,
+        executionFreshnessDivisor: 600,
       };
     case "15Min":
       return {
@@ -378,6 +434,40 @@ function getTimeframeProfile(timeframe: AlpacaBarTimeframe) {
         executionFreshnessDivisor: 90,
       };
   }
+}
+
+function getShiftedTimeframe(base: AlpacaBarTimeframe, offset: MarketLensOffset) {
+  const baseIndex = TIMEFRAME_LENS_ORDER.indexOf(base);
+
+  if (baseIndex === -1) {
+    return base;
+  }
+
+  return TIMEFRAME_LENS_ORDER[clamp(baseIndex + offset, 0, TIMEFRAME_LENS_ORDER.length - 1)];
+}
+
+function getLensSummary(score: number, offset: MarketLensOffset) {
+  if (offset < 0) {
+    if (score >= 81) return "Entry timing stays strong when zooming in.";
+    if (score >= 61) return "Nearer-term timing remains supportive.";
+    if (score >= 46) return "Zooming in shows mixed entry timing.";
+    if (score >= 26) return "Zooming in weakens the setup.";
+    return "Zooming in shows clear near-term conflict.";
+  }
+
+  if (offset > 0) {
+    if (score >= 81) return "Broader structure strongly confirms the setup.";
+    if (score >= 61) return "Broader structure remains supportive.";
+    if (score >= 46) return "Zooming out shows mixed higher-timeframe agreement.";
+    if (score >= 26) return "Broader structure offers limited support.";
+    return "Zooming out reveals higher-timeframe conflict.";
+  }
+
+  if (score >= 81) return "The base timeframe is strongly aligned.";
+  if (score >= 61) return "The base timeframe is supportive.";
+  if (score >= 46) return "The base timeframe is balanced.";
+  if (score >= 26) return "The base timeframe is tentative.";
+  return "The base timeframe is not supportive.";
 }
 
 function scoreFromSignedPercent(value: number | null, scale = 10, base = 50) {
@@ -462,6 +552,7 @@ function createGauge(
   subscores: GaugeSubscore[],
   weights: Record<string, number>,
   sensitivity: number,
+  lensReadouts?: LensReadout[],
 ) {
   const score = Math.round(
     applySensitivityToScore(clamp(weightedScore(subscores, weights), 0, 100), sensitivity),
@@ -478,6 +569,7 @@ function createGauge(
     tone,
     reason,
     subscores,
+    lensReadouts,
   } satisfies GaugeResult;
 }
 
@@ -611,10 +703,117 @@ function buildConfluenceModel({
       ),
     },
   ];
+  const baseTrendScore = weightedScore(trendSubscores, GAUGE_WEIGHTS.trend);
+  const baseMomentumScore = weightedScore(momentumSubscores, GAUGE_WEIGHTS.momentum);
+  const baseExecutionScore = weightedScore(executionSubscores, GAUGE_WEIGHTS.execution);
+  const lensReadouts: LensReadout[] = MARKET_LENS_STOPS.map((stop) => {
+    const lensTimeframe = getShiftedTimeframe(snapshot.timeframe, stop.offset);
+    const lensProfile = getTimeframeProfile(lensTimeframe);
+    const directionalBias =
+      (snapshot.emaShort !== null && snapshot.emaLong !== null && snapshot.emaShort > snapshot.emaLong ? 8 : -6) +
+      (snapshot.structurePercent !== null ? (snapshot.structurePercent - 50) * 0.18 : 0);
+    const timingBias =
+      (snapshot.rsi14 !== null ? (snapshot.rsi14 - 50) * 0.65 : 0) +
+      ((snapshot.macdHistogramPercent ?? 0) * 110 * lensProfile.momentumMultiplier);
+    const conflictPenalty =
+      Math.abs((snapshot.priceChangePercent ?? 0) * 2.8) +
+      Math.max(0, 65 - (snapshot.relativeVolume ?? 50)) * 0.08;
+    const lensScore = clamp(
+      50 +
+        directionalBias * lensProfile.trendMultiplier * (stop.offset > 0 ? 1.15 : 0.85) +
+        timingBias * (stop.offset < 0 ? 1.2 : 0.7) +
+        (baseExecutionScore - 50) * (stop.offset === 0 ? 0.5 : 0.35) -
+        conflictPenalty * (stop.offset < 0 ? 1.15 : 0.7),
+      0,
+      100,
+    );
+
+    return {
+      offset: stop.offset,
+      label: stop.label,
+      timeframe: lensTimeframe,
+      score: Math.round(applySensitivityToScore(lensScore, sensitivity)),
+      summary: getLensSummary(Math.round(applySensitivityToScore(lensScore, sensitivity)), stop.offset),
+    };
+  });
+  const timeframeSubscores: GaugeSubscore[] = [
+    {
+      label: "higher trend",
+      score: clamp(
+        baseTrendScore +
+          (lensReadouts.find((lens) => lens.offset === 1)?.score ?? 50 - 50) * 0.7 +
+          (lensReadouts.find((lens) => lens.offset === 2)?.score ?? 50 - 50) * 0.9,
+        0,
+        100,
+      ),
+    },
+    {
+      label: "structure agreement",
+      score: clamp(
+        50 +
+          ((snapshot.structurePercent ?? 50) - 50) * 1.1 +
+          Math.abs(((snapshot.emaShortSlopePercent ?? 0) * 12)),
+        0,
+        100,
+      ),
+    },
+    {
+      label: "lower timing",
+      score: clamp(
+        baseMomentumScore * 0.5 +
+          (lensReadouts.find((lens) => lens.offset === -1)?.score ?? 50) * 0.3 +
+          (lensReadouts.find((lens) => lens.offset === -2)?.score ?? 50) * 0.2,
+        0,
+        100,
+      ),
+    },
+    {
+      label: "alignment",
+      score: clamp(
+        100 -
+          (Math.max(...lensReadouts.map((lens) => lens.score)) -
+            Math.min(...lensReadouts.map((lens) => lens.score))) *
+            1.2,
+        0,
+        100,
+      ),
+    },
+    {
+      label: "conflict",
+      score: clamp(
+        100 -
+          (Math.abs((lensReadouts.find((lens) => lens.offset === 2)?.score ?? 50) - baseTrendScore) * 0.8 +
+            Math.abs((lensReadouts.find((lens) => lens.offset === -2)?.score ?? 50) - baseMomentumScore) * 0.9),
+        0,
+        100,
+      ),
+    },
+    {
+      label: "risk context",
+      score: clamp(
+        55 +
+          (baseExecutionScore - 50) * 0.8 -
+          (snapshot.quoteAgeSeconds === null
+            ? 0
+            : snapshot.quoteAgeSeconds / timeframeProfile.freshnessPenaltyDivisor) *
+            24,
+        0,
+        100,
+      ),
+    },
+  ];
   const gauges: GaugeResult[] = [
     createGauge("trend", "Trend", trendSubscores, GAUGE_WEIGHTS.trend, sensitivity),
     createGauge("momentum", "Momentum", momentumSubscores, GAUGE_WEIGHTS.momentum, sensitivity),
     createGauge("execution", "Execution", executionSubscores, GAUGE_WEIGHTS.execution, sensitivity),
+    createGauge(
+      "timeframeConfluence",
+      "Timeframe Confluence",
+      timeframeSubscores,
+      GAUGE_WEIGHTS.timeframeConfluence,
+      sensitivity,
+      lensReadouts,
+    ),
   ];
   const overallWeights = getOverallWeights();
   const overallWeightTotal = gauges.reduce((sum, gauge) => sum + overallWeights[gauge.key], 0);
@@ -701,6 +900,7 @@ export function AlgoControllerV2({
     initialControllers.find((controller) => controller.symbol === initialSymbol)?.strategyTimeframe ?? "1Day",
   );
   const [confluenceSensitivity, setConfluenceSensitivity] = useState(50);
+  const [marketLens, setMarketLens] = useState<MarketLensOffset>(0);
   const [targetSize, setTargetSize] = useState(
     String(initialControllers.find((controller) => controller.symbol === initialSymbol)?.targetQty ?? 10),
   );
@@ -711,6 +911,7 @@ export function AlgoControllerV2({
     trend: true,
     momentum: true,
     execution: true,
+    timeframeConfluence: true,
   });
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [controllers, setControllers] = useState(initialControllers);
@@ -825,6 +1026,10 @@ export function AlgoControllerV2({
     isCrypto,
     sensitivity: confluenceSensitivity,
   });
+  const timeframeConfluenceGauge =
+    confluence.gauges.find((gauge) => gauge.key === "timeframeConfluence") ?? null;
+  const selectedLensReadout =
+    timeframeConfluenceGauge?.lensReadouts?.find((readout) => readout.offset === marketLens) ?? null;
   const enabledGauges = confluence.gauges.filter((gauge) => gaugeToggles[gauge.key]);
   const enabledOverallWeights = getOverallWeights();
   const enabledWeightTotal = enabledGauges.reduce(
@@ -1160,6 +1365,33 @@ export function AlgoControllerV2({
                       <span style={{ width: `${gauge.score}%` }} />
                     </div>
                     <p className="algo-v2-mini-gauge-copy">{gauge.reason}</p>
+                    {gauge.key === "timeframeConfluence" && gauge.lensReadouts ? (
+                      <div className="algo-v2-lens-block">
+                        <div className="algo-v2-slider-header">
+                          <strong>Market Lens</strong>
+                          <strong>{selectedLensReadout?.label ?? "Base"}</strong>
+                        </div>
+                        <input
+                          type="range"
+                          min="-2"
+                          max="2"
+                          step="1"
+                          value={marketLens}
+                          onChange={(event) => setMarketLens(Number(event.target.value) as MarketLensOffset)}
+                          className="algo-v2-range"
+                        />
+                        <div className="algo-v2-slider-scale algo-v2-slider-scale-tight">
+                          {MARKET_LENS_STOPS.map((stop) => (
+                            <span key={stop.offset}>{stop.label}</span>
+                          ))}
+                        </div>
+                        <p className="algo-v2-lens-copy">
+                          {selectedLensReadout
+                            ? `${selectedLensReadout.label} · ${selectedLensReadout.timeframe}: ${selectedLensReadout.summary}`
+                            : "Move the lens to inspect nearby timeframe agreement."}
+                        </p>
+                      </div>
+                    ) : null}
                     <details className="algo-v2-gauge-debug">
                       <summary>Debug subscores</summary>
                       <div className="algo-v2-debug-list">
@@ -1370,6 +1602,33 @@ export function AlgoControllerV2({
                       <span style={{ width: `${gauge.score}%` }} />
                     </div>
                     <p className="algo-v2-mini-gauge-copy">{gauge.reason}</p>
+                    {gauge.key === "timeframeConfluence" && gauge.lensReadouts ? (
+                      <div className="algo-v2-lens-block">
+                        <div className="algo-v2-slider-header">
+                          <strong>Market Lens</strong>
+                          <strong>{selectedLensReadout?.label ?? "Base"}</strong>
+                        </div>
+                        <input
+                          type="range"
+                          min="-2"
+                          max="2"
+                          step="1"
+                          value={marketLens}
+                          onChange={(event) => setMarketLens(Number(event.target.value) as MarketLensOffset)}
+                          className="algo-v2-range"
+                        />
+                        <div className="algo-v2-slider-scale algo-v2-slider-scale-tight">
+                          {MARKET_LENS_STOPS.map((stop) => (
+                            <span key={stop.offset}>{stop.label}</span>
+                          ))}
+                        </div>
+                        <p className="algo-v2-lens-copy">
+                          {selectedLensReadout
+                            ? `${selectedLensReadout.label} · ${selectedLensReadout.timeframe}: ${selectedLensReadout.summary}`
+                            : "Move the lens to inspect nearby timeframe agreement."}
+                        </p>
+                      </div>
+                    ) : null}
                     <details className="algo-v2-gauge-debug">
                       <summary>Debug subscores</summary>
                       <div className="algo-v2-debug-list">
