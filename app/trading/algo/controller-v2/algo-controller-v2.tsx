@@ -377,6 +377,39 @@ function getTimeframeProfile(timeframe: AlpacaBarTimeframe) {
   }
 }
 
+function scoreFromSignedPercent(value: number | null, scale = 10, base = 50) {
+  if (value === null || !Number.isFinite(value)) {
+    return 50;
+  }
+
+  return clamp(base + value * scale, 0, 100);
+}
+
+function scoreFromCenteredValue(value: number | null, center: number, scale = 1) {
+  if (value === null || !Number.isFinite(value)) {
+    return 50;
+  }
+
+  return clamp(50 + (value - center) * scale, 0, 100);
+}
+
+function scoreFromInversePercent(value: number | null, strongThreshold: number, weakThreshold: number) {
+  if (value === null || !Number.isFinite(value)) {
+    return 50;
+  }
+
+  if (value <= strongThreshold) {
+    return 90;
+  }
+
+  if (value >= weakThreshold) {
+    return 20;
+  }
+
+  const progress = (value - strongThreshold) / (weakThreshold - strongThreshold);
+  return clamp(90 - progress * 70, 20, 90);
+}
+
 function weightedScore(subscores: GaugeSubscore[], weights: Record<string, number>) {
   let totalWeight = 0;
   let total = 0;
@@ -418,11 +451,9 @@ function createGauge(
 
 function buildConfluenceModel({
   snapshot,
-  positionPnl,
   isCrypto,
 }: {
   snapshot: Snapshot | null;
-  positionPnl: number;
   isCrypto: boolean;
 }): ConfluenceModel {
   if (!snapshot) {
@@ -439,77 +470,86 @@ function buildConfluenceModel({
   }
 
   const timeframeProfile = getTimeframeProfile(snapshot.timeframe);
+  const vwapAlignmentPercent =
+    snapshot.vwap && snapshot.vwap > 0
+      ? ((snapshot.latestPrice - snapshot.vwap) / snapshot.vwap) * 100
+      : null;
 
   const trendSubscores: GaugeSubscore[] = [
     {
       label: "EMA alignment",
-      score: clamp(
-        52 +
-          snapshot.trendStrength * 30 * timeframeProfile.trendMultiplier +
-          (snapshot.signal.action === "buy" ? 12 : snapshot.signal.action === "sell" ? -10 : 0),
-        0,
-        100,
-      ),
+      score:
+        snapshot.emaShort !== null && snapshot.emaLong !== null
+          ? clamp(
+              (snapshot.latestPrice > snapshot.emaShort ? 32 : 12) +
+                (snapshot.emaShort > snapshot.emaLong ? 36 : 14) +
+                (snapshot.latestPrice > snapshot.emaLong ? 22 : 8),
+              0,
+              100,
+            )
+          : 50,
     },
     {
       label: "VWAP alignment",
-      score: clamp(
-        50 +
-          snapshot.trendStrength * 24 * timeframeProfile.trendMultiplier +
-          snapshot.priceChangePercent * 2.2,
-        0,
-        100,
-      ),
+      score: scoreFromSignedPercent(vwapAlignmentPercent, 10 * timeframeProfile.trendMultiplier),
     },
     {
       label: "Slope",
-      score: clamp(50 + snapshot.trendStrength * 38 * timeframeProfile.trendMultiplier, 0, 100),
+      score: scoreFromSignedPercent(
+        snapshot.emaShortSlopePercent,
+        18 * timeframeProfile.trendMultiplier,
+      ),
     },
     {
       label: "Structure",
-      score: clamp(
-        48 +
-          snapshot.trendStrength * 24 * timeframeProfile.trendMultiplier +
-          (positionPnl > 0 ? 8 : positionPnl < 0 ? -8 : 0),
-        0,
-        100,
-      ),
+      score: scoreFromCenteredValue(snapshot.structurePercent, 50, 1.1),
     },
   ];
   const momentumSubscores: GaugeSubscore[] = [
     {
       label: "RSI",
-      score: clamp(50 + snapshot.priceChangePercent * 6 * timeframeProfile.momentumMultiplier, 0, 100),
+      score:
+        snapshot.rsi14 === null
+          ? 50
+          : snapshot.rsi14 >= 55 && snapshot.rsi14 <= 72
+            ? clamp(68 + (snapshot.rsi14 - 55) * 1.2, 0, 100)
+            : snapshot.rsi14 > 72
+              ? clamp(88 - (snapshot.rsi14 - 72) * 1.8, 0, 100)
+              : clamp(50 + (snapshot.rsi14 - 50) * 1.4, 0, 100),
     },
     {
       label: "MACD",
-      score: clamp(
-        50 +
-          snapshot.trendStrength * 30 * timeframeProfile.momentumMultiplier +
-          (snapshot.signal.action === "buy" ? 10 : snapshot.signal.action === "sell" ? -10 : 0),
-        0,
-        100,
+      score: scoreFromSignedPercent(
+        snapshot.macdHistogramPercent,
+        160 * timeframeProfile.momentumMultiplier,
       ),
     },
     {
       label: "ROC",
-      score: clamp(50 + snapshot.priceChangePercent * 7 * timeframeProfile.momentumMultiplier, 0, 100),
+      score: scoreFromSignedPercent(snapshot.roc12, 5 * timeframeProfile.momentumMultiplier),
     },
     {
       label: "candle expansion",
-      score: clamp(
-        40 +
-          (snapshot.relativeVolume ?? 1) * 20 +
-          Math.abs(snapshot.priceChangePercent) * 5 * timeframeProfile.momentumMultiplier,
-        0,
-        100,
-      ),
+      score:
+        snapshot.candleExpansionRatio === null
+          ? 50
+          : clamp(
+              40 +
+                snapshot.candleExpansionRatio * 18 +
+                Math.max(snapshot.priceChangePercent, 0) * 2.5 * timeframeProfile.momentumMultiplier,
+              0,
+              100,
+            ),
     },
   ];
   const executionSubscores: GaugeSubscore[] = [
     {
       label: "spread quality",
-      score: clamp((isCrypto ? 58 : 76) + ((snapshot.relativeVolume ?? 1) - 1) * 10, 0, 100),
+      score: scoreFromInversePercent(
+        snapshot.spreadPercent,
+        isCrypto ? 0.04 : 0.01,
+        isCrypto ? 0.35 : 0.12,
+      ),
     },
     {
       label: "relative volume",
@@ -518,9 +558,9 @@ function buildConfluenceModel({
     {
       label: "quote stability",
       score: clamp(
-        snapshot.signalAgeSeconds === null
+        snapshot.quoteAgeSeconds === null
           ? 58
-          : 92 - snapshot.signalAgeSeconds / timeframeProfile.executionFreshnessDivisor,
+          : 92 - snapshot.quoteAgeSeconds / timeframeProfile.executionFreshnessDivisor,
         0,
         100,
       ),
@@ -528,9 +568,10 @@ function buildConfluenceModel({
     {
       label: "slippage risk",
       score: clamp(
-        (isCrypto ? 54 : 74) +
+        78 -
+          (snapshot.spreadPercent ?? (isCrypto ? 0.25 : 0.08)) * 120 +
           ((snapshot.relativeVolume ?? 1) - 1) * 16 -
-          Math.abs(snapshot.priceChangePercent) * 3,
+          Math.abs(snapshot.priceChangePercent) * 2.5,
         0,
         100,
       ),
@@ -741,7 +782,6 @@ export function AlgoControllerV2({
   const positionPnl = snapshot?.position?.unrealizedPl ?? activePosition?.unrealizedPl ?? initialPnl;
   const confluence = buildConfluenceModel({
     snapshot,
-    positionPnl,
     isCrypto,
   });
   const primaryCommand = getPrimaryCommand(activeController);

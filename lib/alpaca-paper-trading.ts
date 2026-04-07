@@ -52,6 +52,20 @@ export type AlpacaPaperStrategySnapshot = {
   priceChangePercent: number;
   relativeVolume: number | null;
   signalAgeSeconds: number | null;
+  quoteAgeSeconds: number | null;
+  spreadPercent: number | null;
+  emaShort: number | null;
+  emaLong: number | null;
+  emaShortSlopePercent: number | null;
+  vwap: number | null;
+  structurePercent: number | null;
+  rsi14: number | null;
+  macdLine: number | null;
+  macdSignal: number | null;
+  macdHistogram: number | null;
+  macdHistogramPercent: number | null;
+  roc12: number | null;
+  candleExpansionRatio: number | null;
 };
 
 function parsePositiveNumber(value: string | undefined, fallback: number) {
@@ -80,6 +94,24 @@ function calculateExponentialMovingAverage(values: number[], period: number) {
   }
 
   return ema;
+}
+
+function calculateExponentialMovingAverageSeries(values: number[], period: number) {
+  if (values.length === 0) {
+    return [];
+  }
+
+  const smoothing = 2 / (period + 1);
+  const series: number[] = [];
+  let ema = values[0] ?? 0;
+  series.push(ema);
+
+  for (let index = 1; index < values.length; index += 1) {
+    ema = values[index] * smoothing + ema * (1 - smoothing);
+    series.push(ema);
+  }
+
+  return series;
 }
 
 function calculateStandardDeviation(values: number[]) {
@@ -316,6 +348,145 @@ function calculateSignalAgeSeconds(...timestamps: Array<string | null | undefine
   return Math.round(ageMs / 1000);
 }
 
+function calculateVwap(bars: Array<{ high: number; low: number; close: number; volume: number }>) {
+  let weightedTotal = 0;
+  let volumeTotal = 0;
+
+  for (const bar of bars) {
+    const typicalPrice = (bar.high + bar.low + bar.close) / 3;
+    weightedTotal += typicalPrice * bar.volume;
+    volumeTotal += bar.volume;
+  }
+
+  if (volumeTotal <= 0) {
+    return null;
+  }
+
+  return weightedTotal / volumeTotal;
+}
+
+function calculateRsi(values: number[], period: number) {
+  if (values.length <= period) {
+    return null;
+  }
+
+  let gains = 0;
+  let losses = 0;
+
+  for (let index = 1; index <= period; index += 1) {
+    const delta = values[index] - values[index - 1];
+    if (delta >= 0) {
+      gains += delta;
+    } else {
+      losses += Math.abs(delta);
+    }
+  }
+
+  let averageGain = gains / period;
+  let averageLoss = losses / period;
+
+  for (let index = period + 1; index < values.length; index += 1) {
+    const delta = values[index] - values[index - 1];
+    const gain = delta > 0 ? delta : 0;
+    const loss = delta < 0 ? Math.abs(delta) : 0;
+    averageGain = (averageGain * (period - 1) + gain) / period;
+    averageLoss = (averageLoss * (period - 1) + loss) / period;
+  }
+
+  if (averageLoss === 0) {
+    return 100;
+  }
+
+  const relativeStrength = averageGain / averageLoss;
+  return 100 - 100 / (1 + relativeStrength);
+}
+
+function calculateMacd(values: number[], fastPeriod = 12, slowPeriod = 26, signalPeriod = 9) {
+  if (values.length < slowPeriod + signalPeriod) {
+    return {
+      line: null,
+      signal: null,
+      histogram: null,
+    };
+  }
+
+  const fastSeries = calculateExponentialMovingAverageSeries(values, fastPeriod);
+  const slowSeries = calculateExponentialMovingAverageSeries(values, slowPeriod);
+  const macdSeries = values.map((_, index) => fastSeries[index] - slowSeries[index]);
+  const signalSeries = calculateExponentialMovingAverageSeries(macdSeries, signalPeriod);
+  const line = macdSeries.at(-1) ?? null;
+  const signal = signalSeries.at(-1) ?? null;
+
+  return {
+    line,
+    signal,
+    histogram: line !== null && signal !== null ? line - signal : null,
+  };
+}
+
+function calculateRoc(values: number[], period: number) {
+  if (values.length <= period) {
+    return null;
+  }
+
+  const previous = values.at(-(period + 1)) ?? null;
+  const latest = values.at(-1) ?? null;
+
+  if (!previous || !latest) {
+    return null;
+  }
+
+  return ((latest - previous) / previous) * 100;
+}
+
+function calculateCandleExpansionRatio(
+  bars: Array<{ open: number; high: number; low: number; close: number }>,
+  lookback = 10,
+) {
+  if (bars.length < 2) {
+    return null;
+  }
+
+  const latestBar = bars.at(-1);
+  if (!latestBar) {
+    return null;
+  }
+
+  const recentBars = bars.slice(-Math.max(lookback, 2), -1);
+  const latestRange = Math.max(latestBar.high - latestBar.low, Math.abs(latestBar.close - latestBar.open));
+  const averageRange =
+    recentBars.reduce(
+      (sum, bar) => sum + Math.max(bar.high - bar.low, Math.abs(bar.close - bar.open)),
+      0,
+    ) / recentBars.length;
+
+  if (averageRange <= 0) {
+    return null;
+  }
+
+  return latestRange / averageRange;
+}
+
+function calculateStructurePercent(
+  bars: Array<{ high: number; low: number; close: number }>,
+  lookback = 20,
+) {
+  if (bars.length === 0) {
+    return null;
+  }
+
+  const sample = bars.slice(-lookback);
+  const latestClose = sample.at(-1)?.close ?? null;
+  const highestHigh = Math.max(...sample.map((bar) => bar.high));
+  const lowestLow = Math.min(...sample.map((bar) => bar.low));
+
+  if (latestClose === null || highestHigh <= lowestLow) {
+    return null;
+  }
+
+  return ((latestClose - lowestLow) / (highestHigh - lowestLow)) * 100;
+}
+
 export async function getAlpacaPaperStrategySnapshot(input?: {
   symbol?: string;
   strategyType?: AlpacaPaperStrategyType;
@@ -352,7 +523,7 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
   const maxDailyLoss =
     input?.maxDailyLoss ??
     parsePositiveNumber(process.env.ALPACA_MAX_DAILY_LOSS, 25);
-  const barLimit = Math.max(slowPeriod, bollingerLength);
+  const barLimit = Math.max(slowPeriod, bollingerLength, 120);
 
   if (
     (strategyType === "SMA" || strategyType === "EMA") &&
@@ -430,6 +601,40 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
     quote.timestamp,
     bars.at(-1)?.timestamp ?? null,
   );
+  const quoteAgeSeconds = calculateSignalAgeSeconds(quote.timestamp);
+  const spreadPercent =
+    quote.askPrice && quote.bidPrice && latestPrice > 0
+      ? ((quote.askPrice - quote.bidPrice) / latestPrice) * 100
+      : null;
+  const emaShortSeries = calculateExponentialMovingAverageSeries(closes, 9);
+  const emaLongSeries = calculateExponentialMovingAverageSeries(closes, 100);
+  const emaShort = emaShortSeries.at(-1) ?? null;
+  const emaLong = emaLongSeries.at(-1) ?? null;
+  const emaShortLookback = emaShortSeries.length > 5 ? emaShortSeries.at(-6) ?? null : null;
+  const emaShortSlopePercent =
+    emaShort !== null && emaShortLookback && emaShortLookback > 0
+      ? ((emaShort - emaShortLookback) / emaShortLookback) * 100
+      : null;
+  const vwapRaw = calculateVwap(bars);
+  const vwap = vwapRaw === null ? null : Number(vwapRaw.toFixed(4));
+  const structurePercentRaw = calculateStructurePercent(bars);
+  const structurePercent =
+    structurePercentRaw === null ? null : Number(structurePercentRaw.toFixed(2));
+  const rsi14Raw = calculateRsi(closes, 14);
+  const rsi14 = rsi14Raw === null ? null : Number(rsi14Raw.toFixed(2));
+  const macd = calculateMacd(closes);
+  const macdLine = macd.line === null ? null : Number(macd.line.toFixed(4));
+  const macdSignal = macd.signal === null ? null : Number(macd.signal.toFixed(4));
+  const macdHistogram = macd.histogram === null ? null : Number(macd.histogram.toFixed(4));
+  const macdHistogramPercent =
+    macd.histogram === null || latestPrice <= 0
+      ? null
+      : Number(((macd.histogram / latestPrice) * 100).toFixed(4));
+  const roc12Raw = calculateRoc(closes, 12);
+  const roc12 = roc12Raw === null ? null : Number(roc12Raw.toFixed(2));
+  const candleExpansionRatioRaw = calculateCandleExpansionRatio(bars);
+  const candleExpansionRatio =
+    candleExpansionRatioRaw === null ? null : Number(candleExpansionRatioRaw.toFixed(2));
   const strategy =
     strategyType === "NONE"
       ? {
@@ -510,6 +715,20 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
       priceChangePercent,
       relativeVolume,
       signalAgeSeconds,
+      quoteAgeSeconds,
+      spreadPercent,
+      emaShort,
+      emaLong,
+      emaShortSlopePercent,
+      vwap,
+      structurePercent,
+      rsi14,
+      macdLine,
+      macdSignal,
+      macdHistogram,
+      macdHistogramPercent,
+      roc12,
+      candleExpansionRatio,
     };
   }
 
@@ -547,5 +766,19 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
     priceChangePercent,
     relativeVolume,
     signalAgeSeconds,
+    quoteAgeSeconds,
+    spreadPercent,
+    emaShort,
+    emaLong,
+    emaShortSlopePercent,
+    vwap,
+    structurePercent,
+    rsi14,
+    macdLine,
+    macdSignal,
+    macdHistogram,
+    macdHistogramPercent,
+    roc12,
+    candleExpansionRatio,
   };
 }
