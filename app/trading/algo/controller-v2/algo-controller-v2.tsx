@@ -5,6 +5,7 @@ import {
   getAlpacaAlgoSnapshot,
   getTurboOptionCandidates,
   runAlpacaTradeController,
+  submitTurboOptionPaperTrade,
 } from "../actions";
 import type { AlpacaTradeController } from "@/lib/alpaca-trade-controller";
 import type { AlpacaBarTimeframe, AlpacaPosition } from "@/lib/alpaca";
@@ -1282,6 +1283,33 @@ export function AlgoControllerV2({
     });
   }
 
+  async function handleTurboContractTrade(contractSymbol: string) {
+    setError("");
+    setActionNotice("");
+    setIsBusy(true);
+
+    startTransition(async () => {
+      try {
+        const qty = Math.max(1, Math.round(orderQtyValue || 1));
+        const result = await submitTurboOptionPaperTrade({
+          contractSymbol,
+          qty,
+          side: "buy",
+        });
+
+        setActionNotice(result.success);
+      } catch (tradeError) {
+        setError(
+          tradeError instanceof Error
+            ? tradeError.message
+            : "Unable to submit the Turbo option order right now.",
+        );
+      } finally {
+        setIsBusy(false);
+      }
+    });
+  }
+
   return (
     <section className="algo-v2-shell">
       <div className="algo-v2-stage">
@@ -1323,7 +1351,7 @@ export function AlgoControllerV2({
 
           <label className="algo-v2-field">
             <span className="algo-v2-field-label">
-              Order Size {isCrypto ? "(units)" : "(shares)"}
+              Order Size {mode === "turbo" && !isCrypto ? "(contracts)" : isCrypto ? "(units)" : "(shares)"}
             </span>
             <input
               className="form-input"
@@ -1908,6 +1936,15 @@ export function AlgoControllerV2({
                       <span>Spread {formatOptionSpreadLabel(contract.spreadPercent)}</span>
                       <span>IV {formatPercent(contract.snapshot.impliedVolatility, 1)}</span>
                       <span>Breakeven {formatMoney(contract.breakevenPrice)}</span>
+                      <button
+                        type="button"
+                        className="algo-v2-contract-trade-button"
+                        onClick={() => handleTurboContractTrade(contract.symbol)}
+                        disabled={isBusy}
+                      >
+                        Buy {Math.max(1, Math.round(orderQtyValue || 1))} Contract
+                        {Math.max(1, Math.round(orderQtyValue || 1)) === 1 ? "" : "s"}
+                      </button>
                     </article>
                   ))
                 ) : (

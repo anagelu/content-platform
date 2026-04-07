@@ -352,6 +352,44 @@ export async function getTurboOptionCandidates(input: {
   };
 }
 
+export async function submitTurboOptionPaperTrade(input: {
+  contractSymbol: string;
+  qty: number;
+  side?: "buy" | "sell";
+}) {
+  const userId = await requireSignedInUser();
+  const credentials = getAlpacaCredentials();
+
+  if (credentials.environment !== "paper") {
+    throw new Error("Turbo option trading is restricted to Alpaca paper mode.");
+  }
+
+  const contractSymbol = input.contractSymbol.trim().toUpperCase();
+  const qty = Math.max(1, Math.round(Number(input.qty) || 0));
+  const side = input.side === "sell" ? "sell" : "buy";
+
+  if (!contractSymbol) {
+    throw new Error("Missing option contract symbol.");
+  }
+
+  const resolution = await submitTrackedPaperOrder({
+    userId,
+    symbol: contractSymbol,
+    qty,
+    side,
+    clientOrderId: `turbo-option-${side}-${contractSymbol.toLowerCase()}-${Date.now()}`,
+  });
+
+  revalidatePath("/trading/algo/controller-v2");
+  revalidatePath("/trading/algo");
+
+  return {
+    success: `${side === "buy" ? "Buy" : "Sell"} order submitted for ${qty} contract${qty === 1 ? "" : "s"} of ${contractSymbol}.`,
+    order: resolution.order,
+    reachedFinalState: resolution.reachedFinalState,
+  };
+}
+
 function daysBetween(dateA: string, dateB: Date) {
   const first = new Date(dateA);
   const second = new Date(dateB);
