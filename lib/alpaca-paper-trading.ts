@@ -12,6 +12,11 @@ import {
   isAlpacaCryptoSymbol,
   normalizeAlpacaTradingSymbol,
 } from "@/lib/alpaca";
+import {
+  analyzeCandlestickPatterns,
+  type PatternBias,
+  type PatternSignal,
+} from "@/lib/candlestick-patterns";
 
 export type AlpacaPaperStrategyDecision =
   | { action: "buy"; reason: string }
@@ -54,6 +59,19 @@ export type AlpacaPaperStrategySnapshot = {
   signalAgeSeconds: number | null;
   quoteAgeSeconds: number | null;
   spreadPercent: number | null;
+  ema5: number | null;
+  ema9: number | null;
+  ema20: number | null;
+  ema100: number | null;
+  ema200: number | null;
+  ema5SlopePercent: number | null;
+  ema9SlopePercent: number | null;
+  ema20SlopePercent: number | null;
+  ema100SlopePercent: number | null;
+  ema200SlopePercent: number | null;
+  candlestickBias: PatternBias;
+  candlestickScore: number;
+  candlestickSignals: PatternSignal[];
   emaShort: number | null;
   emaLong: number | null;
   emaShortSlopePercent: number | null;
@@ -346,6 +364,22 @@ function calculateSignalAgeSeconds(...timestamps: Array<string | null | undefine
   }
 
   return Math.round(ageMs / 1000);
+}
+
+function calculateLatestEmaValue(closes: number[], period: number) {
+  const series = calculateExponentialMovingAverageSeries(closes, period);
+  return {
+    value: series.at(-1) ?? null,
+    lookback: series.length > 5 ? series.at(-6) ?? null : null,
+  };
+}
+
+function calculateSlopePercent(value: number | null, lookback: number | null) {
+  if (value === null || lookback === null || lookback <= 0) {
+    return null;
+  }
+
+  return ((value - lookback) / lookback) * 100;
 }
 
 function getWeekStartKey(timestamp: string) {
@@ -659,6 +693,39 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
     quote.askPrice && quote.bidPrice && latestPrice > 0
       ? ((quote.askPrice - quote.bidPrice) / latestPrice) * 100
       : null;
+  const ema5Snapshot = calculateLatestEmaValue(closes, 5);
+  const ema9Snapshot = calculateLatestEmaValue(closes, 9);
+  const ema20Snapshot = calculateLatestEmaValue(closes, 20);
+  const ema100Snapshot = calculateLatestEmaValue(closes, 100);
+  const ema200Snapshot = calculateLatestEmaValue(closes, 200);
+  const ema5 = ema5Snapshot.value === null ? null : Number(ema5Snapshot.value.toFixed(4));
+  const ema9 = ema9Snapshot.value === null ? null : Number(ema9Snapshot.value.toFixed(4));
+  const ema20 = ema20Snapshot.value === null ? null : Number(ema20Snapshot.value.toFixed(4));
+  const ema100 = ema100Snapshot.value === null ? null : Number(ema100Snapshot.value.toFixed(4));
+  const ema200 = ema200Snapshot.value === null ? null : Number(ema200Snapshot.value.toFixed(4));
+  const ema5SlopePercentRaw = calculateSlopePercent(ema5Snapshot.value, ema5Snapshot.lookback);
+  const ema9SlopePercentRaw = calculateSlopePercent(ema9Snapshot.value, ema9Snapshot.lookback);
+  const ema20SlopePercentRaw = calculateSlopePercent(ema20Snapshot.value, ema20Snapshot.lookback);
+  const ema100SlopePercentRaw = calculateSlopePercent(ema100Snapshot.value, ema100Snapshot.lookback);
+  const ema200SlopePercentRaw = calculateSlopePercent(ema200Snapshot.value, ema200Snapshot.lookback);
+  const ema5SlopePercent =
+    ema5SlopePercentRaw === null ? null : Number(ema5SlopePercentRaw.toFixed(3));
+  const ema9SlopePercent =
+    ema9SlopePercentRaw === null ? null : Number(ema9SlopePercentRaw.toFixed(3));
+  const ema20SlopePercent =
+    ema20SlopePercentRaw === null ? null : Number(ema20SlopePercentRaw.toFixed(3));
+  const ema100SlopePercent =
+    ema100SlopePercentRaw === null ? null : Number(ema100SlopePercentRaw.toFixed(3));
+  const ema200SlopePercent =
+    ema200SlopePercentRaw === null ? null : Number(ema200SlopePercentRaw.toFixed(3));
+  const candlestickAnalysis = analyzeCandlestickPatterns(
+    normalizedBars.slice(-5).map((bar) => ({
+      open: bar.open,
+      high: bar.high,
+      low: bar.low,
+      close: bar.close,
+    })),
+  );
   const emaShortSeries = calculateExponentialMovingAverageSeries(closes, 9);
   const emaLongSeries = calculateExponentialMovingAverageSeries(closes, 100);
   const emaShort = emaShortSeries.at(-1) ?? null;
@@ -770,6 +837,19 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
       signalAgeSeconds,
       quoteAgeSeconds,
       spreadPercent,
+      ema5,
+      ema9,
+      ema20,
+      ema100,
+      ema200,
+      ema5SlopePercent,
+      ema9SlopePercent,
+      ema20SlopePercent,
+      ema100SlopePercent,
+      ema200SlopePercent,
+      candlestickBias: candlestickAnalysis.overallBias,
+      candlestickScore: candlestickAnalysis.score,
+      candlestickSignals: candlestickAnalysis.signals,
       emaShort,
       emaLong,
       emaShortSlopePercent,
@@ -821,6 +901,19 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
     signalAgeSeconds,
     quoteAgeSeconds,
     spreadPercent,
+    ema5,
+    ema9,
+    ema20,
+    ema100,
+    ema200,
+    ema5SlopePercent,
+    ema9SlopePercent,
+    ema20SlopePercent,
+    ema100SlopePercent,
+    ema200SlopePercent,
+    candlestickBias: candlestickAnalysis.overallBias,
+    candlestickScore: candlestickAnalysis.score,
+    candlestickSignals: candlestickAnalysis.signals,
     emaShort,
     emaLong,
     emaShortSlopePercent,

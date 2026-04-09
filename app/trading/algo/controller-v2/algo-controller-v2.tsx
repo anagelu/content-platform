@@ -47,6 +47,19 @@ type ConfluenceModel = {
   isReady: boolean;
 };
 type GaugeToggleState = Record<GaugeKey, boolean>;
+type SimpleGaugeCard = {
+  key: "trend" | "structure" | "candle";
+  label: string;
+  score: number;
+  band: string;
+  tone: string;
+  summary: string;
+  details: string[];
+};
+type StandardMarketModel = {
+  overview: string;
+  cards: SimpleGaugeCard[];
+};
 const COMMON_CRYPTO_BASE_SYMBOLS = new Set([
   "BTC",
   "ETH",
@@ -301,6 +314,207 @@ function getConfluenceReason(favorableCount: number, strongCount: number, total:
   }
 
   return "Current market conditions are not yet favorable.";
+}
+
+function formatSignedPercentValue(value: number | null, digits = 2) {
+  if (value === null || !Number.isFinite(value)) {
+    return "--";
+  }
+
+  const prefix = value > 0 ? "+" : "";
+  return `${prefix}${value.toFixed(digits)}%`;
+}
+
+function scoreFromCount(count: number, total: number) {
+  if (total <= 0) {
+    return 50;
+  }
+
+  return clamp((count / total) * 100, 0, 100);
+}
+
+function buildStandardMarketModel(snapshot: Snapshot | null): StandardMarketModel {
+  if (!snapshot) {
+    return {
+      overview: "Load a live snapshot to inspect EMA structure and candlestick context.",
+      cards: [],
+    };
+  }
+
+  const emaLevels = [
+    { label: "EMA 5", value: snapshot.ema5, slope: snapshot.ema5SlopePercent },
+    { label: "EMA 9", value: snapshot.ema9, slope: snapshot.ema9SlopePercent },
+    { label: "EMA 20", value: snapshot.ema20, slope: snapshot.ema20SlopePercent },
+    { label: "EMA 100", value: snapshot.ema100, slope: snapshot.ema100SlopePercent },
+    { label: "EMA 200", value: snapshot.ema200, slope: snapshot.ema200SlopePercent },
+  ].filter(
+    (item): item is { label: string; value: number; slope: number | null } =>
+      item.value !== null,
+  );
+  const aboveCount = emaLevels.filter((item) => snapshot.latestPrice > item.value).length;
+  const belowCount = emaLevels.filter((item) => snapshot.latestPrice < item.value).length;
+  const risingCount = emaLevels.filter((item) => (item.slope ?? 0) > 0).length;
+  const fallingCount = emaLevels.filter((item) => (item.slope ?? 0) < 0).length;
+  const bullishOrder =
+    snapshot.ema5 !== null &&
+    snapshot.ema9 !== null &&
+    snapshot.ema20 !== null &&
+    snapshot.ema100 !== null &&
+    snapshot.ema200 !== null &&
+    snapshot.ema5 > snapshot.ema9 &&
+    snapshot.ema9 > snapshot.ema20 &&
+    snapshot.ema20 > snapshot.ema100 &&
+    snapshot.ema100 > snapshot.ema200;
+  const bearishOrder =
+    snapshot.ema5 !== null &&
+    snapshot.ema9 !== null &&
+    snapshot.ema20 !== null &&
+    snapshot.ema100 !== null &&
+    snapshot.ema200 !== null &&
+    snapshot.ema5 < snapshot.ema9 &&
+    snapshot.ema9 < snapshot.ema20 &&
+    snapshot.ema20 < snapshot.ema100 &&
+    snapshot.ema100 < snapshot.ema200;
+  const priceLocation =
+    aboveCount === emaLevels.length
+      ? "Above all key EMAs"
+      : belowCount === emaLevels.length
+        ? "Below all key EMAs"
+        : aboveCount >= 3
+          ? "Above short-term EMAs, mixed against the full stack"
+          : belowCount >= 3
+            ? "Below short-term EMAs, mixed against the full stack"
+            : "Moving between fast and slow EMAs";
+  const trendScore = Math.round(
+    clamp(
+      50 +
+        (aboveCount - belowCount) * 7 +
+        (risingCount - fallingCount) * 5 +
+        (bullishOrder ? 14 : 0) -
+        (bearishOrder ? 14 : 0),
+      0,
+      100,
+    ),
+  );
+  const distFromEma9 =
+    snapshot.ema9 && snapshot.ema9 > 0
+      ? ((snapshot.latestPrice - snapshot.ema9) / snapshot.ema9) * 100
+      : null;
+  const distFromEma20 =
+    snapshot.ema20 && snapshot.ema20 > 0
+      ? ((snapshot.latestPrice - snapshot.ema20) / snapshot.ema20) * 100
+      : null;
+  const absDist20 = Math.abs(distFromEma20 ?? 0);
+  const structureZone =
+    snapshot.structurePercent === null
+      ? "Range location unavailable"
+      : snapshot.structurePercent >= 80
+        ? "Pressing near the top of the recent range"
+        : snapshot.structurePercent <= 20
+          ? "Pressing near the bottom of the recent range"
+          : snapshot.structurePercent >= 60
+            ? "Holding in the upper half of the recent range"
+            : snapshot.structurePercent <= 40
+              ? "Holding in the lower half of the recent range"
+              : "Trading near the middle of the recent range";
+  const structureScore = Math.round(
+    clamp(
+      55 +
+        (snapshot.structurePercent === null ? 0 : (snapshot.structurePercent - 50) * 0.55) -
+        absDist20 * 8 +
+        (snapshot.relativeVolume !== null ? Math.min(10, (snapshot.relativeVolume - 1) * 10) : 0),
+      0,
+      100,
+    ),
+  );
+  const topPattern = snapshot.candlestickSignals[0] ?? null;
+  const patternNearFastEma =
+    Math.min(Math.abs(distFromEma9 ?? 99), Math.abs(distFromEma20 ?? 99)) <= 1.2;
+  const patternAtRangeEdge =
+    snapshot.structurePercent !== null &&
+    (snapshot.structurePercent <= 25 || snapshot.structurePercent >= 75);
+  const patternConfirmation =
+    topPattern === null
+      ? "No high-confidence pattern is active."
+      : patternNearFastEma && patternAtRangeEdge
+        ? "Pattern is printing near a key EMA and a meaningful range edge."
+        : patternNearFastEma
+          ? "Pattern is printing near a key fast EMA."
+          : patternAtRangeEdge
+            ? "Pattern is printing near the edge of the recent range."
+            : "Pattern is present, but confirmation is lighter.";
+  const candleScore = Math.round(
+    clamp(
+      50 +
+        (topPattern ? (topPattern.bias === "bullish" ? 12 : topPattern.bias === "bearish" ? -12 : 0) : 0) +
+        (topPattern ? (topPattern.confidence - 50) * 0.6 : 0) +
+        (patternNearFastEma ? 8 : 0) +
+        (patternAtRangeEdge ? 6 : 0),
+      0,
+      100,
+    ),
+  );
+
+  const cards: SimpleGaugeCard[] = [
+    {
+      key: "trend",
+      label: "Trend",
+      score: trendScore,
+      band: getScoreBand(trendScore),
+      tone: getScoreTone(trendScore),
+      summary:
+        bullishOrder
+          ? "Short and long EMAs are stacked cleanly bullish."
+          : bearishOrder
+            ? "Short and long EMAs are stacked cleanly bearish."
+            : priceLocation,
+      details: [
+        `${aboveCount} of ${emaLevels.length} tracked EMAs are below price.`,
+        `${risingCount} EMA slopes are rising and ${fallingCount} are falling.`,
+        `Location: ${priceLocation}.`,
+      ],
+    },
+    {
+      key: "structure",
+      label: "Structure",
+      score: structureScore,
+      band: getScoreBand(structureScore),
+      tone: getScoreTone(structureScore),
+      summary: structureZone,
+      details: [
+        `Distance from EMA 9: ${formatSignedPercentValue(distFromEma9)}.`,
+        `Distance from EMA 20: ${formatSignedPercentValue(distFromEma20)}.`,
+        `Range position: ${snapshot.structurePercent === null ? "--" : `${snapshot.structurePercent.toFixed(0)}%`}.`,
+      ],
+    },
+    {
+      key: "candle",
+      label: "Candle Signal",
+      score: candleScore,
+      band: getScoreBand(candleScore),
+      tone: getScoreTone(candleScore),
+      summary: topPattern
+        ? `${topPattern.name} (${topPattern.bias}) with ${topPattern.confidence}% confidence.`
+        : "No standout bullish or bearish candle pattern is active.",
+      details: [
+        topPattern ? topPattern.summary : "The recent candles do not match a tracked reversal or continuation pattern.",
+        patternConfirmation,
+        snapshot.candlestickSignals.length > 1
+          ? `Also detected: ${snapshot.candlestickSignals
+              .slice(1, 3)
+              .map((signal) => signal.name)
+              .join(", ")}.`
+          : "No secondary candle pattern is competing for attention.",
+      ],
+    },
+  ];
+
+  return {
+    overview: `${priceLocation}. ${structureZone}. ${
+      topPattern ? `${topPattern.name} is the strongest current candle signal.` : "No dominant candle signal is active."
+    }`,
+    cards,
+  };
 }
 
 function getGaugeScore(gauges: GaugeResult[], key: GaugeKey) {
@@ -1023,6 +1237,7 @@ export function AlgoControllerV2({
   const [positions, setPositions] = useState(initialPositions);
   const [error, setError] = useState(initialError);
   const [isSnapshotLoading, setIsSnapshotLoading] = useState(false);
+  const [snapshotRefreshKey, setSnapshotRefreshKey] = useState(0);
   const [actionNotice, setActionNotice] = useState("");
   const [isBusy, setIsBusy] = useState(false);
   const normalizedSymbol = canonicalizeMarketSymbol(symbol);
@@ -1121,7 +1336,7 @@ export function AlgoControllerV2({
     return () => {
       cancelled = true;
     };
-  }, [activeController, analysisTimeframe, normalizedSymbol]);
+  }, [activeController, analysisTimeframe, normalizedSymbol, snapshotRefreshKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1179,6 +1394,7 @@ export function AlgoControllerV2({
     isCrypto,
     sensitivity: confluenceSensitivity,
   });
+  const standardMarketModel = useMemo(() => buildStandardMarketModel(snapshot), [snapshot]);
   const timeframeConfluenceGauge =
     confluence.gauges.find((gauge) => gauge.key === "timeframeConfluence") ?? null;
   const selectedLensReadout =
@@ -1551,29 +1767,43 @@ export function AlgoControllerV2({
             </select>
           </label>
 
-          <label className="algo-v2-field algo-v2-field-wide">
-            <span className="algo-v2-field-label">Confluence Sensitivity</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              value={confluenceSensitivity}
-              onChange={(event) => setConfluenceSensitivity(Number(event.target.value))}
-              className="algo-v2-range"
-            />
-            <div className="algo-v2-slider-scale">
-              <span>Fast</span>
-              <span>
-                {confluenceSensitivity < 35
-                  ? "Fast"
-                  : confluenceSensitivity > 65
-                    ? "Strict"
-                    : "Balanced"}
-              </span>
-              <span>Strict</span>
+          {mode === "turbo" ? (
+            <label className="algo-v2-field algo-v2-field-wide">
+              <span className="algo-v2-field-label">Confluence Sensitivity</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value={confluenceSensitivity}
+                onChange={(event) => setConfluenceSensitivity(Number(event.target.value))}
+                className="algo-v2-range"
+              />
+              <div className="algo-v2-slider-scale">
+                <span>Fast</span>
+                <span>
+                  {confluenceSensitivity < 35
+                    ? "Fast"
+                    : confluenceSensitivity > 65
+                      ? "Strict"
+                      : "Balanced"}
+                </span>
+                <span>Strict</span>
+              </div>
+            </label>
+          ) : (
+            <div className="algo-v2-field algo-v2-field-wide">
+              <span className="algo-v2-field-label">Snapshot Controls</span>
+              <button
+                type="button"
+                className="button-link secondary"
+                onClick={() => setSnapshotRefreshKey((current) => current + 1)}
+                disabled={isSnapshotLoading}
+              >
+                {isSnapshotLoading ? "Refreshing..." : "Refresh Snapshot"}
+              </button>
             </div>
-          </label>
+          )}
 
           <div className="algo-v2-mode-toggle" role="tablist" aria-label="Controller mode">
             <button
@@ -1602,7 +1832,7 @@ export function AlgoControllerV2({
                 <div>
                   <h3 className="algo-v2-panel-title">Standard Mode</h3>
                   <p className="algo-v2-panel-copy">
-                    Simple, fast position control for stocks and ETFs with compact confluence checks.
+                    Simple, auditable market structure gauges built from EMA positioning and rule-based candle patterns.
                   </p>
                 </div>
               </div>
@@ -1610,10 +1840,10 @@ export function AlgoControllerV2({
               <div className="algo-v2-confluence-card">
                 <div className="algo-v2-confluence-header">
                   <div>
-                    <p className="algo-v2-meter-label">Overall Confluence</p>
-                    {confluence.isReady ? (
-                      <strong className={`algo-v2-confluence-score ${displayedOverallTone}`}>
-                        {displayedOverallScore} · {displayedOverallBand}
+                    <p className="algo-v2-meter-label">Market Structure Summary</p>
+                    {standardMarketModel.cards.length > 0 ? (
+                      <strong className={`algo-v2-confluence-score ${standardMarketModel.cards[0]?.tone ?? "is-neutral"}`}>
+                        {standardMarketModel.overview}
                       </strong>
                     ) : (
                       <strong className="algo-v2-confluence-score is-neutral">
@@ -1622,30 +1852,37 @@ export function AlgoControllerV2({
                     )}
                   </div>
                   <div className="algo-v2-confluence-meta">
-                    <strong>{displayedAlignmentLabel}</strong>
-                    <span>Market conditions</span>
+                    <strong>{snapshot?.timeframe ?? analysisTimeframe}</strong>
+                    <span>Current lens</span>
                   </div>
                 </div>
-                {confluence.isReady && displayedOverallScore !== null ? (
+                {snapshot ? (
                   <div className="algo-v2-health-meter">
                     <div className="algo-v2-health-meter-track" />
                     <div
                       className="algo-v2-health-meter-thumb"
-                      style={{ left: `${displayedOverallScore}%` }}
+                      style={{ left: `${scoreFromCount(
+                        standardMarketModel.cards.filter((card) => card.score >= FAVORABLE_GAUGE_THRESHOLD).length,
+                        Math.max(standardMarketModel.cards.length, 1),
+                      )}%` }}
                     />
                   </div>
                 ) : (
-                  <div className="algo-v2-confluence-empty">Confluence will appear once a valid snapshot loads.</div>
+                  <div className="algo-v2-confluence-empty">A market structure summary will appear once a valid snapshot loads.</div>
                 )}
-                <p className="algo-v2-confluence-copy">{confluenceStatusReason}</p>
+                <p className="algo-v2-confluence-copy">
+                  {snapshot
+                    ? `Price ${snapshot.latestPrice > (snapshot.ema20 ?? snapshot.latestPrice) ? "is leaning above" : "is leaning below"} the 20 EMA, and the latest candle context is being checked against the recent range.`
+                    : confluenceStatusReason}
+                </p>
               </div>
 
-              {confluence.isReady ? (
+              {standardMarketModel.cards.length > 0 ? (
                 <div className="algo-v2-mini-gauge-grid">
-                  {confluence.gauges.map((gauge) => (
+                  {standardMarketModel.cards.map((gauge) => (
                   <article
                     key={gauge.key}
-                    className={gaugeToggles[gauge.key] ? "algo-v2-mini-gauge-card" : "algo-v2-mini-gauge-card is-disabled"}
+                    className="algo-v2-mini-gauge-card"
                   >
                     <div className="algo-v2-mini-gauge-top">
                       <div>
@@ -1656,61 +1893,17 @@ export function AlgoControllerV2({
                       </div>
                       <span className={`algo-v2-gauge-band ${gauge.tone}`}>{gauge.band}</span>
                     </div>
-                    <label className="algo-v2-gauge-toggle">
-                      <span>{gaugeToggles[gauge.key] ? "On" : "Off"}</span>
-                      <input
-                        type="checkbox"
-                        checked={gaugeToggles[gauge.key]}
-                        onChange={() =>
-                          setGaugeToggles((current) => ({
-                            ...current,
-                            [gauge.key]: !current[gauge.key],
-                          }))
-                        }
-                      />
-                    </label>
                     <div className="algo-v2-mini-track">
                       <span style={{ width: `${gauge.score}%` }} />
                     </div>
-                    <p className="algo-v2-mini-gauge-copy">{gauge.reason}</p>
-                    {gauge.key === "timeframeConfluence" && gauge.lensReadouts ? (
-                      <div className="algo-v2-lens-block">
-                        <div className="algo-v2-slider-header">
-                          <strong>Market Lens</strong>
-                          <strong>{selectedLensReadout?.label ?? "Base"}</strong>
+                    <p className="algo-v2-mini-gauge-copy">{gauge.summary}</p>
+                    <div className="algo-v2-debug-list">
+                      {gauge.details.map((detail) => (
+                        <div key={detail}>
+                          <span>{detail}</span>
                         </div>
-                        <input
-                          type="range"
-                          min="-2"
-                          max="2"
-                          step="1"
-                          value={marketLens}
-                          onChange={(event) => setMarketLens(Number(event.target.value) as MarketLensOffset)}
-                          className="algo-v2-range"
-                        />
-                        <div className="algo-v2-slider-scale algo-v2-slider-scale-tight">
-                          {MARKET_LENS_STOPS.map((stop) => (
-                            <span key={stop.offset}>{stop.label}</span>
-                          ))}
-                        </div>
-                        <p className="algo-v2-lens-copy">
-                          {selectedLensReadout
-                            ? `${selectedLensReadout.label} · ${selectedLensReadout.timeframe}: ${selectedLensReadout.summary}`
-                            : "Move the lens to inspect nearby timeframe agreement."}
-                        </p>
-                      </div>
-                    ) : null}
-                    <details className="algo-v2-gauge-debug">
-                      <summary>Debug subscores</summary>
-                      <div className="algo-v2-debug-list">
-                        {gauge.subscores.map((subscore) => (
-                          <div key={subscore.label}>
-                            <span>{subscore.label}</span>
-                            <strong>{Math.round(subscore.score)}</strong>
-                          </div>
-                        ))}
-                      </div>
-                    </details>
+                      ))}
+                    </div>
                   </article>
                   ))}
                 </div>
@@ -1764,7 +1957,7 @@ export function AlgoControllerV2({
             </section>
 
             <aside className="algo-v2-side-card">
-              <h3 className="algo-v2-mini-title">Trade Setup</h3>
+              <h3 className="algo-v2-mini-title">Setup Interpretation</h3>
               <div className="algo-v2-mini-list">
                 <div>
                   <span>Selected market</span>
@@ -1788,13 +1981,15 @@ export function AlgoControllerV2({
                   <strong>{analysisTimeframe}</strong>
                 </div>
                 <div>
-                  <span>Confluence mode</span>
+                  <span>EMA stack</span>
                   <strong>
-                    {confluenceSensitivity < 35
-                      ? "Fast"
-                      : confluenceSensitivity > 65
-                        ? "Strict"
-                        : "Balanced"}
+                    {snapshot?.ema5 && snapshot?.ema9 && snapshot?.ema20
+                      ? snapshot.ema5 > snapshot.ema9 && snapshot.ema9 > snapshot.ema20
+                        ? "Fast bullish"
+                        : snapshot.ema5 < snapshot.ema9 && snapshot.ema9 < snapshot.ema20
+                          ? "Fast bearish"
+                          : "Mixed"
+                      : "--"}
                   </strong>
                 </div>
                 <div>
@@ -1810,6 +2005,20 @@ export function AlgoControllerV2({
                   <strong>{formatRelativeVolume(snapshot?.relativeVolume ?? null)}</strong>
                 </div>
                 <div>
+                  <span>Distance to EMA 20</span>
+                  <strong>
+                    {snapshot?.ema20 ? formatSignedPercentValue(((snapshot.latestPrice - snapshot.ema20) / snapshot.ema20) * 100) : "--"}
+                  </strong>
+                </div>
+                <div>
+                  <span>Top candle signal</span>
+                  <strong>{snapshot?.candlestickSignals[0]?.name ?? "None"}</strong>
+                </div>
+                <div>
+                  <span>Pattern bias</span>
+                  <strong>{snapshot?.candlestickBias ?? "--"}</strong>
+                </div>
+                <div>
                   <span>Controller state</span>
                   <strong>{activeController?.status ?? "UNSET"}</strong>
                 </div>
@@ -1817,11 +2026,10 @@ export function AlgoControllerV2({
                   <span>Daily P&amp;L</span>
                   <strong>{snapshot ? formatSignedMoney(snapshot.dailyPnL) : "--"}</strong>
                 </div>
-                <div>
-                  <span>Signal time</span>
-                  <strong>{formatTimestamp(snapshot?.latestTradeTimestamp ?? null)}</strong>
-                </div>
               </div>
+              <p className="algo-v2-mini-gauge-copy" style={{ marginTop: "1rem" }}>
+                {standardMarketModel.overview}
+              </p>
             </aside>
           </div>
         ) : (
