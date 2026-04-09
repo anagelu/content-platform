@@ -517,6 +517,40 @@ function buildStandardMarketModel(snapshot: Snapshot | null): StandardMarketMode
   };
 }
 
+function buildStandardTimeframeCard({
+  gauge,
+  selectedLensReadout,
+}: {
+  gauge: GaugeResult | null;
+  selectedLensReadout: LensReadout | null;
+}): SimpleGaugeCard | null {
+  if (!gauge) {
+    return null;
+  }
+
+  return {
+    key: "structure",
+    label: "Timeframe Confluence",
+    score: gauge.score,
+    band: gauge.band,
+    tone: gauge.tone,
+    summary: selectedLensReadout
+      ? `${selectedLensReadout.label} on ${selectedLensReadout.timeframe}: ${selectedLensReadout.summary}`
+      : gauge.reason,
+    details: [
+      `${gauge.score} overall score with ${gauge.band.toLowerCase()} agreement.`,
+      selectedLensReadout
+        ? `Active lens: ${selectedLensReadout.label} (${selectedLensReadout.timeframe}).`
+        : "Base timeframe lens is active.",
+      gauge.lensReadouts && gauge.lensReadouts.length > 0
+        ? `Nearby reads: ${gauge.lensReadouts
+            .map((readout) => `${readout.label} ${readout.score}`)
+            .join(" · ")}`
+        : "Nearby timeframe reads are unavailable.",
+    ],
+  };
+}
+
 function getGaugeScore(gauges: GaugeResult[], key: GaugeKey) {
   return gauges.find((gauge) => gauge.key === key)?.score ?? 50;
 }
@@ -1394,11 +1428,22 @@ export function AlgoControllerV2({
     isCrypto,
     sensitivity: confluenceSensitivity,
   });
-  const standardMarketModel = useMemo(() => buildStandardMarketModel(snapshot), [snapshot]);
   const timeframeConfluenceGauge =
     confluence.gauges.find((gauge) => gauge.key === "timeframeConfluence") ?? null;
   const selectedLensReadout =
     timeframeConfluenceGauge?.lensReadouts?.find((readout) => readout.offset === marketLens) ?? null;
+  const standardMarketModel = useMemo(() => {
+    const baseModel = buildStandardMarketModel(snapshot);
+    const timeframeCard = buildStandardTimeframeCard({
+      gauge: timeframeConfluenceGauge,
+      selectedLensReadout,
+    });
+
+    return {
+      ...baseModel,
+      cards: timeframeCard ? [...baseModel.cards, timeframeCard] : baseModel.cards,
+    };
+  }, [selectedLensReadout, snapshot, timeframeConfluenceGauge]);
   const enabledGauges = confluence.gauges.filter((gauge) => gaugeToggles[gauge.key]);
   const enabledOverallWeights = getOverallWeights();
   const enabledWeightTotal = enabledGauges.reduce(
@@ -1897,6 +1942,35 @@ export function AlgoControllerV2({
                       <span style={{ width: `${gauge.score}%` }} />
                     </div>
                     <p className="algo-v2-mini-gauge-copy">{gauge.summary}</p>
+                    {gauge.label === "Timeframe Confluence" && timeframeConfluenceGauge?.lensReadouts ? (
+                      <div className="algo-v2-lens-block">
+                        <div className="algo-v2-slider-header">
+                          <strong>Market Lens</strong>
+                          <strong>{selectedLensReadout?.label ?? "Base"}</strong>
+                        </div>
+                        <input
+                          type="range"
+                          min="-2"
+                          max="2"
+                          step="1"
+                          value={marketLens}
+                          onChange={(event) =>
+                            setMarketLens(Number(event.target.value) as MarketLensOffset)
+                          }
+                          className="algo-v2-range"
+                        />
+                        <div className="algo-v2-slider-scale algo-v2-slider-scale-tight">
+                          {MARKET_LENS_STOPS.map((stop) => (
+                            <span key={stop.offset}>{stop.label}</span>
+                          ))}
+                        </div>
+                        <p className="algo-v2-lens-copy">
+                          {selectedLensReadout
+                            ? `${selectedLensReadout.label} · ${selectedLensReadout.timeframe}: ${selectedLensReadout.summary}`
+                            : "Move the lens to inspect nearby timeframe agreement."}
+                        </p>
+                      </div>
+                    ) : null}
                     <div className="algo-v2-debug-list">
                       {gauge.details.map((detail) => (
                         <div key={detail}>
