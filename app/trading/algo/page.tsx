@@ -5,8 +5,13 @@ import {
   getAlpacaExecutionState,
   getAlpacaOrderHistory,
 } from "./actions";
+import { AlpacaConnectCard } from "./alpaca-connect-card";
 import { AlpacaBotPanel } from "./alpaca-bot-panel";
 import { HeldAssetActions } from "./held-asset-actions";
+
+type OrderHistory = Awaited<ReturnType<typeof getAlpacaOrderHistory>>;
+type ControllerHistory = Awaited<ReturnType<typeof getAlpacaControllerHistory>>;
+type ExecutionState = Awaited<ReturnType<typeof getAlpacaExecutionState>>;
 
 function formatTimestamp(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -61,14 +66,32 @@ export default async function TradingAlgoPage({
 }: {
   searchParams?: Promise<{
     symbol?: string;
+    alpaca?: string;
+    env?: string;
+    message?: string;
   }>;
 }) {
   const session = await auth();
-  const orderHistory = session?.user?.id ? await getAlpacaOrderHistory() : [];
-  const controllers = session?.user?.id ? await getAlpacaControllerHistory() : [];
-  const executionState = session?.user?.id
-    ? await getAlpacaExecutionState()
-    : { positions: [], openOrders: [], recentOrders: [] };
+  const params = searchParams ? await searchParams : undefined;
+  let dashboardError = "";
+  let orderHistory: OrderHistory = [];
+  let controllers: ControllerHistory = [];
+  let executionState: ExecutionState = { positions: [], openOrders: [], recentOrders: [] };
+
+  if (session?.user?.id) {
+    try {
+      [orderHistory, controllers, executionState] = await Promise.all([
+        getAlpacaOrderHistory(),
+        getAlpacaControllerHistory(),
+        getAlpacaExecutionState(),
+      ]);
+    } catch (error) {
+      dashboardError =
+        error instanceof Error
+          ? error.message
+          : "Unable to load the Alpaca dashboard right now.";
+    }
+  }
   const totalMarketValue = executionState.positions.reduce(
     (sum, position) => sum + position.marketValue,
     0,
@@ -105,9 +128,14 @@ export default async function TradingAlgoPage({
       portfolioWeight,
     };
   });
-  const params = searchParams ? await searchParams : undefined;
   const initialSymbol =
     params?.symbol && params.symbol.trim() ? params.symbol.trim().toUpperCase() : undefined;
+  const oauthNotice =
+    params?.alpaca === "connected"
+      ? `Alpaca ${params.env === "live" ? "live" : "paper"} connection saved.`
+      : params?.message
+        ? params.message
+        : "";
 
   return (
     <main>
@@ -133,6 +161,20 @@ export default async function TradingAlgoPage({
             Open Tools
           </Link>
         </div>
+
+        <AlpacaConnectCard />
+
+        {oauthNotice ? (
+          <div className="card" style={{ marginBottom: "1.5rem" }}>
+            <p className="meta" style={{ marginBottom: 0 }}>{oauthNotice}</p>
+          </div>
+        ) : null}
+
+        {dashboardError ? (
+          <div className="card" style={{ marginBottom: "1.5rem" }}>
+            <p className="form-error" style={{ marginBottom: 0 }}>{dashboardError}</p>
+          </div>
+        ) : null}
 
         <section className="trading-hero-card" style={{ marginBottom: "1.5rem" }}>
           <h2 className="trading-section-title">What this page does</h2>

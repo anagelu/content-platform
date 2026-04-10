@@ -8,7 +8,7 @@ import {
   updateAlpacaOrderLog,
 } from "@/lib/alpaca-order-log";
 import {
-  getAlpacaCredentials,
+  type AlpacaCredentials,
   type AlpacaBarTimeframe,
   type AlpacaOrder,
   getLatestCryptoTrade,
@@ -23,6 +23,7 @@ import {
   submitMarketOrder,
   waitForOrderResolution,
 } from "@/lib/alpaca";
+import { getUserAlpacaCredentials } from "@/lib/alpaca-oauth";
 import {
   type AlpacaPaperStrategyType,
   getAlpacaPaperStrategySnapshot,
@@ -54,14 +55,15 @@ async function submitTrackedPaperOrder({
   qty,
   side,
   clientOrderId,
+  credentials,
 }: {
   userId: number;
   symbol: string;
   qty: number;
   side: "buy" | "sell";
   clientOrderId: string;
+  credentials: AlpacaCredentials;
 }) {
-  const credentials = getAlpacaCredentials();
   const normalizedSymbol = normalizeAlpacaTradingSymbol(symbol);
 
   if (isAlpacaCryptoSymbol(normalizedSymbol)) {
@@ -210,13 +212,15 @@ export async function getAlpacaAlgoSnapshot(input: {
   maxNotional: number;
   maxDailyLoss: number;
 }) {
-  await requireSignedInUser();
+  const userId = await requireSignedInUser();
 
   const symbol = input.symbol.trim().toUpperCase();
 
   if (!symbol) {
     throw new Error("Add a ticker symbol first.");
   }
+
+  const credentials = await getUserAlpacaCredentials(userId);
 
   return getAlpacaPaperStrategySnapshot({
     symbol,
@@ -228,6 +232,7 @@ export async function getAlpacaAlgoSnapshot(input: {
     bollingerStdDev: input.bollingerStdDev,
     maxNotional: input.maxNotional,
     maxDailyLoss: input.maxDailyLoss,
+    credentials,
   });
 }
 
@@ -237,7 +242,7 @@ export async function getTurboOptionCandidates(input: {
   targetDelta: number;
   daysToExpiry: number;
 }) {
-  await requireSignedInUser();
+  const userId = await requireSignedInUser();
 
   const underlyingSymbol = input.underlyingSymbol.trim().toUpperCase();
 
@@ -258,7 +263,8 @@ export async function getTurboOptionCandidates(input: {
   const maxDate = new Date();
   maxDate.setDate(maxDate.getDate() + Math.max(2, Math.round(input.daysToExpiry + 7)));
 
-  const latestTrade = await getLatestStockTrade(underlyingSymbol);
+  const credentials = await getUserAlpacaCredentials(userId);
+  const latestTrade = await getLatestStockTrade(underlyingSymbol, credentials);
   const latestPrice = latestTrade.price;
   const strikeWindow = latestPrice * 0.12;
   const strikePriceGte = Math.max(1, latestPrice - strikeWindow);
@@ -275,7 +281,7 @@ export async function getTurboOptionCandidates(input: {
       strikePriceGte,
       strikePriceLte,
       limit: 60,
-    }),
+    }, credentials),
     getAlpacaOptionChainSnapshots({
       underlyingSymbol,
       type: optionType,
@@ -284,7 +290,7 @@ export async function getTurboOptionCandidates(input: {
       strikePriceGte,
       strikePriceLte,
       limit: 60,
-    }),
+    }, credentials),
   ]);
 
   const suggestions = contracts
@@ -358,7 +364,7 @@ export async function submitTurboOptionPaperTrade(input: {
   side?: "buy" | "sell";
 }) {
   const userId = await requireSignedInUser();
-  const credentials = getAlpacaCredentials();
+  const credentials = await getUserAlpacaCredentials(userId);
 
   if (credentials.environment !== "paper") {
     throw new Error("Turbo option trading is restricted to Alpaca paper mode.");
@@ -378,6 +384,7 @@ export async function submitTurboOptionPaperTrade(input: {
     qty,
     side,
     clientOrderId: `turbo-option-${side}-${contractSymbol.toLowerCase()}-${Date.now()}`,
+    credentials,
   });
 
   revalidatePath("/trading/algo/controller-v2");
@@ -403,7 +410,7 @@ export async function runTurboOptionControllerCommand(input: {
   status: "ACTIVE" | "PAUSED" | "EJECTED";
 }> {
   const userId = await requireSignedInUser();
-  const credentials = getAlpacaCredentials();
+  const credentials = await getUserAlpacaCredentials(userId);
 
   if (credentials.environment !== "paper") {
     throw new Error("Turbo option trading is restricted to Alpaca paper mode.");
@@ -434,6 +441,7 @@ export async function runTurboOptionControllerCommand(input: {
       qty: currentQty,
       side: "sell",
       clientOrderId: `turbo-option-${input.command.toLowerCase()}-${contractSymbol.toLowerCase()}-${Date.now()}`,
+      credentials,
     });
 
     revalidatePath("/trading/algo/controller-v2");
@@ -461,6 +469,7 @@ export async function runTurboOptionControllerCommand(input: {
       qty: currentQty - targetQty,
       side: "sell",
       clientOrderId: `turbo-option-trim-${contractSymbol.toLowerCase()}-${Date.now()}`,
+      credentials,
     });
   } else {
     await submitTrackedPaperOrder({
@@ -469,6 +478,7 @@ export async function runTurboOptionControllerCommand(input: {
       qty: targetQty - currentQty,
       side: "buy",
       clientOrderId: `turbo-option-${input.command.toLowerCase()}-${contractSymbol.toLowerCase()}-${Date.now()}`,
+      credentials,
     });
   }
 
@@ -513,8 +523,7 @@ export async function submitAlpacaPaperOrder(input: {
   maxDailyLoss: number;
 }) {
   const userId = await requireSignedInUser();
-
-  const credentials = getAlpacaCredentials();
+  const credentials = await getUserAlpacaCredentials(userId);
 
   if (credentials.environment !== "paper") {
     throw new Error("Website order entry is restricted to Alpaca paper mode.");
@@ -538,6 +547,7 @@ export async function submitAlpacaPaperOrder(input: {
     qty,
     side: input.side,
     clientOrderId: `manual-${input.side}-${normalizedSymbol.toLowerCase().replaceAll("/", "-")}-${Date.now()}`,
+    credentials,
   });
 
   const snapshot = await getAlpacaPaperStrategySnapshot({
@@ -550,6 +560,7 @@ export async function submitAlpacaPaperOrder(input: {
     bollingerStdDev: input.bollingerStdDev,
     maxNotional: input.maxNotional,
     maxDailyLoss: input.maxDailyLoss,
+    credentials,
   });
 
   revalidatePath("/trading/algo");
@@ -589,9 +600,8 @@ export async function runAlpacaAutomationNow() {
 }
 
 export async function getAlpacaExecutionState() {
-  await requireSignedInUser();
-
-  const credentials = getAlpacaCredentials();
+  const userId = await requireSignedInUser();
+  const credentials = await getUserAlpacaCredentials(userId);
   const [positions, openOrders, recentOrders] = await Promise.all([
     listAlpacaPositions(credentials),
     listAlpacaOrders({ status: "open", limit: 25 }, credentials),
@@ -621,7 +631,7 @@ export async function manageAlpacaHeldAssetAction(
 ): Promise<HeldAssetActionState> {
   try {
     const userId = await requireSignedInUser();
-    const credentials = getAlpacaCredentials();
+    const credentials = await getUserAlpacaCredentials(userId);
 
     if (credentials.environment !== "paper") {
       return {
@@ -699,6 +709,7 @@ export async function manageAlpacaHeldAssetAction(
       qty: requestedQty,
       side,
       clientOrderId: `position-${positionAction.toLowerCase()}-${symbol.toLowerCase().replaceAll("/", "-")}-${Date.now()}`,
+      credentials,
     });
 
     revalidatePath("/trading/algo");
@@ -732,7 +743,7 @@ export async function runAlpacaTradeController(input: {
   maxDailyLoss: number;
 }) {
   const userId = await requireSignedInUser();
-  const credentials = getAlpacaCredentials();
+  const credentials = await getUserAlpacaCredentials(userId);
 
   if (credentials.environment !== "paper") {
     throw new Error("Trade controller execution is restricted to Alpaca paper mode.");
@@ -755,6 +766,7 @@ export async function runAlpacaTradeController(input: {
     bollingerStdDev: normalized.bollingerStdDev,
     maxNotional: normalized.maxNotional,
     maxDailyLoss: normalized.maxDailyLoss,
+    credentials,
   });
 
   if (input.command === "PLAY" || input.command === "RESUME") {
@@ -770,6 +782,7 @@ export async function runAlpacaTradeController(input: {
         qty: buyQty,
         side: "buy",
         clientOrderId: `controller-${input.command.toLowerCase()}-${normalized.symbol.toLowerCase().replaceAll("/", "-")}-${Date.now()}`,
+        credentials,
       });
       orders.push(resolution.order);
       allOrdersReachedFinalState =
@@ -783,6 +796,7 @@ export async function runAlpacaTradeController(input: {
         qty: sellQty,
         side: "sell",
         clientOrderId: `controller-${input.command.toLowerCase()}-${normalized.symbol.toLowerCase().replaceAll("/", "-")}-${Date.now()}`,
+        credentials,
       });
       orders.push(resolution.order);
       allOrdersReachedFinalState =
@@ -824,6 +838,7 @@ export async function runAlpacaTradeController(input: {
         qty: exitQty,
         side: exitSide,
         clientOrderId: `controller-${input.command.toLowerCase()}-${normalized.symbol.toLowerCase().replaceAll("/", "-")}-${Date.now()}`,
+        credentials,
       });
       orders.push(resolution.order);
       allOrdersReachedFinalState =
@@ -860,6 +875,7 @@ export async function runAlpacaTradeController(input: {
     bollingerStdDev: normalized.bollingerStdDev,
     maxNotional: normalized.maxNotional,
     maxDailyLoss: normalized.maxDailyLoss,
+    credentials,
   });
   const controller = await getAlpacaTradeController(userId, normalized.symbol);
   revalidatePath("/trading/algo");

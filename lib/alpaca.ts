@@ -33,8 +33,10 @@ export type AlpacaBarTimeframe =
   | "1Week";
 
 export type AlpacaCredentials = {
-  keyId: string;
-  secretKey: string;
+  authMode: "keys" | "oauth";
+  keyId?: string;
+  secretKey?: string;
+  accessToken?: string;
   environment: AlpacaEnvironment;
 };
 
@@ -258,6 +260,7 @@ export function getAlpacaCredentials(): AlpacaCredentials {
   }
 
   return {
+    authMode: "keys",
     keyId,
     secretKey,
     environment: getDefaultEnvironment(),
@@ -282,8 +285,14 @@ async function createAlpacaRequest<T>({
       headers: {
         accept: "application/json",
         "content-type": "application/json",
-        "APCA-API-KEY-ID": credentials.keyId,
-        "APCA-API-SECRET-KEY": credentials.secretKey,
+        ...(credentials.authMode === "oauth" && credentials.accessToken
+          ? {
+              Authorization: `Bearer ${credentials.accessToken}`,
+            }
+          : {
+              "APCA-API-KEY-ID": credentials.keyId ?? "",
+              "APCA-API-SECRET-KEY": credentials.secretKey ?? "",
+            }),
         ...init?.headers,
       },
       signal: controller.signal,

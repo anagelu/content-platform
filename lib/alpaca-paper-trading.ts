@@ -1,5 +1,6 @@
 import {
   getAlpacaAccount,
+  type AlpacaCredentials,
   type AlpacaBarTimeframe,
   getAlpacaCredentials,
   getCryptoBars,
@@ -578,8 +579,9 @@ export async function getAlpacaPaperStrategySnapshot(input?: {
   bollingerStdDev?: number;
   maxNotional?: number;
   maxDailyLoss?: number;
+  credentials?: AlpacaCredentials;
 }) {
-  const credentials = getAlpacaCredentials();
+  const credentials = input?.credentials ?? getAlpacaCredentials();
   const symbol = normalizeAlpacaTradingSymbol(
     input?.symbol || process.env.ALPACA_SYMBOL || "SPY",
   );

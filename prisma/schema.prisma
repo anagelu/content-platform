@@ -34,6 +34,13 @@ model User {
   publicTradingProfile Boolean          @default(false)
   tradingBio           String?
   tradingFocus         String?
+  alpacaPreferredEnvironment String?    @default("paper")
+  alpacaLiveAccessTokenEncrypted String?
+  alpacaLiveScope      String?
+  alpacaLiveConnectedAt DateTime?
+  alpacaPaperAccessTokenEncrypted String?
+  alpacaPaperScope     String?
+  alpacaPaperConnectedAt DateTime?
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @default(now()) @updatedAt
 
