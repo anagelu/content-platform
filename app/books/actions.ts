@@ -233,3 +233,47 @@ export async function deleteBook(formData: FormData) {
 
   redirect("/books");
 }
+
+export async function setBookVisibility(formData: FormData) {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    redirect("/login");
+  }
+
+  const id = Number(formData.get("id"));
+  const nextVisibility = formData.get("isPublic")?.toString() === "true";
+
+  if (!Number.isFinite(id) || id <= 0) {
+    throw new Error("Book ID is required.");
+  }
+
+  const book = await prisma.book.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      slug: true,
+      authorId: true,
+    },
+  });
+
+  if (!book) {
+    throw new Error("Book not found.");
+  }
+
+  const userId = Number(session.user.id);
+  const isAdmin = session.user.role === "admin";
+
+  if (!isAdmin && book.authorId !== userId) {
+    throw new Error("You do not have permission to change this book's visibility.");
+  }
+
+  await prisma.book.update({
+    where: { id },
+    data: {
+      isPublic: nextVisibility,
+    },
+  });
+
+  redirect(`/books/${book.slug}`);
+}

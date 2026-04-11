@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { deleteBook } from "../actions";
+import { deleteBook, setBookVisibility } from "../actions";
 import { BookReaderWorkspace } from "../book-reader-workspace";
 
 export default async function BookPage({
@@ -97,6 +97,13 @@ export default async function BookPage({
                 </Link>
                 {canManage ? (
                   <>
+                    <form action={setBookVisibility}>
+                      <input type="hidden" name="id" value={book.id} />
+                      <input type="hidden" name="isPublic" value={book.isPublic ? "false" : "true"} />
+                      <button type="submit" className="button-link secondary">
+                        {book.isPublic ? "Make Private" : "Make Public"}
+                      </button>
+                    </form>
                     <Link href={`/books/${book.slug}/edit`} className="button-link secondary">
                       Edit
                     </Link>
