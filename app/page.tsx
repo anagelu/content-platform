@@ -62,241 +62,178 @@ export default async function HomePage() {
         })
       : Promise.resolve([]),
   ]);
+  const quickLinks = [
+    { href: "/posts", label: "Posts", hint: "Publishing" },
+    { href: "/books", label: "Books", hint: "Manuscripts" },
+    { href: "/studio", label: "Studio", hint: "Distribution" },
+    ...(session ? [{ href: "/trading", label: "Trading", hint: "Markets" }] : []),
+    ...(session ? [{ href: "/inbox/messages", label: "Inbox", hint: "Capture" }] : []),
+  ];
+  const operatingLanes = [
+    {
+      kicker: "Capture",
+      title: "Collect the rough material first",
+      copy: "Bring in a conversation, note, journal fragment, or research thread before you decide what it should become.",
+    },
+    {
+      kicker: "Shape",
+      title: "Move the idea into a stronger form",
+      copy: "Choose the right output and build it in a structured workspace instead of editing loose fragments.",
+    },
+    {
+      kicker: "Compound",
+      title: "Turn one source into multiple assets",
+      copy: "Strong ideas can branch into posts, book sections, patent drafts, and distribution pieces without losing continuity.",
+    },
+  ];
 
   return (
     <main>
       <div className="home-page-shell">
-        <div className="home-layout">
-          <aside className="home-sidebar">
-            <div className="site-sidebar-card home-sidebar-card">
-              <p className="site-sidebar-label">Main Paths</p>
-              <p className="site-sidebar-description">
-                Start from capture, then move toward finished assets.
+        <div className="home-main">
+          <section className="home-command-surface" id="overview">
+            <div className="home-command-main">
+              <p className="home-hero-kicker">Pattern Foundry</p>
+              <h1 className="page-title">Build durable assets from rough thinking.</h1>
+              <p className="page-subtitle">
+                Capture first, structure second, publish later. Pattern Foundry gives each idea a workspace so it can
+                evolve into writing, books, patents, distribution pieces, and trading workflows without losing continuity.
               </p>
-              <nav className="home-side-nav" aria-label="Homepage navigation">
-                <Link href="/">
-                  <span>Home</span>
-                  <span className="home-side-nav-count">overview</span>
-                </Link>
-                <Link href="/about">
-                  <span>About</span>
-                  <span className="home-side-nav-count">mission</span>
-                </Link>
-                <Link href="/#start-with-an-idea">
-                  <span>Capture</span>
-                  <span className="home-side-nav-count">start</span>
-                </Link>
-                <Link href="/posts">
-                  <span>Posts</span>
-                  <span className="home-side-nav-count">publishing</span>
-                </Link>
-                <Link href="/books">
-                  <span>Books</span>
-                  <span className="home-side-nav-count">manuscripts</span>
-                </Link>
-                <Link href="/patents">
-                  <span>Patents</span>
-                  <span className="home-side-nav-count">filings</span>
-                </Link>
-                <Link href="/studio">
-                  <span>Studio</span>
-                  <span className="home-side-nav-count">distribution</span>
-                </Link>
-                {session ? (
-                  <>
-                    <Link href="/trading">
-                      <span>Trading</span>
-                      <span className="home-side-nav-count">markets</span>
-                    </Link>
-                    <Link href="/inbox/messages">
-                      <span>Inbox</span>
-                      <span className="home-side-nav-count">capture</span>
-                    </Link>
-                  </>
-                ) : null}
-                {session?.user?.role === "admin" ? (
-                  <Link href="/admin/ai?range=30d">
-                    <span>Admin</span>
-                    <span className="home-side-nav-count">ops</span>
+
+              <div className="home-command-strip" aria-label="Primary workspaces">
+                {quickLinks.map((link) => (
+                  <Link key={link.href} href={link.href} className="home-command-link">
+                    <strong>{link.label}</strong>
+                    <span>{link.hint}</span>
+                  </Link>
+                ))}
+                {!session ? (
+                  <Link href="/login" className="home-command-link is-accent">
+                    <strong>Sign In</strong>
+                    <span>Open your workspace</span>
                   </Link>
                 ) : null}
-              </nav>
+              </div>
             </div>
 
-            <div className="site-sidebar-card home-sidebar-card">
-              <p className="site-sidebar-label">More</p>
-              <p className="site-sidebar-description">
-                Secondary systems, archives, and deeper workspace areas.
+            <div className="home-command-panel">
+              <p className="home-hero-panel-label">Operating Model</p>
+              <div className="home-command-metrics">
+                <div>
+                  <span>Capture</span>
+                  <strong>Conversations, notes, fragments</strong>
+                </div>
+                <div>
+                  <span>Shape</span>
+                  <strong>Posts, books, patents, distribution</strong>
+                </div>
+                <div>
+                  <span>Compound</span>
+                  <strong>One source, many durable outputs</strong>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="home-idea-section" id="start-with-an-idea">
+            <div className="home-section-heading">
+              <p className="home-section-kicker">Start Here</p>
+              <h2 className="trading-section-title">Capture the rough version first.</h2>
+              <p className="meta">
+                Use the idea surface below to pick the right destination and keep the work moving inside a structured editor.
               </p>
-              <nav className="home-side-nav" aria-label="Secondary navigation">
-                <Link href="/books">
-                  <span>Books</span>
-                  <span className="home-side-nav-count">manuscripts</span>
-                </Link>
-                <Link href="/search">
-                  <span>Search</span>
-                  <span className="home-side-nav-count">finder</span>
-                </Link>
-                {session ? (
-                  <>
-                    <Link href="/trading">
-                      <span>Trading</span>
-                      <span className="home-side-nav-count">markets</span>
-                    </Link>
-                    <Link href="/categories">
-                      <span>Categories</span>
-                      <span className="home-side-nav-count">taxonomy</span>
-                    </Link>
-                    <Link href="/inbox/messages">
-                      <span>Inbox</span>
-                      <span className="home-side-nav-count">capture</span>
-                    </Link>
-                    <Link href="/os">
-                      <span>OS</span>
-                      <span className="home-side-nav-count">workspace</span>
-                    </Link>
-                    {session.user.role === "admin" ? (
-                      <Link href="/admin/ai?range=30d">
-                        <span>Admin</span>
-                        <span className="home-side-nav-count">ops</span>
-                      </Link>
-                    ) : null}
-                  </>
-                ) : null}
-              </nav>
             </div>
-          </aside>
 
-          <div className="home-main">
-            <section className="home-hero" id="overview">
-              <div className="home-hero-copy">
-                <p className="home-hero-kicker">Pattern Foundry</p>
-                <h1 className="page-title">Turn rough ideas into durable assets.</h1>
-                <p className="page-subtitle">
-                  Start messy. Refine later. Paste a conversation, note, or draft
-                  and turn it into a post, book section, patent draft, or
-                  distribution-ready asset without losing the thread of the idea.
-                </p>
-              </div>
+            <HomeIdeaStarter outputOptions={outputOptions} />
+          </section>
 
-              <div className="home-hero-panel">
-                <p className="home-hero-panel-label">Core Flow</p>
-                <ol className="home-flow-list">
-                  <li>Paste a conversation, note, or rough draft.</li>
-                  <li>Choose the output shape you want to create.</li>
-                  <li>Refine the draft section by section.</li>
-                  <li>Publish or distribute when the asset is ready.</li>
-                </ol>
-              </div>
-            </section>
+          <section className="home-core-section">
+            <div className="home-section-heading">
+              <p className="home-section-kicker">Operating Lanes</p>
+              <h2 className="trading-section-title">A clearer path from capture to finished work.</h2>
+            </div>
 
-            <section id="start-with-an-idea" className="home-idea-section">
-              <div className="home-section-heading">
-                <p className="home-section-kicker">Step 1</p>
-                <h2 className="trading-section-title">Capture the rough version first.</h2>
-                <p className="meta">
-                  Capture first, choose the shape next, and continue in the
-                  workspace where the real drafting happens.
-                </p>
-              </div>
+            <div className="home-lane-grid">
+              {operatingLanes.map((lane) => (
+                <article key={lane.title} className="home-lane-card">
+                  <p className="home-focus-kicker">{lane.kicker}</p>
+                  <h3 className="card-title">{lane.title}</h3>
+                  <p className="preview">{lane.copy}</p>
+                </article>
+              ))}
+            </div>
+          </section>
 
-              <HomeIdeaStarter outputOptions={outputOptions} />
-            </section>
+          <section className="home-secondary-section">
+            <div className="home-section-heading">
+              <p className="home-section-kicker">Recent Activity</p>
+              <h2 className="trading-section-title">Live workspaces stay visible without overwhelming the page.</h2>
+            </div>
 
-            <section className="home-core-section">
-              <div className="home-section-heading">
-                <p className="home-section-kicker">Step 3</p>
-                <h2 className="trading-section-title">Generate, refine, and turn the idea into something durable.</h2>
-              </div>
-
-              <div className="home-core-grid">
-                <div className="card">
-                  <h3 className="card-title">Refine in structure, not in chaos</h3>
-                  <p className="preview">
-                    Move from raw material into sections, chapters, or filing blocks so the idea gets stronger as it develops.
-                  </p>
+            <div className="home-activity-grid">
+              <section className="home-module">
+                <div className="home-module-header">
+                  <div>
+                    <p className="home-focus-kicker">Publishing</p>
+                    <h3 className="card-title">Recent Posts</h3>
+                  </div>
+                  <Link href="/posts" className="button-link secondary">
+                    View All
+                  </Link>
                 </div>
-                <div className="card">
-                  <h3 className="card-title">Keep one source, create many assets</h3>
-                  <p className="preview">
-                    A single strong idea can become a post, a manuscript section, a patent frame, and a distribution piece.
-                  </p>
-                </div>
-                <div className="card">
-                  <h3 className="card-title">Publish when the work is ready</h3>
-                  <p className="preview">
-                    Finish the asset in the right workspace, then move into publishing or downstream distribution without starting over.
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            <section className="home-secondary-section">
-              <div className="home-section-heading">
-                <p className="home-section-kicker">Recently Active</p>
-                <h2 className="trading-section-title">Secondary systems stay available, but out of the way.</h2>
-              </div>
-
-              <div className="trading-detail-grid">
-                <div className="card" style={{ marginBottom: 0 }}>
-                  <h3 className="card-title">Recent Posts</h3>
-                  {posts.length === 0 ? (
-                    <p className="meta">No posts yet.</p>
-                  ) : (
-                    <div className="home-compact-list">
-                      {posts.map((post) => (
-                        <Link key={post.id} href={`/posts/${post.slug}`} className="home-compact-link">
-                          <strong>{post.title}</strong>
-                          <span>
-                            {post.category?.name || "Uncategorized"} · {new Date(post.createdAt).toLocaleDateString()}
-                          </span>
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="card" style={{ marginBottom: 0 }}>
-                  <h3 className="card-title">Draft Workspaces</h3>
+                {posts.length === 0 ? (
+                  <p className="meta">No posts yet.</p>
+                ) : (
                   <div className="home-compact-list">
-                    {books.map((book) => (
-                      <Link key={book.id} href={`/books/${book.slug}`} className="home-compact-link">
-                        <strong>{book.title}</strong>
-                        <span>{book.bookType} · updated {new Date(book.updatedAt).toLocaleDateString()}</span>
+                    {posts.map((post) => (
+                      <Link key={post.id} href={`/posts/${post.slug}`} className="home-compact-link">
+                        <strong>{post.title}</strong>
+                        <span>
+                          {post.category?.name || "Uncategorized"} · {new Date(post.createdAt).toLocaleDateString()}
+                        </span>
                       </Link>
                     ))}
-                    {session
-                      ? patents.map((patent) => (
-                          <Link key={patent.id} href={`/patents/${patent.slug}`} className="home-compact-link">
-                            <strong>{patent.title}</strong>
-                            <span>Patent draft · updated {new Date(patent.updatedAt).toLocaleDateString()}</span>
-                          </Link>
-                        ))
-                      : null}
-                    <div className="toolbar" style={{ marginTop: "0.8rem", marginBottom: 0 }}>
-                      <Link href="/books" className="button-link secondary">
-                        Books
+                  </div>
+                )}
+              </section>
+
+              <section className="home-module">
+                <div className="home-module-header">
+                  <div>
+                    <p className="home-focus-kicker">Workspaces</p>
+                    <h3 className="card-title">Drafts In Motion</h3>
+                  </div>
+                  <div className="toolbar" style={{ margin: 0 }}>
+                    <Link href="/books" className="button-link secondary">
+                      Books
+                    </Link>
+                    {session ? (
+                      <Link href="/trading" className="button-link secondary">
+                        Trading
                       </Link>
-                      {session ? (
-                        <>
-                          <Link href="/trading" className="button-link secondary">
-                            Trading
-                          </Link>
-                          <Link href="/inbox/messages" className="button-link secondary">
-                            Inbox
-                          </Link>
-                        </>
-                      ) : (
-                        <Link href="/login" className="button-link secondary">
-                          Sign In
-                        </Link>
-                      )}
-                    </div>
+                    ) : null}
                   </div>
                 </div>
-              </div>
-            </section>
-          </div>
+                <div className="home-compact-list">
+                  {books.map((book) => (
+                    <Link key={book.id} href={`/books/${book.slug}`} className="home-compact-link">
+                      <strong>{book.title}</strong>
+                      <span>{book.bookType} · updated {new Date(book.updatedAt).toLocaleDateString()}</span>
+                    </Link>
+                  ))}
+                  {session
+                    ? patents.map((patent) => (
+                        <Link key={patent.id} href={`/patents/${patent.slug}`} className="home-compact-link">
+                          <strong>{patent.title}</strong>
+                          <span>Patent draft · updated {new Date(patent.updatedAt).toLocaleDateString()}</span>
+                        </Link>
+                      ))
+                    : null}
+                  {books.length === 0 && patents.length === 0 ? <p className="meta">No active drafts yet.</p> : null}
+                </div>
+              </section>
+            </div>
+          </section>
         </div>
       </div>
     </main>
