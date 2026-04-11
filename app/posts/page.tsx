@@ -24,33 +24,31 @@ export default async function PostsPage() {
   return (
     <main>
       <div className="site-shell">
-        <h1 className="page-title">Posts</h1>
-        <p className="page-subtitle">
-          Browse the publishing archive, including posts born from conversations and pieces that later expanded into broader assets.
-        </p>
-
-        <div className="toolbar">
-          <Link href="/posts/new" className="button-link">
-            Create New Post
-          </Link>
-          <Link href="/categories" className="button-link secondary">
-            Browse Categories
-          </Link>
-          <Link href="/" className="button-link secondary">
-            Home
-          </Link>
-        </div>
-
-        <section className="posts-hero-band">
-          <div className="posts-hero-card posts-hero-card-primary">
-            <span className="posts-hero-kicker">Editorial Signal</span>
-            <h2 className="card-title">This archive tracks what became durable enough to publish.</h2>
-            <p className="preview">
-              Posts here are not just isolated entries. Many start as conversations, get categorized, and then become source material for books, studio outputs, or follow-on derivatives.
+        <section className="section-command-surface">
+          <div className="section-command-main">
+            <p className="home-hero-kicker">Publishing Archive</p>
+            <h1 className="page-title">Posts that were strong enough to become durable.</h1>
+            <p className="page-subtitle">
+              Browse the archive of finished writing, including entries that started as conversations and later expanded into broader systems.
             </p>
+            <div className="section-command-strip">
+              <Link href="/posts/new" className="section-command-link is-accent">
+                <strong>Create Post</strong>
+                <span>Start publishing</span>
+              </Link>
+              <Link href="/categories" className="section-command-link">
+                <strong>Categories</strong>
+                <span>Browse taxonomy</span>
+              </Link>
+              <Link href="/" className="section-command-link">
+                <strong>Home</strong>
+                <span>Return to hub</span>
+              </Link>
+            </div>
           </div>
-          <div className="posts-hero-card">
-            <span className="posts-hero-kicker">Archive Stats</span>
+
+          <div className="section-command-panel">
+            <p className="home-hero-panel-label">Archive Stats</p>
             <ul className="posts-hero-stats" aria-label="Post archive metrics">
               <li>
                 <strong>{posts.length}</strong>
@@ -69,6 +67,22 @@ export default async function PostsPage() {
                 <span>linked derivatives</span>
               </li>
             </ul>
+          </div>
+        </section>
+
+        <section className="posts-hero-band">
+          <div className="posts-hero-card posts-hero-card-primary">
+            <span className="posts-hero-kicker">Editorial Signal</span>
+            <h2 className="card-title">This archive tracks what became durable enough to publish.</h2>
+            <p className="preview">
+              Posts here are not just isolated entries. Many start as conversations, get categorized, and then become source material for books, studio outputs, or follow-on derivatives.
+            </p>
+          </div>
+          <div className="posts-hero-card">
+            <span className="posts-hero-kicker">Publishing Frame</span>
+            <p className="preview">
+              The archive is meant to show what held up after refinement. Each post can become a seed for books, derivatives, or future systems.
+            </p>
           </div>
         </section>
 

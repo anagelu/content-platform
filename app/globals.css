@@ -359,6 +359,84 @@ main {
   box-shadow: 0 10px 22px rgba(15, 39, 64, 0.16);
 }
 
+.section-command-surface {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.9fr);
+  gap: 1rem;
+  margin-bottom: 1.4rem;
+}
+
+.section-command-main,
+.section-command-panel {
+  padding: 1.35rem 1.4rem;
+  border-radius: 24px;
+  border: 1px solid rgba(196, 205, 220, 0.84);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(242, 245, 249, 0.94));
+  box-shadow: 0 16px 34px rgba(32, 45, 64, 0.06);
+}
+
+.section-command-panel {
+  background: linear-gradient(145deg, rgba(18, 42, 69, 0.96), rgba(31, 58, 89, 0.92));
+  border-color: rgba(35, 63, 94, 0.12);
+  color: #f6f9fc;
+}
+
+.section-command-panel .trading-section-title,
+.section-command-panel .card-title,
+.section-command-panel p,
+.section-command-panel strong {
+  color: inherit;
+}
+
+.section-command-panel .meta,
+.section-command-panel .preview,
+.section-command-panel .posts-hero-stats span {
+  color: rgba(223, 234, 246, 0.76);
+}
+
+.section-command-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+  margin-top: 1.15rem;
+}
+
+.section-command-link {
+  display: grid;
+  gap: 0.22rem;
+  padding: 0.88rem 0.95rem;
+  border-radius: 16px;
+  border: 1px solid rgba(196, 205, 220, 0.82);
+  background: rgba(247, 249, 252, 0.88);
+  color: #1d2732;
+  text-decoration: none;
+  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.section-command-link:hover {
+  text-decoration: none;
+  transform: translateY(-1px);
+  border-color: rgba(113, 149, 193, 0.8);
+  box-shadow: 0 12px 24px rgba(40, 58, 84, 0.08);
+}
+
+.section-command-link span {
+  color: #6b7481;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.section-command-link.is-accent {
+  background: linear-gradient(180deg, #12355b, #0f2740);
+  border-color: transparent;
+  color: #f8fbff;
+}
+
+.section-command-link.is-accent span {
+  color: rgba(227, 237, 246, 0.74);
+}
+
 .home-hero-panel-label {
   margin: 0 0 0.7rem;
   color: rgba(223, 234, 246, 0.76);
@@ -1010,7 +1088,8 @@ main {
 }
 
 @media (max-width: 1320px) {
-  .home-hero {
+  .home-command-surface,
+  .section-command-surface {
     grid-template-columns: 1fr;
   }
 
@@ -2595,12 +2674,12 @@ main {
 }
 
 .card {
-  background: rgba(255, 252, 246, 0.92);
-  border: 1px solid rgba(224, 214, 200, 0.86);
-  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(246, 248, 252, 0.94));
+  border: 1px solid rgba(216, 224, 234, 0.9);
+  border-radius: 20px;
   padding: 1.3rem 1.35rem;
   margin-bottom: 1rem;
-  box-shadow: 0 12px 28px rgba(49, 37, 20, 0.055);
+  box-shadow: 0 12px 28px rgba(32, 45, 64, 0.06);
 }
 
 .tool-disclosure {
@@ -2672,7 +2751,7 @@ main {
 }
 
 .meta {
-  color: #6c6257;
+  color: #687381;
   font-size: 0.92rem;
   margin: 0.22rem 0;
   line-height: 1.55;
@@ -2681,7 +2760,7 @@ main {
 .preview {
   margin-top: 0.75rem;
   line-height: 1.78;
-  color: #3f382f;
+  color: #2f3945;
 }
 
 .badge-row {
@@ -2701,9 +2780,9 @@ main {
 .trading-hero-card {
   padding: 1.4rem 1.5rem;
   border-radius: 18px;
-  background: linear-gradient(135deg, #f8edd7, #efe5d6);
-  border: 1px solid #ddc8a7;
-  box-shadow: 0 12px 30px rgba(73, 52, 24, 0.09);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(245, 247, 251, 0.94));
+  border: 1px solid rgba(205, 212, 223, 0.82);
+  box-shadow: 0 12px 30px rgba(32, 45, 64, 0.08);
 }
 
 .trading-section-title {
@@ -3144,8 +3223,7 @@ main {
 @media (max-width: 720px) {
   .site-header-inner,
   .app-shell-inner,
-  .home-layout,
-  .home-hero,
+  .home-command-surface,
   .home-focus-grid,
   .home-output-action-row,
   .home-output-grid,
@@ -3214,7 +3292,8 @@ main {
   .algo-v2-topbar,
   .algo-v2-controls-row,
   .algo-v2-panel-heading,
-  .algo-v2-action-bar {
+  .algo-v2-action-bar,
+  .home-module-header {
     flex-direction: column;
   }
 
@@ -3258,7 +3337,10 @@ main {
   .algo-v2-controls-row,
   .algo-v2-order-row,
   .algo-v2-turbo-columns,
-  .algo-v2-action-cluster {
+  .algo-v2-action-cluster,
+  .section-command-surface,
+  .home-activity-grid,
+  .home-lane-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -4321,20 +4403,22 @@ main {
 .posts-hero-card {
   padding: 1.35rem 1.4rem;
   border-radius: 20px;
-  border: 1px solid #ddc8a7;
-  background: linear-gradient(180deg, rgba(255, 250, 241, 0.96), rgba(244, 234, 215, 0.92));
-  box-shadow: 0 12px 28px rgba(73, 52, 24, 0.08);
+  border: 1px solid rgba(205, 212, 223, 0.82);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 247, 251, 0.94));
+  box-shadow: 0 12px 28px rgba(32, 45, 64, 0.06);
 }
 
 .posts-hero-card-primary {
-  background: linear-gradient(145deg, #f7ead1, #f0dbb0);
-  border-color: #caa56f;
+  background:
+    radial-gradient(circle at top right, rgba(130, 163, 211, 0.16), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 244, 251, 0.95));
+  border-color: rgba(141, 177, 214, 0.8);
 }
 
 .posts-hero-kicker {
   display: block;
   margin-bottom: 0.55rem;
-  color: #7c4f18;
+  color: #5b7390;
   font-size: 0.76rem;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -4368,7 +4452,7 @@ main {
 }
 
 .posts-hero-stats span {
-  color: #6c6257;
+  color: #6b7481;
   font-size: 0.92rem;
 }
 

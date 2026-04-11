@@ -35,30 +35,56 @@ export default async function BooksPage() {
   return (
     <main>
       <div className="site-shell">
-        <h1 className="page-title">Books</h1>
-        <p className="page-subtitle">
-          Turn rough drafts into a structured, editable manuscript with an outline you can keep refining.
-        </p>
+        <section className="section-command-surface">
+          <div className="section-command-main">
+            <p className="home-hero-kicker">Manuscript Workspace</p>
+            <h1 className="page-title">Shape rough concepts into structured books.</h1>
+            <p className="page-subtitle">
+              Move beyond loose notes and build a manuscript with sections, sequencing, and a draft that can keep compounding.
+            </p>
+            <div className="section-command-strip">
+              {session ? (
+                <>
+                  <Link href="/books/new" className="section-command-link is-accent">
+                    <strong>Create Book</strong>
+                    <span>Open a manuscript</span>
+                  </Link>
+                  <Link href="/posts/new" className="section-command-link">
+                    <strong>Create Post</strong>
+                    <span>Spin out an article</span>
+                  </Link>
+                </>
+              ) : (
+                <Link href="/login" className="section-command-link is-accent">
+                  <strong>Sign In</strong>
+                  <span>Start writing</span>
+                </Link>
+              )}
+              <Link href="/" className="section-command-link">
+                <strong>Home</strong>
+                <span>Return to hub</span>
+              </Link>
+            </div>
+          </div>
 
-        <div className="toolbar">
-          {session ? (
-            <>
-              <Link href="/books/new" className="button-link">
-                Create New Book
-              </Link>
-              <Link href="/posts/new" className="button-link secondary">
-                Create New Post
-              </Link>
-            </>
-          ) : (
-            <Link href="/login" className="button-link">
-              Sign In To Create
-            </Link>
-          )}
-          <Link href="/" className="button-link secondary">
-            Home
-          </Link>
-        </div>
+          <div className="section-command-panel">
+            <p className="home-hero-panel-label">Library Status</p>
+            <div className="home-command-metrics">
+              <div>
+                <span>Visible books</span>
+                <strong>{books.length}</strong>
+              </div>
+              <div>
+                <span>Public titles</span>
+                <strong>{books.filter((book) => book.isPublic).length}</strong>
+              </div>
+              <div>
+                <span>Total sections</span>
+                <strong>{books.reduce((sum, book) => sum + book.sections.length, 0)}</strong>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {books.length === 0 ? (
           <div className="card">

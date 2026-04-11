@@ -118,59 +118,57 @@ export default async function TradingPage() {
   return (
     <main>
       <div className="site-shell site-shell-wide">
-        <h1 className="page-title">Trading Workspace</h1>
-        <p className="page-subtitle">
-          Collate trading ideas, let your workflow evolve across repeated
-          sessions, and selectively push your best frameworks into a credited
-          public showcase.
-        </p>
-
-        <div className="toolbar">
-          <Link href="/trading/new" className="button-link">
-            New Trading Session
-          </Link>
-          <Link href="/trading/journal" className="button-link secondary">
-            Trading Journal
-          </Link>
-          <Link href="/trading/tools" className="button-link secondary">
-            Open Tools
-          </Link>
-          <Link href="/trading/algo" className="button-link secondary">
-            Algo Workspace
-          </Link>
-          <Link href="/trading/screener" className="button-link secondary">
-            Screener
-          </Link>
-          <Link href="/trading/recommendations" className="button-link secondary">
-            Recommendations
-          </Link>
-          <Link href="/trading/pipeline" className="button-link secondary">
-            Pipeline
-          </Link>
-          <Link href="/" className="button-link secondary">
-            Home
-          </Link>
-        </div>
-
-        {session ? (
-          <section className="trading-hero-card">
-            <h2 className="trading-section-title">Your evolving edge</h2>
-            <p>{formatPersonalizedOverview(mySessions)}</p>
-            <p className="meta">
-              {mySessions.length} session{mySessions.length === 1 ? "" : "s"} in
-              your workspace
+        <section className="section-command-surface trading-command-surface">
+          <div className="section-command-main">
+            <p className="home-hero-kicker">Trading Workspace</p>
+            <h1 className="page-title">Build a repeatable market process, not just isolated trades.</h1>
+            <p className="page-subtitle">
+              Track setups, review execution, build algorithmic workflows, and keep market operations organized in one system.
             </p>
-          </section>
-        ) : (
-          <section className="trading-hero-card">
-            <h2 className="trading-section-title">Private workspace, public upside</h2>
-            <p>
-              Sign in to build a trading workflow that gets more personalized as
-              your sessions grow. Public-ready ideas can later be featured with
-              credit.
-            </p>
-          </section>
-        )}
+            <div className="section-command-strip">
+              <Link href="/trading/new" className="section-command-link is-accent">
+                <strong>New Session</strong>
+                <span>Plan a setup</span>
+              </Link>
+              <Link href="/trading/journal" className="section-command-link">
+                <strong>Journal</strong>
+                <span>Review the loop</span>
+              </Link>
+              <Link href="/trading/algo" className="section-command-link">
+                <strong>Algo</strong>
+                <span>Automation and telemetry</span>
+              </Link>
+              <Link href="/trading/screener" className="section-command-link">
+                <strong>Screener</strong>
+                <span>Scan markets</span>
+              </Link>
+              <Link href="/trading/pipeline" className="section-command-link">
+                <strong>Pipeline</strong>
+                <span>Track ideas</span>
+              </Link>
+            </div>
+          </div>
+
+          <div className="section-command-panel">
+            <p className="home-hero-panel-label">Current Read</p>
+            {session ? (
+              <>
+                <h2 className="trading-section-title">Your evolving edge</h2>
+                <p>{formatPersonalizedOverview(mySessions)}</p>
+                <p className="meta">
+                  {mySessions.length} session{mySessions.length === 1 ? "" : "s"} in your workspace
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="trading-section-title">Private workspace, public upside</h2>
+                <p>
+                  Sign in to build a trading workflow that gets more personalized as your sessions grow. Public-ready ideas can later be featured with credit.
+                </p>
+              </>
+            )}
+          </div>
+        </section>
 
         <section style={{ marginTop: "2rem" }}>
           <h2 className="trading-section-title">SPX Focus Loop</h2>
