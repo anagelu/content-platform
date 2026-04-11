@@ -692,6 +692,47 @@ function formatSignalAge(value: number | null) {
   return `${Math.round(value / 3600)}h ago`;
 }
 
+function formatElapsedTime(value: string | null) {
+  if (!value) {
+    return "--";
+  }
+
+  const start = new Date(value);
+
+  if (Number.isNaN(start.getTime())) {
+    return "--";
+  }
+
+  const elapsedMs = Date.now() - start.getTime();
+
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) {
+    return "--";
+  }
+
+  const totalMinutes = Math.floor(elapsedMs / (1000 * 60));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  const seconds = Math.floor((elapsedMs % (1000 * 60)) / 1000);
+
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function getExecutionStateLabel(status: "ACTIVE" | "PAUSED" | "EJECTED" | "UNSET", hasExposure: boolean) {
+  if (status === "ACTIVE" || hasExposure) {
+    return "Active";
+  }
+
+  if (status === "PAUSED") {
+    return "Paused";
+  }
+
+  return "Armed";
+}
+
 function getTimeframeProfile(timeframe: AlpacaBarTimeframe) {
   switch (timeframe) {
     case "1Week":
@@ -1561,6 +1602,64 @@ export function AlgoControllerV2({
             helper: "Enter the selected option contract using the size you set above.",
             tone: "algo-v2-action-button is-positive",
           };
+  const executionGauge = confluence.gauges.find((gauge) => gauge.key === "execution") ?? null;
+  const standardTelemetryScore = scoreFromCount(
+    standardMarketModel.cards.filter((card) => card.score >= FAVORABLE_GAUGE_THRESHOLD).length,
+    Math.max(standardMarketModel.cards.length, 1),
+  );
+  const standardHandoffReady =
+    displayedOverallScore !== null &&
+    displayedOverallScore >= FAVORABLE_GAUGE_THRESHOLD &&
+    (timeframeConfluenceGauge?.score ?? 0) >= FAVORABLE_GAUGE_THRESHOLD;
+  const sessionClockAnchor = activeController?.lastCommandAt ?? activeController?.updatedAt ?? null;
+  const sessionDuration = formatElapsedTime(sessionClockAnchor);
+  const standardSessionState = getExecutionStateLabel(
+    activeController?.status ?? "UNSET",
+    Math.abs(currentQty) > 0,
+  );
+  const turboSessionState = getExecutionStateLabel(turboContractStatus, turboCurrentQty > 0);
+  const displayedSessionState = mode === "turbo" && !isCrypto ? turboSessionState : standardSessionState;
+  const displayedCommand = mode === "turbo" && !isCrypto ? turboPrimaryCommand : primaryCommand;
+  const standardPlayLocked =
+    !normalizedSymbol ||
+    isBusy ||
+    isSnapshotLoading ||
+    (executionGauge?.score ?? 0) < FAVORABLE_GAUGE_THRESHOLD;
+  const turboPlayLocked =
+    !selectedTurboContract ||
+    isBusy ||
+    isTurboLoading ||
+    bias === "neutral" ||
+    (executionGauge?.score ?? 0) < FAVORABLE_GAUGE_THRESHOLD ||
+    (turboFitScore ?? 0) < FAVORABLE_GAUGE_THRESHOLD;
+  const playLocked = mode === "turbo" && !isCrypto ? turboPlayLocked : standardPlayLocked;
+  const playLockReason =
+    mode === "turbo" && !isCrypto
+      ? !selectedTurboContract
+        ? "Select a contract before you start Turbo."
+        : bias === "neutral"
+          ? "Choose a directional bias before arming Turbo."
+          : (executionGauge?.score ?? 0) < FAVORABLE_GAUGE_THRESHOLD
+            ? "Execution quality is below the safety threshold, so Play stays locked."
+            : (turboFitScore ?? 0) < FAVORABLE_GAUGE_THRESHOLD
+              ? "Turbo readiness is below the safety threshold, so Play stays locked."
+              : ""
+      : (executionGauge?.score ?? 0) < FAVORABLE_GAUGE_THRESHOLD
+        ? "Execution quality is below the safety threshold, so Play stays locked."
+        : "";
+  const addActionLabel =
+    mode === "turbo" && !isCrypto
+      ? `Add Position (+${Math.max(1, Math.round(orderQtyValue || 1))})`
+      : `Add Position (+${formatNumber(Math.max(orderQtyValue, minimumTargetQty), isCrypto ? 2 : 0)})`;
+  const addActionCopy =
+    mode === "turbo" && !isCrypto
+      ? "Buy one more clip into the selected contract while the session is active."
+      : "Add another controller clip at the current sizing profile.";
+  const contractTelemetrySummary = selectedTurboContract
+    ? `${formatOptionExpiration(selectedTurboContract.expirationDate)} ${Math.round(
+        selectedTurboContract.strikePrice,
+      )}${selectedTurboContract.type === "call" ? "C" : "P"}`
+    : "--";
 
   useEffect(() => {
     if (!autoBiasEnabled || mode !== "turbo") {
@@ -1752,18 +1851,34 @@ export function AlgoControllerV2({
           <div className="algo-v2-topbar-left">
             <div className="algo-v2-symbol-badge">{normalizedSymbol || "--"}</div>
             <div>
-              <h2 className="algo-v2-title">{normalizedSymbol || "Market"} Controller</h2>
+              <div className="algo-v2-state-strip">
+                <span className={`algo-v2-state-pill is-${displayedSessionState.toLowerCase()}`}>
+                  {displayedSessionState}
+                </span>
+                <span className="algo-v2-state-copy">
+                  {mode === "turbo" ? "Execution dashboard" : "Structural navigator"}
+                </span>
+              </div>
+              <h2 className="algo-v2-title">
+                {normalizedSymbol || "Market"} Controller ({mode === "turbo" ? "Turbo Mode" : "Standard Mode"})
+              </h2>
               <p className="algo-v2-subtitle">
-                <span className="algo-v2-dot is-green" /> Market Open
-                <span className="algo-v2-dot is-blue" /> Trading
+                <span className="algo-v2-dot is-green" /> Session live
+                <span className="algo-v2-dot is-blue" /> {snapshot?.quoteAgeSeconds !== null ? "Snapshot online" : "Awaiting snapshot"}
               </p>
             </div>
           </div>
-          <div className="algo-v2-topbar-right">
-            <span className="algo-v2-pnl-label">P&amp;L</span>
-            <strong className={positionPnl >= 0 ? "algo-v2-pnl is-positive" : "algo-v2-pnl is-negative"}>
-              {formatSignedMoney(positionPnl)}
-            </strong>
+          <div className="algo-v2-topbar-right algo-v2-metric-cluster">
+            <div className="algo-v2-header-metric">
+              <span className="algo-v2-pnl-label">Equity P&amp;L</span>
+              <strong className={positionPnl >= 0 ? "algo-v2-pnl is-positive" : "algo-v2-pnl is-negative"}>
+                {formatSignedMoney(positionPnl)}
+              </strong>
+            </div>
+            <div className="algo-v2-header-metric is-secondary">
+              <span className="algo-v2-pnl-label">Session Time</span>
+              <strong className="algo-v2-pnl">{sessionDuration}</strong>
+            </div>
           </div>
         </div>
 
@@ -1812,9 +1927,28 @@ export function AlgoControllerV2({
             </select>
           </label>
 
+          <div className="algo-v2-field algo-v2-field-wide">
+            <span className="algo-v2-field-label">Snapshot Controls</span>
+            <div className="algo-v2-inline-controls">
+              <span className="algo-v2-inline-readout">
+                {isSnapshotLoading ? `Refreshing ${normalizedSymbol || "market"}...` : formatTimestamp(snapshot?.lastBarTimestamp ?? null)}
+              </span>
+              <button
+                type="button"
+                className="algo-v2-icon-button"
+                onClick={() => setSnapshotRefreshKey((current) => current + 1)}
+                disabled={isSnapshotLoading}
+                aria-label="Refresh snapshot"
+                title="Refresh snapshot"
+              >
+                R
+              </button>
+            </div>
+          </div>
+
           {mode === "turbo" ? (
             <label className="algo-v2-field algo-v2-field-wide">
-              <span className="algo-v2-field-label">Confluence Sensitivity</span>
+              <span className="algo-v2-field-label">Sensitivity</span>
               <input
                 type="range"
                 min="0"
@@ -1836,223 +1970,209 @@ export function AlgoControllerV2({
                 <span>Strict</span>
               </div>
             </label>
-          ) : (
-            <div className="algo-v2-field algo-v2-field-wide">
-              <span className="algo-v2-field-label">Snapshot Controls</span>
-              <button
-                type="button"
-                className="button-link secondary"
-                onClick={() => setSnapshotRefreshKey((current) => current + 1)}
-                disabled={isSnapshotLoading}
-              >
-                {isSnapshotLoading ? "Refreshing..." : "Refresh Snapshot"}
-              </button>
-            </div>
-          )}
-
-          <div className="algo-v2-mode-toggle" role="tablist" aria-label="Controller mode">
-            <button
-              type="button"
-              className={mode === "standard" ? "algo-v2-mode-button is-active is-standard" : "algo-v2-mode-button"}
-              onClick={() => setMode("standard")}
-            >
-              Standard
-            </button>
-            <button
-              type="button"
-              className={mode === "turbo" ? "algo-v2-mode-button is-active is-turbo" : "algo-v2-mode-button"}
-              onClick={() => setMode("turbo")}
-            >
-              Turbo
-              <span className="algo-v2-mode-tag">Advanced</span>
-            </button>
-          </div>
+          ) : null}
         </div>
 
         {mode === "standard" ? (
           <div className="algo-v2-panel-grid">
             <section className="algo-v2-main-card">
               <div className="algo-v2-panel-heading">
-                <div className="algo-v2-panel-icon is-standard">S</div>
-                <div>
-                  <h3 className="algo-v2-panel-title">Standard Mode</h3>
-                  <p className="algo-v2-panel-copy">
-                    Simple, auditable market structure gauges built from EMA positioning and rule-based candle patterns.
-                  </p>
+                <div className="algo-v2-panel-heading-main">
+                  <div className="algo-v2-panel-icon is-standard">S</div>
+                  <div>
+                    <h3 className="algo-v2-panel-title">Structural Navigator</h3>
+                    <p className="algo-v2-panel-copy">
+                      Decision stack view of trend, structure, candle context, and handoff readiness.
+                    </p>
+                  </div>
+                </div>
+                <div className="algo-v2-mode-toggle" role="tablist" aria-label="Controller mode">
+                  <button
+                    type="button"
+                    className="algo-v2-mode-button is-active is-standard"
+                    onClick={() => setMode("standard")}
+                  >
+                    Standard
+                  </button>
+                  <button
+                    type="button"
+                    className="algo-v2-mode-button"
+                    onClick={() => setMode("turbo")}
+                  >
+                    Turbo
+                    <span className="algo-v2-mode-tag">Advanced</span>
+                  </button>
                 </div>
               </div>
 
-              <div className="algo-v2-confluence-card">
+              <div className="algo-v2-confluence-card is-telemetry">
                 <div className="algo-v2-confluence-header">
                   <div>
-                    <p className="algo-v2-meter-label">Market Structure Summary</p>
-                    {standardMarketModel.cards.length > 0 ? (
-                      <strong className={`algo-v2-confluence-score ${standardMarketModel.cards[0]?.tone ?? "is-neutral"}`}>
-                        {standardMarketModel.overview}
-                      </strong>
-                    ) : (
-                      <strong className="algo-v2-confluence-score is-neutral">
-                        {isSnapshotLoading ? "Loading" : "Unavailable"}
-                      </strong>
-                    )}
+                    <p className="algo-v2-meter-label">Conclusion Header</p>
+                    <strong className={`algo-v2-confluence-score ${standardMarketModel.cards[0]?.tone ?? "is-neutral"}`}>
+                      {snapshot ? standardMarketModel.overview : "Waiting for a live structural read."}
+                    </strong>
                   </div>
                   <div className="algo-v2-confluence-meta">
-                    <strong>{snapshot?.timeframe ?? analysisTimeframe}</strong>
-                    <span>Current lens</span>
+                    <strong>{standardTelemetryScore}</strong>
+                    <span>Navigator score</span>
                   </div>
                 </div>
                 {snapshot ? (
-                  <div className="algo-v2-health-meter">
-                    <div className="algo-v2-health-meter-track" />
-                    <div
-                      className="algo-v2-health-meter-thumb"
-                      style={{ left: `${scoreFromCount(
-                        standardMarketModel.cards.filter((card) => card.score >= FAVORABLE_GAUGE_THRESHOLD).length,
-                        Math.max(standardMarketModel.cards.length, 1),
-                      )}%` }}
-                    />
-                  </div>
+                  <>
+                    <div className="algo-v2-health-meter">
+                      <div className="algo-v2-health-meter-track" />
+                      <div className="algo-v2-health-meter-thumb" style={{ left: `${standardTelemetryScore}%` }} />
+                    </div>
+                    <div className="algo-v2-health-meter-scale">
+                      <span>Fragile</span>
+                      <span>Structure bar</span>
+                      <span>Aligned</span>
+                    </div>
+                  </>
                 ) : (
                   <div className="algo-v2-confluence-empty">A market structure summary will appear once a valid snapshot loads.</div>
                 )}
                 <p className="algo-v2-confluence-copy">
                   {snapshot
-                    ? `Price ${snapshot.latestPrice > (snapshot.ema20 ?? snapshot.latestPrice) ? "is leaning above" : "is leaning below"} the 20 EMA, and the latest candle context is being checked against the recent range.`
+                    ? `Price is being compared against the EMA stack, range position, and the strongest recent candle pattern on ${snapshot.timeframe}.`
                     : confluenceStatusReason}
                 </p>
               </div>
 
-              {standardMarketModel.cards.length > 0 ? (
-                <div className="algo-v2-mini-gauge-grid">
-                  {standardMarketModel.cards.map((gauge) => (
-                  <article
-                    key={gauge.key}
-                    className="algo-v2-mini-gauge-card"
-                  >
-                    <div className="algo-v2-mini-gauge-top">
-                      <div>
-                        <p className="algo-v2-meter-label">{gauge.label}</p>
-                        <strong className={`algo-v2-mini-gauge-score ${gauge.tone}`}>
-                          {gauge.score}
-                        </strong>
-                      </div>
-                      <span className={`algo-v2-gauge-band ${gauge.tone}`}>{gauge.band}</span>
-                    </div>
-                    <div className="algo-v2-mini-track">
-                      <span style={{ width: `${gauge.score}%` }} />
-                    </div>
-                    <p className="algo-v2-mini-gauge-copy">{gauge.summary}</p>
-                    {gauge.label === "Timeframe Confluence" && timeframeConfluenceGauge?.lensReadouts ? (
-                      <div className="algo-v2-lens-block">
-                        <div className="algo-v2-slider-header">
-                          <strong>Market Lens</strong>
-                          <strong>{selectedLensReadout?.label ?? "Base"}</strong>
-                        </div>
-                        <input
-                          type="range"
-                          min="-2"
-                          max="2"
-                          step="1"
-                          value={marketLens}
-                          onChange={(event) =>
-                            setMarketLens(Number(event.target.value) as MarketLensOffset)
-                          }
-                          className="algo-v2-range"
-                        />
-                        <div className="algo-v2-slider-scale algo-v2-slider-scale-tight">
-                          {MARKET_LENS_STOPS.map((stop) => (
-                            <span key={stop.offset}>{stop.label}</span>
-                          ))}
-                        </div>
-                        <p className="algo-v2-lens-copy">
-                          {selectedLensReadout
-                            ? `${selectedLensReadout.label} · ${selectedLensReadout.timeframe}: ${selectedLensReadout.summary}`
-                            : "Move the lens to inspect nearby timeframe agreement."}
-                        </p>
-                      </div>
-                    ) : null}
-                    <div className="algo-v2-debug-list">
-                      {gauge.details.map((detail) => (
-                        <div key={detail}>
-                          <span>{detail}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </article>
-                  ))}
+              {standardHandoffReady ? (
+                <div className="algo-v2-handoff-card">
+                  <div>
+                    <p className="algo-v2-meter-label">Suggested Action</p>
+                    <strong>Standard is seeing enough alignment to hand off toward Turbo.</strong>
+                    <p className="algo-v2-mini-gauge-copy">
+                      Nearby timeframes are cooperating, so this setup may be ready for the execution dashboard.
+                    </p>
+                  </div>
+                  <button type="button" className="algo-v2-handoff-button" onClick={() => setMode("turbo")}>
+                    Open Turbo
+                  </button>
                 </div>
               ) : null}
 
-              <div className="algo-v2-slider-card">
-                <div className="algo-v2-slider-header">
-                  <strong>Order Size Lever</strong>
-                  <strong>
-                    {orderQtyValue > 0 ? formatNumber(orderQtyValue, isCrypto ? 2 : 0) : "--"}{" "}
-                    {isCrypto ? "units" : "shares"}
-                  </strong>
+              <div className="algo-v2-decision-stack">
+                <div className="algo-v2-section-header">
+                  <div>
+                    <p className="algo-v2-meter-label">Decision Stack</p>
+                    <strong>Trend, structure, candle signal, then timeframe agreement.</strong>
+                  </div>
                 </div>
-                <input
-                  type="range"
-                  min="0"
-                  max={targetSliderMax}
-                  step={targetSliderStep}
-                  value={orderQtyValue}
-                  onChange={(event) => setTargetSize(event.target.value)}
-                  className="algo-v2-range"
-                />
-                <div className="algo-v2-slider-scale">
-                  <span>Smaller</span>
-                  <span>
-                    Resulting position: {formatNumber(resultingTargetQty, isCrypto ? 2 : 0)}{" "}
-                    {isCrypto ? "units" : "shares"}
-                  </span>
-                  <span>Larger</span>
+                <div className="algo-v2-mini-gauge-grid is-stack">
+                  {standardMarketModel.cards.map((gauge) => (
+                    <article key={gauge.key} className="algo-v2-mini-gauge-card is-stack">
+                      <div className="algo-v2-mini-gauge-top">
+                        <div>
+                          <p className="algo-v2-meter-label">{gauge.label}</p>
+                          <strong className={`algo-v2-mini-gauge-score ${gauge.tone}`}>{gauge.score}</strong>
+                        </div>
+                        <span className={`algo-v2-gauge-band ${gauge.tone}`}>{gauge.band}</span>
+                      </div>
+                      <div className="algo-v2-mini-track">
+                        <span style={{ width: `${gauge.score}%` }} />
+                      </div>
+                      <p className="algo-v2-mini-gauge-copy">{gauge.summary}</p>
+                      {gauge.label === "Timeframe Confluence" && timeframeConfluenceGauge?.lensReadouts ? (
+                        <div className="algo-v2-lens-block">
+                          <div className="algo-v2-slider-header">
+                            <strong>Market Lens</strong>
+                            <strong>{selectedLensReadout?.label ?? "Base"}</strong>
+                          </div>
+                          <input
+                            type="range"
+                            min="-2"
+                            max="2"
+                            step="1"
+                            value={marketLens}
+                            onChange={(event) => setMarketLens(Number(event.target.value) as MarketLensOffset)}
+                            className="algo-v2-range"
+                          />
+                          <div className="algo-v2-slider-scale algo-v2-slider-scale-tight">
+                            {MARKET_LENS_STOPS.map((stop) => (
+                              <span key={stop.offset}>{stop.label}</span>
+                            ))}
+                          </div>
+                          <p className="algo-v2-lens-copy">
+                            {selectedLensReadout
+                              ? `${selectedLensReadout.label} · ${selectedLensReadout.timeframe}: ${selectedLensReadout.summary}`
+                              : "Move the lens to inspect nearby timeframe agreement."}
+                          </p>
+                        </div>
+                      ) : null}
+                      <details className="algo-v2-gauge-debug">
+                        <summary>Debug</summary>
+                        <div className="algo-v2-debug-list">
+                          {gauge.details.map((detail) => (
+                            <div key={detail}>
+                              <span>{detail}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    </article>
+                  ))}
                 </div>
               </div>
 
-              <div className="algo-v2-stat-row">
-                <div>
-                  <span className="algo-v2-stat-label">Order Amount</span>
-                  <strong className="is-positive">
-                    +{formatNumber(pendingChange, isCrypto ? 2 : 0)} {isCrypto ? "units" : "shares"}
-                  </strong>
+              <div className="algo-v2-order-row">
+                <div className="algo-v2-slider-card">
+                  <div className="algo-v2-slider-header">
+                    <strong>Order Size Lever</strong>
+                    <strong>
+                      {orderQtyValue > 0 ? formatNumber(orderQtyValue, isCrypto ? 2 : 0) : "--"} {isCrypto ? "units" : "shares"}
+                    </strong>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max={targetSliderMax}
+                    step={targetSliderStep}
+                    value={orderQtyValue}
+                    onChange={(event) => setTargetSize(event.target.value)}
+                    className="algo-v2-range"
+                  />
+                  <div className="algo-v2-slider-scale">
+                    <span>Smaller</span>
+                    <span>
+                      Resulting position: {formatNumber(resultingTargetQty, isCrypto ? 2 : 0)} {isCrypto ? "units" : "shares"}
+                    </span>
+                    <span>Larger</span>
+                  </div>
                 </div>
-                <div>
-                  <span className="algo-v2-stat-label">Current Position</span>
-                  <strong>
-                    {formatNumber(currentQty, isCrypto ? 4 : 0)} {isCrypto ? "units" : "shares"}
-                  </strong>
-                </div>
-                <div>
-                  <span className="algo-v2-stat-label">Signal Freshness</span>
-                  <strong>{formatSignalAge(snapshot?.signalAgeSeconds ?? null)}</strong>
+
+                <div className="algo-v2-stat-row is-telemetry">
+                  <div>
+                    <span className="algo-v2-stat-label">Order Amount</span>
+                    <strong className="is-positive">
+                      +{formatNumber(pendingChange, isCrypto ? 2 : 0)} {isCrypto ? "units" : "shares"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="algo-v2-stat-label">Current Position</span>
+                    <strong>{formatNumber(currentQty, isCrypto ? 4 : 0)} {isCrypto ? "units" : "shares"}</strong>
+                  </div>
+                  <div>
+                    <span className="algo-v2-stat-label">Signal Freshness</span>
+                    <strong>{formatSignalAge(snapshot?.signalAgeSeconds ?? null)}</strong>
+                  </div>
                 </div>
               </div>
             </section>
 
             <aside className="algo-v2-side-card">
-              <h3 className="algo-v2-mini-title">Setup Interpretation</h3>
+              <h3 className="algo-v2-mini-title">Telemetry Readout</h3>
               <div className="algo-v2-mini-list">
                 <div>
                   <span>Selected market</span>
                   <strong>{normalizedSymbol || "--"}</strong>
                 </div>
                 <div>
-                  <span>Selected size</span>
-                  <strong>
-                    {orderQtyValue > 0 ? formatNumber(orderQtyValue, isCrypto ? 2 : 0) : "--"}{" "}
-                    {isCrypto ? "units" : "shares"}
-                  </strong>
-                </div>
-                <div>
-                  <span>Resulting target</span>
-                  <strong>
-                    {formatNumber(resultingTargetQty, isCrypto ? 2 : 0)} {isCrypto ? "units" : "shares"}
-                  </strong>
-                </div>
-                <div>
-                  <span>Analysis timeframe</span>
-                  <strong>{analysisTimeframe}</strong>
+                  <span>Controller state</span>
+                  <strong>{activeController?.status ?? "UNSET"}</strong>
                 </div>
                 <div>
                   <span>EMA stack</span>
@@ -2093,10 +2213,6 @@ export function AlgoControllerV2({
                   <strong>{snapshot?.candlestickBias ?? "--"}</strong>
                 </div>
                 <div>
-                  <span>Controller state</span>
-                  <strong>{activeController?.status ?? "UNSET"}</strong>
-                </div>
-                <div>
                   <span>Daily P&amp;L</span>
                   <strong>{snapshot ? formatSignedMoney(snapshot.dailyPnL) : "--"}</strong>
                 </div>
@@ -2107,239 +2223,252 @@ export function AlgoControllerV2({
             </aside>
           </div>
         ) : (
-          <div className="algo-v2-panel-grid">
+          <div className="algo-v2-panel-grid is-turbo-layout">
             <section className="algo-v2-main-card">
               <div className="algo-v2-panel-heading">
-                <div className="algo-v2-panel-icon is-turbo">T</div>
-                <div>
-                  <h3 className="algo-v2-panel-title">Turbo Mode</h3>
-                  <p className="algo-v2-panel-copy">
-                    Precision options control using directional bias, target delta, and time horizon.
-                  </p>
-                </div>
-              </div>
-
-              <div className="algo-v2-health-meter-card">
-                <div className="algo-v2-confluence-header">
+                <div className="algo-v2-panel-heading-main">
+                  <div className="algo-v2-panel-icon is-turbo">T</div>
                   <div>
-                    <p className="algo-v2-meter-label">Overall Confluence</p>
-                    {confluence.isReady ? (
-                      <strong className={`algo-v2-confluence-score ${displayedOverallTone}`}>
-                        {displayedOverallScore} · {displayedOverallBand}
-                      </strong>
-                    ) : (
-                      <strong className="algo-v2-confluence-score is-neutral">
-                        {isSnapshotLoading ? "Loading" : "Unavailable"}
-                      </strong>
-                    )}
-                  </div>
-                  <div className="algo-v2-confluence-meta">
-                    <strong>{displayedAlignmentLabel}</strong>
-                    <span>Market conditions</span>
+                    <h3 className="algo-v2-panel-title">Execution Dashboard</h3>
+                    <p className="algo-v2-panel-copy">
+                      Setup analysis on the left, options controls on the right, and contract targets off to the side.
+                    </p>
                   </div>
                 </div>
-                {confluence.isReady && displayedOverallScore !== null ? (
-                  <>
-                    <div className="algo-v2-health-meter">
-                      <div className="algo-v2-health-meter-track" />
-                      <div
-                        className="algo-v2-health-meter-thumb"
-                        style={{ left: `${displayedOverallScore}%` }}
-                      />
-                    </div>
-                    <div className="algo-v2-health-meter-scale">
-                      <span>Low</span>
-                      <span>Confluence Meter</span>
-                      <span>High</span>
-                    </div>
-                  </>
-                ) : (
-                  <div className="algo-v2-confluence-empty is-dark">Confluence will appear once a valid snapshot loads.</div>
-                )}
-                <p className="algo-v2-confluence-copy">{confluenceStatusReason}</p>
+                <div className="algo-v2-mode-toggle" role="tablist" aria-label="Controller mode">
+                  <button
+                    type="button"
+                    className="algo-v2-mode-button"
+                    onClick={() => setMode("standard")}
+                  >
+                    Standard
+                  </button>
+                  <button
+                    type="button"
+                    className="algo-v2-mode-button is-active is-turbo"
+                    onClick={() => setMode("turbo")}
+                  >
+                    Turbo
+                    <span className="algo-v2-mode-tag">Advanced</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="algo-v2-turbo-overview">
-                <article className="algo-v2-turbo-rail-card">
-                  <div className="algo-v2-slider-header">
-                    <strong>Directional Rail</strong>
-                    <strong>{turboBiasHeadline}</strong>
+              <div className="algo-v2-turbo-columns">
+                <div className="algo-v2-turbo-analysis">
+                  <div className="algo-v2-health-meter-card">
+                    <div className="algo-v2-confluence-header">
+                      <div>
+                        <p className="algo-v2-meter-label">Overall Confluence</p>
+                        {confluence.isReady ? (
+                          <strong className={`algo-v2-confluence-score ${displayedOverallTone}`}>
+                            {displayedOverallScore} · {displayedOverallBand}
+                          </strong>
+                        ) : (
+                          <strong className="algo-v2-confluence-score is-neutral">
+                            {isSnapshotLoading ? "Loading" : "Unavailable"}
+                          </strong>
+                        )}
+                      </div>
+                      <div className="algo-v2-confluence-meta">
+                        <strong>{displayedAlignmentLabel}</strong>
+                        <span>Decision stack</span>
+                      </div>
+                    </div>
+                    {confluence.isReady && displayedOverallScore !== null ? (
+                      <>
+                        <div className="algo-v2-health-meter">
+                          <div className="algo-v2-health-meter-track" />
+                          <div className="algo-v2-health-meter-thumb" style={{ left: `${displayedOverallScore}%` }} />
+                        </div>
+                        <div className="algo-v2-health-meter-scale">
+                          <span>Low</span>
+                          <span>Confluence meter</span>
+                          <span>High</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="algo-v2-confluence-empty is-dark">Confluence will appear once a valid snapshot loads.</div>
+                    )}
+                    <p className="algo-v2-confluence-copy">{confluenceStatusReason}</p>
                   </div>
-                  <p className="algo-v2-mini-gauge-copy">{turboBiasCopy}</p>
-                  <label className="algo-v2-gauge-toggle">
-                    <span>{autoBiasEnabled ? "Auto Bias On" : "Auto Bias Off"}</span>
-                    <input
-                      type="checkbox"
-                      checked={autoBiasEnabled}
-                      onChange={(event) => setAutoBiasEnabled(event.target.checked)}
-                    />
-                  </label>
-                  <div className="algo-v2-bias-buttons is-rail">
-                    <button
-                      type="button"
-                      className={getBiasButtonClass(bias, "bearish")}
-                      onClick={() => setBias("bearish")}
-                    >
-                      Put
-                    </button>
-                    <button
-                      type="button"
-                      className={getBiasButtonClass(bias, "neutral")}
-                      onClick={() => setBias("neutral")}
-                    >
-                      Transition
-                    </button>
-                    <button
-                      type="button"
-                      className={getBiasButtonClass(bias, "bullish")}
-                      onClick={() => setBias("bullish")}
-                    >
-                      Call
-                    </button>
-                  </div>
-                </article>
 
-                <article className="algo-v2-turbo-readiness-card">
-                  <div className="algo-v2-slider-header">
-                    <strong>Turbo Readiness</strong>
-                    <strong className={turboFitTone}>
-                      {turboFitScore ?? "--"} {turboFitBand !== "Unavailable" ? `· ${turboFitBand}` : ""}
-                    </strong>
+                  <div className="algo-v2-decision-stack">
+                    <div className="algo-v2-section-header">
+                      <div>
+                        <p className="algo-v2-meter-label">Setup Analysis</p>
+                        <strong>Read the stack before you touch execution.</strong>
+                      </div>
+                    </div>
+                    <div className="algo-v2-mini-gauge-grid is-stack">
+                      {confluence.gauges.map((gauge) => (
+                        <article
+                          key={gauge.key}
+                          className={gaugeToggles[gauge.key] ? "algo-v2-mini-gauge-card is-stack" : "algo-v2-mini-gauge-card is-stack is-disabled"}
+                        >
+                          <div className="algo-v2-mini-gauge-top">
+                            <div>
+                              <p className="algo-v2-meter-label">{gauge.label}</p>
+                              <strong className={`algo-v2-mini-gauge-score ${gauge.tone}`}>{gauge.score}</strong>
+                            </div>
+                            <span className={`algo-v2-gauge-band ${gauge.tone}`}>{gauge.band}</span>
+                          </div>
+                          <label className="algo-v2-gauge-toggle">
+                            <span>{gaugeToggles[gauge.key] ? "On" : "Off"}</span>
+                            <input
+                              type="checkbox"
+                              checked={gaugeToggles[gauge.key]}
+                              onChange={() =>
+                                setGaugeToggles((current) => ({
+                                  ...current,
+                                  [gauge.key]: !current[gauge.key],
+                                }))
+                              }
+                            />
+                          </label>
+                          <div className="algo-v2-mini-track">
+                            <span style={{ width: `${gauge.score}%` }} />
+                          </div>
+                          <p className="algo-v2-mini-gauge-copy">{gauge.reason}</p>
+                          {gauge.key === "timeframeConfluence" && gauge.lensReadouts ? (
+                            <div className="algo-v2-lens-block">
+                              <div className="algo-v2-slider-header">
+                                <strong>Market Lens</strong>
+                                <strong>{selectedLensReadout?.label ?? "Base"}</strong>
+                              </div>
+                              <input
+                                type="range"
+                                min="-2"
+                                max="2"
+                                step="1"
+                                value={marketLens}
+                                onChange={(event) => setMarketLens(Number(event.target.value) as MarketLensOffset)}
+                                className="algo-v2-range"
+                              />
+                              <div className="algo-v2-slider-scale algo-v2-slider-scale-tight">
+                                {MARKET_LENS_STOPS.map((stop) => (
+                                  <span key={stop.offset}>{stop.label}</span>
+                                ))}
+                              </div>
+                              <p className="algo-v2-lens-copy">
+                                {selectedLensReadout
+                                  ? `${selectedLensReadout.label} · ${selectedLensReadout.timeframe}: ${selectedLensReadout.summary}`
+                                  : "Move the lens to inspect nearby timeframe agreement."}
+                              </p>
+                            </div>
+                          ) : null}
+                          <details className="algo-v2-gauge-debug">
+                            <summary>Debug subscores</summary>
+                            <div className="algo-v2-debug-list">
+                              {gauge.subscores.map((subscore) => (
+                                <div key={subscore.label}>
+                                  <span>{subscore.label}</span>
+                                  <strong>{Math.round(subscore.score)}</strong>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        </article>
+                      ))}
+                    </div>
                   </div>
-                  <div className="algo-v2-mini-track">
-                    <span style={{ width: `${turboFitScore ?? 0}%` }} />
-                  </div>
-                  <div className="algo-v2-mini-list">
-                    <div>
-                      <span>Bias</span>
+                </div>
+
+                <div className="algo-v2-turbo-options">
+                  <div className="algo-v2-slider-card">
+                    <div className="algo-v2-slider-header">
+                      <strong>Options Control</strong>
                       <strong>{turboBiasHeadline}</strong>
                     </div>
-                    <div>
-                      <span>Target delta</span>
-                      <strong>{deltaTarget.toFixed(2)}</strong>
+                    <p className="algo-v2-mini-gauge-copy">{turboBiasCopy}</p>
+                    <div className="algo-v2-turbo-control-group">
+                      <div className="algo-v2-inline-stat">
+                        <span>Directional rail</span>
+                        <strong>{bias === "neutral" ? "Transition" : turboBiasHeadline}</strong>
+                      </div>
+                      <label className="algo-v2-gauge-toggle">
+                        <span>{autoBiasEnabled ? "Auto Bias On" : "Auto Bias Off"}</span>
+                        <input
+                          type="checkbox"
+                          checked={autoBiasEnabled}
+                          onChange={(event) => setAutoBiasEnabled(event.target.checked)}
+                        />
+                      </label>
                     </div>
-                    <div>
-                      <span>Time horizon</span>
-                      <strong>{formatDteLabel(daysToExpiry)}</strong>
+                    <div className="algo-v2-bias-buttons is-rail">
+                      <button type="button" className={getBiasButtonClass(bias, "bearish")} onClick={() => setBias("bearish")}>
+                        Put
+                      </button>
+                      <button type="button" className={getBiasButtonClass(bias, "neutral")} onClick={() => setBias("neutral")}>
+                        Transition
+                      </button>
+                      <button type="button" className={getBiasButtonClass(bias, "bullish")} onClick={() => setBias("bullish")}>
+                        Call
+                      </button>
                     </div>
                   </div>
-                </article>
-              </div>
 
-              {confluence.isReady ? (
-                <div className="algo-v2-mini-gauge-grid is-turbo">
-                  {confluence.gauges.map((gauge) => (
-                  <article
-                    key={gauge.key}
-                    className={gaugeToggles[gauge.key] ? "algo-v2-mini-gauge-card" : "algo-v2-mini-gauge-card is-disabled"}
-                  >
-                    <div className="algo-v2-mini-gauge-top">
+                  <div className="algo-v2-slider-card">
+                    <div className="algo-v2-slider-header">
+                      <strong>Transitions</strong>
+                      <strong>{turboCurrentQty > 0 ? "Session live" : "Ready"}</strong>
+                    </div>
+                    <div className="algo-v2-mini-list">
                       <div>
-                        <p className="algo-v2-meter-label">{gauge.label}</p>
-                        <strong className={`algo-v2-mini-gauge-score ${gauge.tone}`}>
-                          {gauge.score}
+                        <span>Turbo Readiness</span>
+                        <strong className={turboFitTone}>
+                          {turboFitScore ?? "--"} {turboFitBand !== "Unavailable" ? turboFitBand : ""}
                         </strong>
                       </div>
-                      <span className={`algo-v2-gauge-band ${gauge.tone}`}>{gauge.band}</span>
-                    </div>
-                    <label className="algo-v2-gauge-toggle">
-                      <span>{gaugeToggles[gauge.key] ? "On" : "Off"}</span>
-                      <input
-                        type="checkbox"
-                        checked={gaugeToggles[gauge.key]}
-                        onChange={() =>
-                          setGaugeToggles((current) => ({
-                            ...current,
-                            [gauge.key]: !current[gauge.key],
-                          }))
-                        }
-                      />
-                    </label>
-                    <div className="algo-v2-mini-track">
-                      <span style={{ width: `${gauge.score}%` }} />
-                    </div>
-                    <p className="algo-v2-mini-gauge-copy">{gauge.reason}</p>
-                    {gauge.key === "timeframeConfluence" && gauge.lensReadouts ? (
-                      <div className="algo-v2-lens-block">
-                        <div className="algo-v2-slider-header">
-                          <strong>Market Lens</strong>
-                          <strong>{selectedLensReadout?.label ?? "Base"}</strong>
-                        </div>
-                        <input
-                          type="range"
-                          min="-2"
-                          max="2"
-                          step="1"
-                          value={marketLens}
-                          onChange={(event) => setMarketLens(Number(event.target.value) as MarketLensOffset)}
-                          className="algo-v2-range"
-                        />
-                        <div className="algo-v2-slider-scale algo-v2-slider-scale-tight">
-                          {MARKET_LENS_STOPS.map((stop) => (
-                            <span key={stop.offset}>{stop.label}</span>
-                          ))}
-                        </div>
-                        <p className="algo-v2-lens-copy">
-                          {selectedLensReadout
-                            ? `${selectedLensReadout.label} · ${selectedLensReadout.timeframe}: ${selectedLensReadout.summary}`
-                            : "Move the lens to inspect nearby timeframe agreement."}
-                        </p>
+                      <div>
+                        <span>Execution</span>
+                        <strong>{executionGauge?.score ?? "--"}</strong>
                       </div>
-                    ) : null}
-                    <details className="algo-v2-gauge-debug">
-                      <summary>Debug subscores</summary>
-                      <div className="algo-v2-debug-list">
-                        {gauge.subscores.map((subscore) => (
-                          <div key={subscore.label}>
-                            <span>{subscore.label}</span>
-                            <strong>{Math.round(subscore.score)}</strong>
-                          </div>
-                        ))}
+                      <div>
+                        <span>Timeframe Confluence</span>
+                        <strong>{timeframeConfluenceGauge?.score ?? "--"}</strong>
                       </div>
-                    </details>
-                  </article>
-                  ))}
-                </div>
-              ) : null}
+                    </div>
+                  </div>
 
-              <div className="algo-v2-turbo-grid">
-                <div className="algo-v2-slider-card">
-                  <div className="algo-v2-slider-header">
-                    <strong>Delta Target</strong>
-                    <strong>{deltaTarget.toFixed(2)}</strong>
+                  <div className="algo-v2-slider-card">
+                    <div className="algo-v2-slider-header">
+                      <strong>Delta Target</strong>
+                      <strong>{deltaTarget.toFixed(2)}</strong>
+                    </div>
+                    <input
+                      type="range"
+                      min="20"
+                      max="60"
+                      value={Math.round(deltaTarget * 100)}
+                      onChange={(event) => setDeltaTarget(Number(event.target.value) / 100)}
+                      className="algo-v2-range"
+                    />
+                    <div className="algo-v2-slider-scale">
+                      <span>0.20</span>
+                      <span>{Math.round(deltaTarget * 100)} Delta</span>
+                      <span>0.60</span>
+                    </div>
                   </div>
-                  <input
-                    type="range"
-                    min="20"
-                    max="60"
-                    value={Math.round(deltaTarget * 100)}
-                    onChange={(event) => setDeltaTarget(Number(event.target.value) / 100)}
-                    className="algo-v2-range"
-                  />
-                  <div className="algo-v2-slider-scale">
-                    <span>0.20</span>
-                    <span>{Math.round(deltaTarget * 100)} Delta</span>
-                    <span>0.60</span>
-                  </div>
-                </div>
 
-                <div className="algo-v2-slider-card">
-                  <div className="algo-v2-slider-header">
-                    <strong>Time Horizon</strong>
-                    <strong>{formatDteLabel(daysToExpiry)}</strong>
-                  </div>
-                  <input
-                    type="range"
-                    min="7"
-                    max="60"
-                    value={daysToExpiry}
-                    onChange={(event) => setDaysToExpiry(Number(event.target.value))}
-                    className="algo-v2-range is-purple"
-                  />
-                  <div className="algo-v2-slider-scale">
-                    <span>7</span>
-                    <span>Days to expiration</span>
-                    <span>60</span>
+                  <div className="algo-v2-slider-card">
+                    <div className="algo-v2-slider-header">
+                      <strong>Time Horizon</strong>
+                      <strong>{formatDteLabel(daysToExpiry)}</strong>
+                    </div>
+                    <input
+                      type="range"
+                      min="7"
+                      max="60"
+                      value={daysToExpiry}
+                      onChange={(event) => setDaysToExpiry(Number(event.target.value))}
+                      className="algo-v2-range is-purple"
+                    />
+                    <div className="algo-v2-slider-scale">
+                      <span>7</span>
+                      <span>Days to expiration</span>
+                      <span>60</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2349,28 +2478,12 @@ export function AlgoControllerV2({
               <h3 className="algo-v2-mini-title">Suggested Contracts</h3>
               <div className="algo-v2-mini-list">
                 <div>
-                  <span>Contract fit</span>
-                  <strong className={turboFitTone}>
-                    {turboFitScore ?? "--"} {turboFitBand !== "Unavailable" ? turboFitBand : ""}
-                  </strong>
-                </div>
-                <div>
-                  <span>Bias</span>
-                  <strong>{turboBiasHeadline}</strong>
-                </div>
-                <div>
-                  <span>Selected contract</span>
-                  <strong>
-                    {selectedTurboContract
-                      ? `${Math.round(selectedTurboContract.strikePrice)}${selectedTurboContract.type === "call" ? "C" : "P"}`
-                      : "--"}
-                  </strong>
+                  <span>Lead contract</span>
+                  <strong>{contractTelemetrySummary}</strong>
                 </div>
                 <div>
                   <span>Target expiry</span>
-                  <strong>
-                    {turboCandidates ? formatOptionExpiration(turboCandidates.targetExpirationDate) : "--"}
-                  </strong>
+                  <strong>{turboCandidates ? formatOptionExpiration(turboCandidates.targetExpirationDate) : "--"}</strong>
                 </div>
                 <div>
                   <span>Price change</span>
@@ -2402,20 +2515,48 @@ export function AlgoControllerV2({
                           : "algo-v2-contract-card"
                       }
                     >
-                      <strong>
-                        {normalizedSymbol} {formatOptionExpiration(contract.expirationDate)}{" "}
-                        {Math.round(contract.strikePrice)}
-                        {contract.type === "call" ? "C" : "P"}
-                      </strong>
-                      <span>Fit {contract.fitScore} · {index === 0 ? "best candidate" : "alternate"}</span>
-                      <span>
-                        Delta {contract.snapshot.delta !== null && contract.snapshot.delta > 0 ? "+" : ""}
-                        {formatNumber(contract.snapshot.delta, 2)}
-                      </span>
-                      <span>Mark {formatMoney(contract.markPrice)}</span>
-                      <span>Spread {formatOptionSpreadLabel(contract.spreadPercent)}</span>
-                      <span>IV {formatPercent(contract.snapshot.impliedVolatility, 1)}</span>
-                      <span>Breakeven {formatMoney(contract.breakevenPrice)}</span>
+                      <div className="algo-v2-contract-top">
+                        <div>
+                          <strong>
+                            {normalizedSymbol} {formatOptionExpiration(contract.expirationDate)} {Math.round(contract.strikePrice)}
+                            {contract.type === "call" ? "C" : "P"}
+                          </strong>
+                          <span>Fit {contract.fitScore} · {index === 0 ? "best candidate" : "alternate"}</span>
+                        </div>
+                        <span className={`algo-v2-gauge-band ${getScoreTone(contract.fitScore)}`}>Fit {contract.fitScore}</span>
+                      </div>
+                      <div className="algo-v2-contract-metrics">
+                        <div>
+                          <span>Delta</span>
+                          <strong>
+                            {contract.snapshot.delta !== null && contract.snapshot.delta > 0 ? "+" : ""}
+                            {formatNumber(contract.snapshot.delta, 2)}
+                          </strong>
+                        </div>
+                        <div>
+                          <span>Mark</span>
+                          <strong>{formatMoney(contract.markPrice)}</strong>
+                        </div>
+                        <div>
+                          <span>Spread</span>
+                          <strong>{formatOptionSpreadLabel(contract.spreadPercent)}</strong>
+                        </div>
+                        <div>
+                          <span>IV</span>
+                          <strong>{formatPercent(contract.snapshot.impliedVolatility, 1)}</strong>
+                        </div>
+                        <div>
+                          <span>IV Rank</span>
+                          <strong>Pending</strong>
+                        </div>
+                        <div>
+                          <span>Breakeven</span>
+                          <strong>{formatMoney(contract.breakevenPrice)}</strong>
+                        </div>
+                      </div>
+                      <p className="algo-v2-contract-note">
+                        Breakeven guide is ready for a chart overlay once the underlying chart is attached to this cockpit.
+                      </p>
                       <button
                         type="button"
                         className="algo-v2-contract-select-button"
@@ -2455,33 +2596,84 @@ export function AlgoControllerV2({
           </div>
         )}
 
-        <div className="algo-v2-actions">
-          <button
-            type="button"
-            className={mode === "turbo" && !isCrypto ? turboPrimaryCommand.tone : primaryCommand.tone}
-            onClick={() =>
-              mode === "turbo" && !isCrypto
-                ? handleTurboPrimaryCommand(turboPrimaryCommand.command)
-                : handleControllerCommand(primaryCommand.command)
-            }
-            disabled={isBusy}
-          >
-            <span className="algo-v2-action-label">
-              {mode === "turbo" && !isCrypto ? turboPrimaryCommand.label : primaryCommand.label}
-            </span>
-            <span className="algo-v2-action-copy">
-              {mode === "turbo" && !isCrypto ? turboPrimaryCommand.helper : primaryCommand.helper}
-            </span>
-          </button>
-          <button
-            type="button"
-            className="algo-v2-action-button is-danger"
-            onClick={() => handleControllerCommand("EJECT")}
-            disabled={isBusy}
-          >
-            <span className="algo-v2-action-label">Eject</span>
-            <span className="algo-v2-action-copy">Exit and flatten the current controller cycle.</span>
-          </button>
+        <div className="algo-v2-actions is-media-player">
+          <div className="algo-v2-action-bar">
+            <div className="algo-v2-action-state">
+              <p className="algo-v2-meter-label">Media Player</p>
+              <strong>{displayedSessionState} session</strong>
+              <span>
+                {mode === "turbo" && !isCrypto
+                  ? `State ${turboCurrentQty > 0 ? "B" : turboContractStatus === "PAUSED" ? "C" : "A"} · ${turboCurrentQty > 0 ? "Active session" : turboContractStatus === "PAUSED" ? "Paused session" : "Waiting for entry"}`
+                  : `State ${activeController?.status === "ACTIVE" ? "B" : activeController?.status === "PAUSED" ? "C" : "A"} · ${displayedCommand.helper}`}
+              </span>
+            </div>
+            <div className="algo-v2-action-cluster">
+              {displayedSessionState === "Active" ? (
+                <>
+                  <button
+                    type="button"
+                    className="algo-v2-action-button is-primary"
+                    onClick={() =>
+                      mode === "turbo" && !isCrypto
+                        ? handleTurboPrimaryCommand("PAUSE")
+                        : handleControllerCommand("PAUSE")
+                    }
+                    disabled={isBusy}
+                  >
+                    <span className="algo-v2-action-label">Pause Session</span>
+                    <span className="algo-v2-action-copy">
+                      {mode === "turbo" && !isCrypto ? "Flatten the option while staying armed." : "Flatten the controller while keeping the session warm."}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="algo-v2-action-button is-secondary"
+                    onClick={() =>
+                      mode === "turbo" && !isCrypto
+                        ? handleTurboContractTrade(selectedTurboContract?.symbol ?? "")
+                        : handleControllerCommand("PLAY")
+                    }
+                    disabled={isBusy || (mode === "turbo" && !isCrypto && !selectedTurboContract)}
+                  >
+                    <span className="algo-v2-action-label">{addActionLabel}</span>
+                    <span className="algo-v2-action-copy">{addActionCopy}</span>
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className={displayedSessionState === "Paused" ? "algo-v2-action-button is-positive" : displayedCommand.tone}
+                  onClick={() =>
+                    mode === "turbo" && !isCrypto
+                      ? handleTurboPrimaryCommand(displayedSessionState === "Paused" ? "RESUME" : "PLAY")
+                      : handleControllerCommand(displayedSessionState === "Paused" ? "RESUME" : "PLAY")
+                  }
+                  disabled={displayedSessionState === "Armed" ? playLocked : isBusy}
+                >
+                  <span className="algo-v2-action-label">{displayedSessionState === "Paused" ? "Resume Session" : "Arm"}</span>
+                  <span className="algo-v2-action-copy">
+                    {displayedSessionState === "Paused"
+                      ? "Resume the session from cash while preserving the plan."
+                      : displayedCommand.helper}
+                  </span>
+                </button>
+              )}
+              <button
+                type="button"
+                className="algo-v2-action-button is-danger"
+                onClick={() =>
+                  mode === "turbo" && !isCrypto
+                    ? handleTurboPrimaryCommand("EJECT")
+                    : handleControllerCommand("EJECT")
+                }
+                disabled={isBusy}
+              >
+                <span className="algo-v2-action-label">Eject</span>
+                <span className="algo-v2-action-copy">Exit and flatten the current controller cycle.</span>
+              </button>
+            </div>
+          </div>
+          {playLockReason ? <p className="algo-v2-lock-note">{playLockReason}</p> : null}
         </div>
 
         {actionNotice ? <p className="form-help">{actionNotice}</p> : null}

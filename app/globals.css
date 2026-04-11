@@ -1201,6 +1201,11 @@ main {
   align-items: center;
 }
 
+.algo-v2-metric-cluster {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
 .algo-v2-symbol-badge {
   display: inline-flex;
   align-items: center;
@@ -1219,6 +1224,49 @@ main {
   margin: 0 0 0.12rem;
   font-size: clamp(1.3rem, 2.2vw, 1.8rem);
   line-height: 1.08;
+}
+
+.algo-v2-state-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+  margin-bottom: 0.45rem;
+}
+
+.algo-v2-state-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.algo-v2-state-pill.is-armed {
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+}
+
+.algo-v2-state-pill.is-active {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+.algo-v2-state-pill.is-paused {
+  background: rgba(245, 158, 11, 0.14);
+  color: #a16207;
+}
+
+.algo-v2-state-copy {
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .algo-v2-subtitle {
@@ -1258,6 +1306,21 @@ main {
   line-height: 1;
 }
 
+.algo-v2-header-metric {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 132px;
+  padding: 0.75rem 0.9rem;
+  border-radius: 16px;
+  border: 1px solid rgba(214, 222, 236, 0.9);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.algo-v2-header-metric.is-secondary .algo-v2-pnl {
+  color: #0f172a;
+  font-size: 1.2rem;
+}
+
 .algo-v2-pnl.is-positive,
 .algo-v2-confluence-score.is-positive,
 .algo-v2-mini-gauge-score.is-positive,
@@ -1289,8 +1352,8 @@ main {
 }
 
 .algo-v2-controls-row {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 1rem;
   align-items: end;
 }
@@ -1304,6 +1367,35 @@ main {
 .algo-v2-field-wide {
   min-width: 240px;
   flex: 1 1 260px;
+}
+
+.algo-v2-inline-controls {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+  min-height: 42px;
+  padding: 0.3rem 0.35rem 0.3rem 0.75rem;
+  border-radius: 14px;
+  border: 1px solid rgba(209, 213, 219, 0.92);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.algo-v2-inline-readout {
+  color: #64748b;
+  font-size: 0.88rem;
+}
+
+.algo-v2-icon-button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(59, 130, 246, 0.24);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.96), rgba(219, 234, 254, 0.92));
+  color: #1d4ed8;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .algo-v2-field-label {
@@ -1376,9 +1468,16 @@ main {
 
 .algo-v2-panel-heading {
   display: flex;
-  gap: 0.85rem;
+  justify-content: space-between;
+  gap: 1rem;
   align-items: flex-start;
   margin-bottom: 1rem;
+}
+
+.algo-v2-panel-heading-main {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
 }
 
 .algo-v2-panel-icon {
@@ -1419,6 +1518,10 @@ main {
   border-radius: 20px;
   border: 1px solid rgba(214, 222, 236, 0.92);
   background: linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(238, 244, 252, 0.92));
+}
+
+.algo-v2-confluence-card.is-telemetry {
+  margin-bottom: 0.9rem;
 }
 
 .algo-v2-confluence-header {
@@ -1475,11 +1578,19 @@ main {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
+.algo-v2-mini-gauge-grid.is-stack {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .algo-v2-mini-gauge-card {
   padding: 0.9rem 0.95rem;
   border-radius: 18px;
   border: 1px solid rgba(214, 222, 236, 0.92);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(243, 246, 251, 0.92));
+}
+
+.algo-v2-mini-gauge-card.is-stack {
+  padding: 1rem 1.05rem;
 }
 
 .algo-v2-mini-gauge-card.is-disabled {
@@ -1859,6 +1970,87 @@ main {
   gap: 0.85rem;
 }
 
+.algo-v2-order-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 0.85rem;
+  align-items: start;
+}
+
+.algo-v2-stat-row.is-telemetry {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+  padding: 1rem 1.05rem;
+  border-radius: 18px;
+  border: 1px solid rgba(214, 222, 236, 0.92);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.92));
+}
+
+.algo-v2-handoff-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding: 1rem 1.05rem;
+  border-radius: 18px;
+  border: 1px solid rgba(34, 197, 94, 0.32);
+  background: linear-gradient(180deg, rgba(240, 253, 244, 0.98), rgba(220, 252, 231, 0.92));
+}
+
+.algo-v2-handoff-button {
+  padding: 0.8rem 1rem;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #22c55e, #15803d);
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.algo-v2-decision-stack {
+  display: grid;
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.algo-v2-section-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+
+.algo-v2-turbo-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.8fr);
+  gap: 0.9rem;
+}
+
+.algo-v2-turbo-analysis,
+.algo-v2-turbo-options {
+  display: grid;
+  gap: 0.85rem;
+  align-content: start;
+}
+
+.algo-v2-turbo-control-group {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.algo-v2-inline-stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: baseline;
+  color: #475569;
+  font-size: 0.92rem;
+}
+
 .radar-shell {
   display: grid;
   gap: 1.25rem;
@@ -2047,6 +2239,38 @@ main {
   font-size: 0.92rem;
 }
 
+.algo-v2-contract-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.algo-v2-contract-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem 0.8rem;
+  margin-top: 0.6rem;
+}
+
+.algo-v2-contract-metrics div {
+  display: grid;
+  gap: 0.16rem;
+}
+
+.algo-v2-contract-metrics span {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.algo-v2-contract-note {
+  margin: 0.55rem 0 0;
+  color: #64748b;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
 .algo-v2-contract-trade-button {
   margin-top: 0.35rem;
   padding: 0.72rem 0.85rem;
@@ -2085,8 +2309,50 @@ main {
 
 .algo-v2-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.algo-v2-actions.is-media-player {
+  padding: 1rem 1.05rem;
+  border-radius: 22px;
+  border: 1px solid rgba(30, 41, 59, 0.14);
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.1), transparent 30%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.96));
+}
+
+.algo-v2-action-bar {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(0, 2fr);
   gap: 1rem;
+  align-items: stretch;
+}
+
+.algo-v2-action-state {
+  display: grid;
+  align-content: center;
+  gap: 0.35rem;
+  padding: 0.95rem 1rem;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.28);
+  color: #f8fafc;
+}
+
+.algo-v2-action-state .algo-v2-meter-label {
+  margin-bottom: 0;
+  color: rgba(226, 232, 240, 0.7);
+}
+
+.algo-v2-action-state span {
+  color: rgba(226, 232, 240, 0.78);
+  line-height: 1.5;
+}
+
+.algo-v2-action-cluster {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
 }
 
 .algo-v2-action-button {
@@ -2115,6 +2381,10 @@ main {
   background: linear-gradient(180deg, #f87171, #dc2626);
 }
 
+.algo-v2-action-button.is-secondary {
+  background: linear-gradient(180deg, #22c55e, #166534);
+}
+
 .algo-v2-action-button:disabled {
   opacity: 0.7;
   cursor: not-allowed;
@@ -2129,6 +2399,13 @@ main {
 .algo-v2-action-copy {
   color: rgba(255, 255, 255, 0.88);
   line-height: 1.45;
+}
+
+.algo-v2-lock-note {
+  margin: 0;
+  color: rgba(248, 250, 252, 0.78);
+  font-size: 0.9rem;
+  line-height: 1.5;
 }
 
 .brand-lockup {
@@ -2899,7 +3176,9 @@ main {
   .book-reader-panel-header,
   .book-reader-folio,
   .algo-v2-topbar,
-  .algo-v2-controls-row {
+  .algo-v2-controls-row,
+  .algo-v2-panel-heading,
+  .algo-v2-action-bar {
     flex-direction: column;
   }
 
@@ -2938,6 +3217,13 @@ main {
   .algo-v2-mini-gauge-grid,
   .algo-v2-mini-gauge-grid.is-turbo {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .algo-v2-controls-row,
+  .algo-v2-order-row,
+  .algo-v2-turbo-columns,
+  .algo-v2-action-cluster {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -4239,6 +4525,9 @@ main {
   .algo-v2-mini-gauge-grid,
   .algo-v2-mini-gauge-grid.is-turbo,
   .algo-v2-actions,
+  .algo-v2-order-row,
+  .algo-v2-turbo-columns,
+  .algo-v2-action-cluster,
   .about-hero,
   .trading-grid,
   .trading-detail-grid,
