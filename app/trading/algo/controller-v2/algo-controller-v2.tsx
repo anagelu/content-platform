@@ -319,6 +319,22 @@ function extractRequestedMarketSymbol(message: string) {
   return null;
 }
 
+function extractRequestedTimeframe(message: string): AlpacaBarTimeframe | null {
+  const normalized = message.toLowerCase();
+  const patterns: Array<{ pattern: RegExp; timeframe: AlpacaBarTimeframe }> = [
+    { pattern: /\b1\s*min(?:ute)?\b|\b1m\b/, timeframe: "1Min" },
+    { pattern: /\b5\s*min(?:ute)?s?\b|\b5m\b/, timeframe: "5Min" },
+    { pattern: /\b15\s*min(?:ute)?s?\b|\b15m\b/, timeframe: "15Min" },
+    { pattern: /\b30\s*min(?:ute)?s?\b|\b30m\b/, timeframe: "30Min" },
+    { pattern: /\b1\s*hour\b|\b1h\b|\bhourly\b/, timeframe: "1Hour" },
+    { pattern: /\bdaily\b|\b1\s*day\b|\b1d\b/, timeframe: "1Day" },
+    { pattern: /\bweekly\b|\b1\s*week\b|\b1w\b/, timeframe: "1Week" },
+  ];
+
+  const match = patterns.find((entry) => entry.pattern.test(normalized));
+  return match?.timeframe ?? null;
+}
+
 function isCryptoLikeSymbol(symbol: string) {
   const normalized = canonicalizeMarketSymbol(symbol);
   return normalized.includes("/") || COMMON_CRYPTO_BASE_SYMBOLS.has(normalized);
@@ -1428,6 +1444,7 @@ export function AlgoControllerV2({
   const [actionNotice, setActionNotice] = useState("");
   const [isBusy, setIsBusy] = useState(false);
   const [copilotFocusSymbol, setCopilotFocusSymbol] = useState<string | null>(null);
+  const [copilotFocusTimeframe, setCopilotFocusTimeframe] = useState<AlpacaBarTimeframe | null>(null);
   const [copilotInput, setCopilotInput] = useState("");
   const [isCopilotLoading, setIsCopilotLoading] = useState(false);
   const [copilotMessages, setCopilotMessages] = useState<CopilotMessage[]>([
@@ -1846,7 +1863,7 @@ export function AlgoControllerV2({
     return `Priority cockpit summary:
 Selected ticker: ${contextSymbol || "(not set)"}
 Requested ticker from user message: ${requestedSymbolInPrompt || "(none, use cockpit ticker)"}
-Analysis timeframe: ${analysisTimeframe}
+Analysis timeframe: ${contextSnapshot?.timeframe ?? analysisTimeframe}
 Controller mode: ${effectiveMode}
 Recommended mode from cockpit: ${
       contextDisplayedOverallScore !== null && contextDisplayedOverallScore >= FAVORABLE_GAUGE_THRESHOLD
@@ -2160,21 +2177,29 @@ ${recentOrderSummary}`;
 
     try {
       const requestedSymbol = extractRequestedMarketSymbol(trimmedInput) ?? copilotFocusSymbol;
+      const requestedTimeframe =
+        extractRequestedTimeframe(trimmedInput) ?? copilotFocusTimeframe ?? analysisTimeframe;
       let contextText = copilotContextText;
 
-      if (requestedSymbol && requestedSymbol !== normalizedSymbol) {
+      if (
+        (requestedSymbol && requestedSymbol !== normalizedSymbol) ||
+        requestedTimeframe !== analysisTimeframe
+      ) {
         const overrideController =
           controllers.find(
-            (controller) => canonicalizeMarketSymbol(controller.symbol) === requestedSymbol,
+            (controller) =>
+              canonicalizeMarketSymbol(controller.symbol) === (requestedSymbol ?? normalizedSymbol),
           ) ?? null;
         const overridePosition =
           positions.find(
-            (position) => canonicalizeMarketSymbol(position.symbol) === requestedSymbol,
+            (position) =>
+              canonicalizeMarketSymbol(position.symbol) === (requestedSymbol ?? normalizedSymbol),
           ) ?? null;
+        const effectiveSymbol = requestedSymbol ?? normalizedSymbol;
         const overrideSnapshot = await getAlpacaAlgoSnapshot({
-          symbol: requestedSymbol,
+          symbol: effectiveSymbol,
           strategyType: overrideController?.strategyType ?? "NONE",
-          strategyTimeframe: analysisTimeframe,
+          strategyTimeframe: requestedTimeframe,
           fastPeriod: overrideController?.fastPeriod ?? 5,
           slowPeriod: overrideController?.slowPeriod ?? 20,
           bollingerLength: overrideController?.bollingerLength ?? 20,
@@ -2184,7 +2209,7 @@ ${recentOrderSummary}`;
         });
         const overrideConfluence = buildConfluenceModel({
           snapshot: overrideSnapshot,
-          isCrypto: isCryptoLikeSymbol(requestedSymbol),
+          isCrypto: isCryptoLikeSymbol(effectiveSymbol),
           sensitivity: confluenceSensitivity,
         });
         const overrideTimeframeGauge =
@@ -2205,7 +2230,7 @@ ${recentOrderSummary}`;
         };
 
         contextText = buildCopilotContextText({
-          symbol: requestedSymbol,
+          symbol: effectiveSymbol,
           snapshot: overrideSnapshot,
           controller: overrideController,
           position: overridePosition,
@@ -2219,6 +2244,15 @@ ${recentOrderSummary}`;
 
       if (requestedSymbol) {
         setCopilotFocusSymbol(requestedSymbol);
+      }
+
+      if (requestedTimeframe) {
+        setCopilotFocusTimeframe(requestedTimeframe);
+        setAnalysisTimeframe(requestedTimeframe);
+      }
+
+      if (requestedSymbol && requestedSymbol !== normalizedSymbol) {
+        setSymbol(requestedSymbol);
       }
 
       const response = await fetch("/api/ai/algo-controller-v2", {

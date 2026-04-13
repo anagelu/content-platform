@@ -544,12 +544,14 @@ async function createGeminiResponse({
   userText,
   maxOutputTokens,
   responseSchema,
+  tools,
 }: {
   model: string;
   systemInstruction: string;
   userText: string;
   maxOutputTokens: number;
   responseSchema?: Record<string, unknown>;
+  tools?: Array<Record<string, unknown>>;
 }) {
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -584,6 +586,7 @@ async function createGeminiResponse({
             responseMimeType: "application/json",
             ...(responseSchema ? { responseSchema } : {}),
           },
+          ...(tools && tools.length > 0 ? { tools } : {}),
         }),
         signal: controller.signal,
       },
@@ -1345,6 +1348,7 @@ Return a JSON object with this exact shape:
           systemInstruction,
           userText,
           maxOutputTokens: 700,
+          tools: [{ google_search: {} }],
         })
       : await createOpenAIResponse({
           model,
