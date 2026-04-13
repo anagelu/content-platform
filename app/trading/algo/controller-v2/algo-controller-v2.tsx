@@ -108,6 +108,7 @@ const COPILOT_SYMBOL_STOPWORDS = new Set([
   "CHECK",
   "COCKPIT",
   "CONFLUENCE",
+  "DAILY",
   "DO",
   "FOR",
   "GAUGE",
@@ -124,6 +125,8 @@ const COPILOT_SYMBOL_STOPWORDS = new Set([
   "MARKET",
   "ME",
   "MODE",
+  "MINUTE",
+  "MINUTES",
   "NOW",
   "OF",
   "ON",
@@ -142,11 +145,16 @@ const COPILOT_SYMBOL_STOPWORDS = new Set([
   "THIS",
   "TICKER",
   "TIMEFRAME",
+  "TODAY",
   "TO",
   "TURBO",
   "V2",
   "WHAT",
+  "WEEK",
+  "WEEKLY",
   "WHY",
+  "HOUR",
+  "HOURLY",
 ]);
 const ANALYSIS_TIMEFRAMES: Array<{ value: AlpacaBarTimeframe; label: string }> = [
   { value: "1Min", label: "1 Min" },
@@ -1419,6 +1427,7 @@ export function AlgoControllerV2({
   const [snapshotRefreshKey, setSnapshotRefreshKey] = useState(0);
   const [actionNotice, setActionNotice] = useState("");
   const [isBusy, setIsBusy] = useState(false);
+  const [copilotFocusSymbol, setCopilotFocusSymbol] = useState<string | null>(null);
   const [copilotInput, setCopilotInput] = useState("");
   const [isCopilotLoading, setIsCopilotLoading] = useState(false);
   const [copilotMessages, setCopilotMessages] = useState<CopilotMessage[]>([
@@ -2150,7 +2159,7 @@ ${recentOrderSummary}`;
     setIsCopilotLoading(true);
 
     try {
-      const requestedSymbol = extractRequestedMarketSymbol(trimmedInput);
+      const requestedSymbol = extractRequestedMarketSymbol(trimmedInput) ?? copilotFocusSymbol;
       let contextText = copilotContextText;
 
       if (requestedSymbol && requestedSymbol !== normalizedSymbol) {
@@ -2206,6 +2215,10 @@ ${recentOrderSummary}`;
           requestedSymbolInPrompt: requestedSymbol,
           effectiveMode: mode,
         });
+      }
+
+      if (requestedSymbol) {
+        setCopilotFocusSymbol(requestedSymbol);
       }
 
       const response = await fetch("/api/ai/algo-controller-v2", {
