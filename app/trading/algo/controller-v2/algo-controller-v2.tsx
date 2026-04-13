@@ -2180,70 +2180,85 @@ ${recentOrderSummary}`;
       const requestedTimeframe =
         extractRequestedTimeframe(trimmedInput) ?? copilotFocusTimeframe ?? analysisTimeframe;
       let contextText = copilotContextText;
+      let resolvedSymbol = requestedSymbol;
 
       if (
         (requestedSymbol && requestedSymbol !== normalizedSymbol) ||
         requestedTimeframe !== analysisTimeframe
       ) {
-        const overrideController =
-          controllers.find(
-            (controller) =>
-              canonicalizeMarketSymbol(controller.symbol) === (requestedSymbol ?? normalizedSymbol),
-          ) ?? null;
-        const overridePosition =
-          positions.find(
-            (position) =>
-              canonicalizeMarketSymbol(position.symbol) === (requestedSymbol ?? normalizedSymbol),
-          ) ?? null;
-        const effectiveSymbol = requestedSymbol ?? normalizedSymbol;
-        const overrideSnapshot = await getAlpacaAlgoSnapshot({
-          symbol: effectiveSymbol,
-          strategyType: overrideController?.strategyType ?? "NONE",
-          strategyTimeframe: requestedTimeframe,
-          fastPeriod: overrideController?.fastPeriod ?? 5,
-          slowPeriod: overrideController?.slowPeriod ?? 20,
-          bollingerLength: overrideController?.bollingerLength ?? 20,
-          bollingerStdDev: overrideController?.bollingerStdDev ?? 2,
-          maxNotional: overrideController?.maxNotional ?? 100,
-          maxDailyLoss: overrideController?.maxDailyLoss ?? 25,
-        });
-        const overrideConfluence = buildConfluenceModel({
-          snapshot: overrideSnapshot,
-          isCrypto: isCryptoLikeSymbol(effectiveSymbol),
-          sensitivity: confluenceSensitivity,
-        });
-        const overrideTimeframeGauge =
-          overrideConfluence.gauges.find((gauge) => gauge.key === "timeframeConfluence") ?? null;
-        const overrideLensReadout =
-          overrideTimeframeGauge?.lensReadouts?.find((readout) => readout.offset === marketLens) ??
-          null;
-        const overrideStandardBase = buildStandardMarketModel(overrideSnapshot);
-        const overrideTimeframeCard = buildStandardTimeframeCard({
-          gauge: overrideTimeframeGauge,
-          selectedLensReadout: overrideLensReadout,
-        });
-        const overrideStandardModel = {
-          ...overrideStandardBase,
-          cards: overrideTimeframeCard
-            ? [...overrideStandardBase.cards, overrideTimeframeCard]
-            : overrideStandardBase.cards,
-        };
+        try {
+          const effectiveSymbol = requestedSymbol ?? normalizedSymbol;
 
-        contextText = buildCopilotContextText({
-          symbol: effectiveSymbol,
-          snapshot: overrideSnapshot,
-          controller: overrideController,
-          position: overridePosition,
-          confluenceModel: overrideConfluence,
-          standardModel: overrideStandardModel,
-          lensReadout: overrideLensReadout,
-          requestedSymbolInPrompt: requestedSymbol,
-          effectiveMode: mode,
-        });
+          if (!effectiveSymbol) {
+            throw new Error("No market ticker is available for this follow-up question.");
+          }
+
+          const overrideController =
+            controllers.find(
+              (controller) =>
+                canonicalizeMarketSymbol(controller.symbol) === effectiveSymbol,
+            ) ?? null;
+          const overridePosition =
+            positions.find(
+              (position) =>
+                canonicalizeMarketSymbol(position.symbol) === effectiveSymbol,
+            ) ?? null;
+          const overrideSnapshot = await getAlpacaAlgoSnapshot({
+            symbol: effectiveSymbol,
+            strategyType: overrideController?.strategyType ?? "NONE",
+            strategyTimeframe: requestedTimeframe,
+            fastPeriod: overrideController?.fastPeriod ?? 5,
+            slowPeriod: overrideController?.slowPeriod ?? 20,
+            bollingerLength: overrideController?.bollingerLength ?? 20,
+            bollingerStdDev: overrideController?.bollingerStdDev ?? 2,
+            maxNotional: overrideController?.maxNotional ?? 100,
+            maxDailyLoss: overrideController?.maxDailyLoss ?? 25,
+          });
+          const overrideConfluence = buildConfluenceModel({
+            snapshot: overrideSnapshot,
+            isCrypto: isCryptoLikeSymbol(effectiveSymbol),
+            sensitivity: confluenceSensitivity,
+          });
+          const overrideTimeframeGauge =
+            overrideConfluence.gauges.find((gauge) => gauge.key === "timeframeConfluence") ?? null;
+          const overrideLensReadout =
+            overrideTimeframeGauge?.lensReadouts?.find((readout) => readout.offset === marketLens) ??
+            null;
+          const overrideStandardBase = buildStandardMarketModel(overrideSnapshot);
+          const overrideTimeframeCard = buildStandardTimeframeCard({
+            gauge: overrideTimeframeGauge,
+            selectedLensReadout: overrideLensReadout,
+          });
+          const overrideStandardModel = {
+            ...overrideStandardBase,
+            cards: overrideTimeframeCard
+              ? [...overrideStandardBase.cards, overrideTimeframeCard]
+              : overrideStandardBase.cards,
+          };
+
+          contextText = buildCopilotContextText({
+            symbol: effectiveSymbol,
+            snapshot: overrideSnapshot,
+            controller: overrideController,
+            position: overridePosition,
+            confluenceModel: overrideConfluence,
+            standardModel: overrideStandardModel,
+            lensReadout: overrideLensReadout,
+            requestedSymbolInPrompt: requestedSymbol,
+            effectiveMode: mode,
+          });
+          resolvedSymbol = effectiveSymbol;
+        } catch {
+          contextText = `${copilotContextText}
+
+Follow-up note:
+The requested follow-up market refresh could not be loaded, so answer using the most recent available cockpit context. Do not mention internal server errors. If the user asked for a different timeframe or symbol, say the refresh did not complete and answer from the last available read instead.`;
+          resolvedSymbol = requestedSymbol ?? normalizedSymbol;
+        }
       }
 
-      if (requestedSymbol) {
-        setCopilotFocusSymbol(requestedSymbol);
+      if (resolvedSymbol) {
+        setCopilotFocusSymbol(resolvedSymbol);
       }
 
       if (requestedTimeframe) {
@@ -2251,8 +2266,8 @@ ${recentOrderSummary}`;
         setAnalysisTimeframe(requestedTimeframe);
       }
 
-      if (requestedSymbol && requestedSymbol !== normalizedSymbol) {
-        setSymbol(requestedSymbol);
+      if (resolvedSymbol && resolvedSymbol !== normalizedSymbol) {
+        setSymbol(resolvedSymbol);
       }
 
       const response = await fetch("/api/ai/algo-controller-v2", {
