@@ -224,6 +224,21 @@ type GenerateTradingSessionAssistOutput = {
   usage: OpenAIUsageStats;
 };
 
+type GenerateAlgoControllerV2CopilotInput = {
+  userMessage: string;
+  contextText: string;
+  conversationText?: string;
+};
+
+type GenerateAlgoControllerV2CopilotOutput = {
+  reply: string;
+  suggestedActions: string[];
+  warnings: string[];
+  recommendedMode: "standard" | "turbo" | "hold";
+  model: string;
+  usage: OpenAIUsageStats;
+};
+
 type OpenAIUsageStats = {
   inputTokens: number;
   outputTokens: number;
@@ -1716,6 +1731,117 @@ Return a JSON object with this exact shape:
     title: parsed.title.trim() || title || "Untitled setup",
     thesis: parsed.thesis.trim(),
     workflowNotes: parsed.workflowNotes.trim(),
+    model,
+    usage: provider === "gemini" ? parseGeminiUsage(payload) : parseOpenAIUsage(payload),
+  };
+}
+
+export async function generateAlgoControllerV2Copilot({
+  userMessage,
+  contextText,
+  conversationText = "",
+}: GenerateAlgoControllerV2CopilotInput): Promise<GenerateAlgoControllerV2CopilotOutput> {
+  const trimmedMessage = userMessage.trim();
+  const trimmedContext = contextText.trim();
+  const trimmedConversation = conversationText.trim();
+
+  if (!trimmedMessage) {
+    throw new Error("Add a copilot message before requesting guidance.");
+  }
+
+  if (!trimmedContext) {
+    throw new Error("Algo Controller V2 context is missing for the copilot request.");
+  }
+
+  if (trimmedMessage.length > 2500) {
+    throw new Error("Keep the copilot message under 2500 characters.");
+  }
+
+  if (trimmedContext.length > 16000) {
+    throw new Error("The cockpit context is too large for this assist flow.");
+  }
+
+  const model = await getPostDraftGenerationModel();
+  const provider = await getAiProvider();
+  const systemInstruction =
+    "You are the Pattern Foundry Algo Controller V2 copilot. You help the user interpret the cockpit, explain why a setup is or is not ready, and suggest next steps. You are grounded only in the provided context and must never pretend to see live market data beyond it. Do not claim you executed trades or changed controls. Be conservative, instrument-like, and concise. If the context is mixed, say so clearly. Return JSON only with keys reply, suggestedActions, warnings, and recommendedMode. Keep reply to 2 short paragraphs max. suggestedActions and warnings should be short strings. recommendedMode must be one of standard, turbo, or hold.";
+  const userText = `User message:
+${trimmedMessage}
+
+Recent copilot conversation:
+${trimmedConversation || "(no prior conversation)"}
+
+Algo Controller V2 context:
+${trimmedContext}
+
+Return a JSON object with this exact shape:
+{
+  "reply": "short grounded explanation",
+  "suggestedActions": ["short action", "short action"],
+  "warnings": ["short warning"],
+  "recommendedMode": "standard"
+}`;
+
+  const payload =
+    provider === "gemini"
+      ? await createGeminiResponse({
+          model,
+          systemInstruction,
+          userText,
+          maxOutputTokens: 700,
+        })
+      : await createOpenAIResponse({
+          model,
+          max_output_tokens: 700,
+          input: [
+            {
+              role: "system",
+              content: [{ type: "input_text", text: systemInstruction }],
+            },
+            {
+              role: "user",
+              content: [{ type: "input_text", text: userText }],
+            },
+          ],
+        });
+
+  const responseText =
+    provider === "gemini" ? getGeminiResponseText(payload) : getResponseText(payload);
+  const jsonText = extractJson(responseText);
+
+  let parsed: Partial<GenerateAlgoControllerV2CopilotOutput>;
+
+  try {
+    parsed = JSON.parse(jsonText) as Partial<GenerateAlgoControllerV2CopilotOutput>;
+  } catch {
+    throw new Error("The model returned an unreadable Algo Controller V2 copilot response.");
+  }
+
+  if (
+    !parsed ||
+    typeof parsed.reply !== "string" ||
+    !Array.isArray(parsed.suggestedActions) ||
+    !Array.isArray(parsed.warnings) ||
+    (parsed.recommendedMode !== "standard" &&
+      parsed.recommendedMode !== "turbo" &&
+      parsed.recommendedMode !== "hold")
+  ) {
+    throw new Error("The model returned an incomplete Algo Controller V2 copilot response.");
+  }
+
+  return {
+    reply: parsed.reply.trim(),
+    suggestedActions: parsed.suggestedActions
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 4),
+    warnings: parsed.warnings
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 4),
+    recommendedMode: parsed.recommendedMode,
     model,
     usage: provider === "gemini" ? parseGeminiUsage(payload) : parseOpenAIUsage(payload),
   };

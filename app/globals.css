@@ -2523,6 +2523,151 @@ main {
   line-height: 1.5;
 }
 
+.algo-v2-copilot {
+  display: grid;
+  gap: 0.95rem;
+  padding: 1rem 1.05rem;
+  border-radius: 22px;
+  border: 1px solid rgba(214, 222, 236, 0.92);
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(250, 252, 255, 0.98), rgba(239, 244, 252, 0.95));
+}
+
+.algo-v2-copilot-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: start;
+}
+
+.algo-v2-copilot-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.algo-v2-copilot-log {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.algo-v2-copilot-message {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.9rem 0.95rem;
+  border-radius: 18px;
+  border: 1px solid rgba(214, 222, 236, 0.92);
+}
+
+.algo-v2-copilot-message.is-assistant {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.algo-v2-copilot-message.is-user {
+  background: rgba(231, 238, 249, 0.82);
+}
+
+.algo-v2-copilot-message p {
+  margin: 0;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.algo-v2-copilot-role {
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.algo-v2-copilot-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.algo-v2-copilot-meta strong {
+  color: #0f172a;
+  text-transform: capitalize;
+}
+
+.algo-v2-copilot-list-block {
+  display: grid;
+  gap: 0.35rem;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.algo-v2-copilot-list-block span {
+  font-weight: 700;
+}
+
+.algo-v2-copilot-list-block.is-warning span {
+  color: #b45309;
+}
+
+.algo-v2-copilot-list {
+  margin: 0;
+  padding-left: 1rem;
+  color: #334155;
+}
+
+.algo-v2-copilot-list li + li {
+  margin-top: 0.2rem;
+}
+
+.algo-v2-copilot-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.algo-v2-copilot-input {
+  min-height: 6.4rem;
+  resize: vertical;
+}
+
+.algo-v2-copilot-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: end;
+}
+
+.algo-v2-copilot-hint {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.algo-v2-copilot-submit {
+  border: none;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #2563eb, #1d4ed8);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  padding: 0.9rem 1.1rem;
+  cursor: pointer;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2);
+}
+
+.algo-v2-copilot-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .brand-lockup {
   display: inline-flex;
   align-items: center;

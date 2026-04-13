@@ -9,13 +9,14 @@ import {
   submitTurboOptionPaperTrade,
 } from "../actions";
 import type { AlpacaTradeController } from "@/lib/alpaca-trade-controller";
-import type { AlpacaBarTimeframe, AlpacaPosition } from "@/lib/alpaca";
+import type { AlpacaBarTimeframe, AlpacaOrder, AlpacaPosition } from "@/lib/alpaca";
 
 type Snapshot = Awaited<ReturnType<typeof getAlpacaAlgoSnapshot>>;
 type TurboOptionCandidatesResult = Awaited<ReturnType<typeof getTurboOptionCandidates>>;
 type ControllerResult = Awaited<ReturnType<typeof runAlpacaTradeController>>;
 type ControllerMode = "standard" | "turbo";
 type Bias = "bearish" | "neutral" | "bullish";
+type CopilotModeRecommendation = "standard" | "turbo" | "hold";
 type GaugeKey = "trend" | "momentum" | "execution" | "timeframeConfluence";
 type MarketLensOffset = -2 | -1 | 0 | 1 | 2;
 type GaugeSubscore = { label: string; score: number };
@@ -59,6 +60,13 @@ type SimpleGaugeCard = {
 type StandardMarketModel = {
   overview: string;
   cards: SimpleGaugeCard[];
+};
+type CopilotMessage = {
+  role: "assistant" | "user";
+  text: string;
+  suggestedActions?: string[];
+  warnings?: string[];
+  recommendedMode?: CopilotModeRecommendation;
 };
 const COMMON_CRYPTO_BASE_SYMBOLS = new Set([
   "BTC",
@@ -1267,12 +1275,16 @@ export function AlgoControllerV2({
   initialSymbol,
   initialControllers,
   initialPositions,
+  initialOpenOrders,
+  initialRecentOrders,
   initialPnl,
   initialError,
 }: {
   initialSymbol: string;
   initialControllers: AlpacaTradeController[];
   initialPositions: AlpacaPosition[];
+  initialOpenOrders: AlpacaOrder[];
+  initialRecentOrders: AlpacaOrder[];
   initialPnl: number;
   initialError: string;
 }) {
@@ -1315,6 +1327,15 @@ export function AlgoControllerV2({
   const [snapshotRefreshKey, setSnapshotRefreshKey] = useState(0);
   const [actionNotice, setActionNotice] = useState("");
   const [isBusy, setIsBusy] = useState(false);
+  const [copilotInput, setCopilotInput] = useState("");
+  const [isCopilotLoading, setIsCopilotLoading] = useState(false);
+  const [copilotMessages, setCopilotMessages] = useState<CopilotMessage[]>([
+    {
+      role: "assistant",
+      text:
+        "Algo Controller V2 copilot is online. Ask why the setup is blocked, whether Standard or Turbo fits better, or what the current gauges are saying.",
+    },
+  ]);
   const normalizedSymbol = canonicalizeMarketSymbol(symbol);
 
   const activeController = useMemo(
@@ -1661,6 +1682,150 @@ export function AlgoControllerV2({
       )}${selectedTurboContract.type === "call" ? "C" : "P"}`
     : "--";
 
+  const copilotContextText = useMemo(() => {
+    const controllerStatus = activeController?.status ?? "UNSET";
+    const primaryPattern = snapshot?.candlestickSignals[0] ?? null;
+    const topContractText = selectedTurboContract
+      ? `${selectedTurboContract.symbol} | fit ${selectedTurboContract.fitScore} | mark ${formatMoney(
+          selectedTurboContract.markPrice,
+        )} | breakeven ${formatMoney(selectedTurboContract.breakevenPrice)}`
+      : "(none selected)";
+    const openOrderSummary =
+      initialOpenOrders.length > 0
+        ? initialOpenOrders
+            .slice(0, 5)
+            .map(
+              (order) =>
+                `${order.symbol} ${order.side} ${order.status} qty ${order.qty ?? "--"} submitted ${order.submittedAt ?? "--"}`,
+            )
+            .join("\n")
+        : "(none)";
+    const recentOrderSummary =
+      initialRecentOrders.length > 0
+        ? initialRecentOrders
+            .slice(0, 5)
+            .map(
+              (order) =>
+                `${order.symbol} ${order.side} ${order.status} filled ${order.filledQty ?? "--"} avg ${order.filledAvgPrice ?? "--"}`,
+            )
+            .join("\n")
+        : "(none)";
+
+    return `Controller mode: ${mode}
+Recommended mode from cockpit: ${standardHandoffReady ? "turbo handoff available" : "no handoff"}
+Symbol: ${normalizedSymbol || "(not set)"}
+Analysis timeframe: ${analysisTimeframe}
+Confluence sensitivity: ${confluenceSensitivity}
+Market lens: ${selectedLensReadout ? `${selectedLensReadout.label} ${selectedLensReadout.timeframe}` : "Base"}
+Bias: ${bias}
+Auto bias: ${autoBiasEnabled ? "on" : "off"}
+Current controller status: ${controllerStatus}
+Displayed session state: ${displayedSessionState}
+Order size target: ${formatNumber(orderQtyValue, isCrypto ? 2 : 0)}
+Current position qty: ${formatNumber(currentQty, isCrypto ? 4 : 0)}
+Current position P&L: ${formatSignedMoney(positionPnl)}
+Snapshot loading: ${isSnapshotLoading ? "yes" : "no"}
+Snapshot error: ${error || "(none)"}
+Action notice: ${actionNotice || "(none)"}
+
+Structural overview:
+${standardMarketModel.overview}
+
+Standard cards:
+${standardMarketModel.cards
+  .map((card) => `${card.label}: ${card.score} ${card.band} | ${card.summary}`)
+  .join("\n")}
+
+Turbo gauges:
+${confluence.gauges
+  .map((gauge) => `${gauge.label}: ${gauge.score} ${gauge.band} | ${gauge.reason}`)
+  .join("\n")}
+
+Overall confluence:
+${displayedOverallScore ?? "--"} ${displayedOverallBand}
+Alignment: ${displayedAlignmentLabel}
+Confluence reason: ${confluenceStatusReason}
+Execution safety lock: ${playLocked ? playLockReason || "locked" : "clear"}
+
+Snapshot telemetry:
+Latest price: ${snapshot ? formatMoney(snapshot.latestPrice) : "--"}
+Price change: ${formatPercent(snapshot?.priceChangePercent ?? null)}
+Relative volume: ${formatRelativeVolume(snapshot?.relativeVolume ?? null)}
+Signal action: ${snapshot?.signal.action ?? "--"}
+Signal freshness: ${formatSignalAge(snapshot?.signalAgeSeconds ?? null)}
+Top candle signal: ${primaryPattern ? `${primaryPattern.name} ${primaryPattern.bias} ${primaryPattern.confidence}%` : "none"}
+Candlestick bias: ${snapshot?.candlestickBias ?? "--"}
+EMA stack summary: ${
+      snapshot?.ema5 && snapshot?.ema9 && snapshot?.ema20
+        ? snapshot.ema5 > snapshot.ema9 && snapshot.ema9 > snapshot.ema20
+          ? "fast bullish"
+          : snapshot.ema5 < snapshot.ema9 && snapshot.ema9 < snapshot.ema20
+            ? "fast bearish"
+            : "mixed"
+        : "--"
+    }
+Distance to EMA 20: ${
+      snapshot?.ema20
+        ? formatSignedPercentValue(((snapshot.latestPrice - snapshot.ema20) / snapshot.ema20) * 100)
+        : "--"
+    }
+
+Turbo contract context:
+Selected contract: ${topContractText}
+Turbo readiness: ${turboFitScore ?? "--"} ${turboFitBand}
+Turbo status: ${turboContractStatus}
+Turbo candidate count: ${turboContracts.length}
+
+Open orders:
+${openOrderSummary}
+
+Recent orders:
+${recentOrderSummary}`;
+  }, [
+    actionNotice,
+    activeController?.status,
+    analysisTimeframe,
+    autoBiasEnabled,
+    bias,
+    confluence.gauges,
+    confluenceStatusReason,
+    confluenceSensitivity,
+    currentQty,
+    displayedAlignmentLabel,
+    displayedOverallBand,
+    displayedOverallScore,
+    displayedSessionState,
+    error,
+    initialOpenOrders,
+    initialRecentOrders,
+    isCrypto,
+    isSnapshotLoading,
+    mode,
+    normalizedSymbol,
+    orderQtyValue,
+    playLockReason,
+    playLocked,
+    positionPnl,
+    selectedLensReadout,
+    selectedTurboContract,
+    snapshot,
+    standardHandoffReady,
+    standardMarketModel.cards,
+    standardMarketModel.overview,
+    turboContractStatus,
+    turboContracts.length,
+    turboFitBand,
+    turboFitScore,
+  ]);
+  const copilotConversationText = useMemo(
+    () =>
+      copilotMessages
+        .slice(-6)
+        .map((message) => `${message.role === "assistant" ? "Assistant" : "User"}: ${message.text}`)
+        .join("\n"),
+    [copilotMessages],
+  );
+
   useEffect(() => {
     if (!autoBiasEnabled || mode !== "turbo") {
       return;
@@ -1842,6 +2007,77 @@ export function AlgoControllerV2({
         setIsBusy(false);
       }
     });
+  }
+
+  async function handleCopilotSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const trimmedInput = copilotInput.trim();
+
+    if (!trimmedInput || isCopilotLoading) {
+      return;
+    }
+
+    const nextUserMessage: CopilotMessage = {
+      role: "user",
+      text: trimmedInput,
+    };
+
+    setCopilotInput("");
+    setCopilotMessages((current) => [...current, nextUserMessage]);
+    setIsCopilotLoading(true);
+
+    try {
+      const response = await fetch("/api/ai/algo-controller-v2", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userMessage: trimmedInput,
+          contextText: copilotContextText,
+          conversationText: copilotConversationText,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        error?: string;
+        reply?: string;
+        suggestedActions?: string[];
+        warnings?: string[];
+        recommendedMode?: CopilotModeRecommendation;
+      };
+
+      if (!response.ok || !payload.reply) {
+        throw new Error(payload.error || "The V2 copilot could not respond right now.");
+      }
+
+      const reply = payload.reply;
+
+      setCopilotMessages((current) => [
+        ...current,
+        {
+          role: "assistant",
+          text: reply,
+          suggestedActions: payload.suggestedActions ?? [],
+          warnings: payload.warnings ?? [],
+          recommendedMode: payload.recommendedMode ?? "hold",
+        },
+      ]);
+    } catch (copilotError) {
+      setCopilotMessages((current) => [
+        ...current,
+        {
+          role: "assistant",
+          text:
+            copilotError instanceof Error
+              ? copilotError.message
+              : "The V2 copilot could not respond right now.",
+        },
+      ]);
+    } finally {
+      setIsCopilotLoading(false);
+    }
   }
 
   return (
@@ -2675,6 +2911,82 @@ export function AlgoControllerV2({
           </div>
           {playLockReason ? <p className="algo-v2-lock-note">{playLockReason}</p> : null}
         </div>
+
+        <section className="algo-v2-copilot">
+          <div className="algo-v2-copilot-header">
+            <div>
+              <p className="algo-v2-meter-label">V2 Copilot</p>
+              <h3 className="algo-v2-mini-title">Explain and recommend from the live cockpit</h3>
+            </div>
+            <span className="algo-v2-copilot-badge">
+              {isCopilotLoading ? "Thinking" : "Explain-only"}
+            </span>
+          </div>
+          <div className="algo-v2-copilot-log">
+            {copilotMessages.map((message, index) => (
+              <article
+                key={`${message.role}-${index}`}
+                className={
+                  message.role === "assistant"
+                    ? "algo-v2-copilot-message is-assistant"
+                    : "algo-v2-copilot-message is-user"
+                }
+              >
+                <span className="algo-v2-copilot-role">
+                  {message.role === "assistant" ? "Copilot" : "You"}
+                </span>
+                <p>{message.text}</p>
+                {message.recommendedMode ? (
+                  <div className="algo-v2-copilot-meta">
+                    <span>Recommended mode</span>
+                    <strong>{message.recommendedMode}</strong>
+                  </div>
+                ) : null}
+                {message.suggestedActions && message.suggestedActions.length > 0 ? (
+                  <div className="algo-v2-copilot-list-block">
+                    <span>Suggested actions</span>
+                    <ul className="algo-v2-copilot-list">
+                      {message.suggestedActions.map((action) => (
+                        <li key={action}>{action}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {message.warnings && message.warnings.length > 0 ? (
+                  <div className="algo-v2-copilot-list-block is-warning">
+                    <span>Warnings</span>
+                    <ul className="algo-v2-copilot-list">
+                      {message.warnings.map((warning) => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </article>
+            ))}
+          </div>
+          <form className="algo-v2-copilot-form" onSubmit={handleCopilotSubmit}>
+            <textarea
+              className="form-input algo-v2-copilot-input"
+              value={copilotInput}
+              onChange={(event) => setCopilotInput(event.target.value)}
+              placeholder="Ask why the setup is blocked, whether Turbo fits here, or what the gauges are saying."
+              rows={3}
+            />
+            <div className="algo-v2-copilot-actions">
+              <p className="algo-v2-copilot-hint">
+                The copilot reads the current V2 state, explains it, and recommends next steps. It does not execute trades.
+              </p>
+              <button
+                type="submit"
+                className="algo-v2-copilot-submit"
+                disabled={isCopilotLoading || !copilotInput.trim()}
+              >
+                {isCopilotLoading ? "Analyzing..." : "Ask Copilot"}
+              </button>
+            </div>
+          </form>
+        </section>
 
         {actionNotice ? <p className="form-help">{actionNotice}</p> : null}
         {error ? <p className="form-error">{error}</p> : null}

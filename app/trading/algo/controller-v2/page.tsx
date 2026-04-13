@@ -72,6 +72,8 @@ export default async function TradingAlgoControllerV2Page({
           initialSymbol={initialSymbol}
           initialControllers={controllers}
           initialPositions={executionState.positions}
+          initialOpenOrders={executionState.openOrders}
+          initialRecentOrders={executionState.recentOrders}
           initialPnl={totalUnrealizedPl}
           initialError={initialError}
         />
