@@ -1711,22 +1711,24 @@ export function AlgoControllerV2({
             .join("\n")
         : "(none)";
 
-    return `Controller mode: ${mode}
-Recommended mode from cockpit: ${standardHandoffReady ? "turbo handoff available" : "no handoff"}
-Symbol: ${normalizedSymbol || "(not set)"}
+    return `Priority cockpit summary:
+Selected ticker: ${normalizedSymbol || "(not set)"}
 Analysis timeframe: ${analysisTimeframe}
-Confluence sensitivity: ${confluenceSensitivity}
-Market lens: ${selectedLensReadout ? `${selectedLensReadout.label} ${selectedLensReadout.timeframe}` : "Base"}
+Controller mode: ${mode}
+Recommended mode from cockpit: ${standardHandoffReady ? "turbo handoff available" : "hold current mode"}
+Overall confluence: ${displayedOverallScore ?? "--"} ${displayedOverallBand}
+Alignment: ${displayedAlignmentLabel}
+Controller status: ${controllerStatus}
+Displayed session state: ${displayedSessionState}
+Execution safety lock: ${playLocked ? playLockReason || "locked" : "clear"}
+Signal action: ${snapshot?.signal.action ?? "--"}
+Latest price: ${snapshot ? formatMoney(snapshot.latestPrice) : "--"}
+Price change: ${formatPercent(snapshot?.priceChangePercent ?? null)}
+Top candle signal: ${primaryPattern ? `${primaryPattern.name} ${primaryPattern.bias} ${primaryPattern.confidence}%` : "none"}
+Candlestick bias: ${snapshot?.candlestickBias ?? "--"}
+Timeframe lens: ${selectedLensReadout ? `${selectedLensReadout.label} ${selectedLensReadout.timeframe}` : "Base"}
 Bias: ${bias}
 Auto bias: ${autoBiasEnabled ? "on" : "off"}
-Current controller status: ${controllerStatus}
-Displayed session state: ${displayedSessionState}
-Order size target: ${formatNumber(orderQtyValue, isCrypto ? 2 : 0)}
-Current position qty: ${formatNumber(currentQty, isCrypto ? 4 : 0)}
-Current position P&L: ${formatSignedMoney(positionPnl)}
-Snapshot loading: ${isSnapshotLoading ? "yes" : "no"}
-Snapshot error: ${error || "(none)"}
-Action notice: ${actionNotice || "(none)"}
 
 Structural overview:
 ${standardMarketModel.overview}
@@ -1745,16 +1747,10 @@ Overall confluence:
 ${displayedOverallScore ?? "--"} ${displayedOverallBand}
 Alignment: ${displayedAlignmentLabel}
 Confluence reason: ${confluenceStatusReason}
-Execution safety lock: ${playLocked ? playLockReason || "locked" : "clear"}
 
 Snapshot telemetry:
-Latest price: ${snapshot ? formatMoney(snapshot.latestPrice) : "--"}
-Price change: ${formatPercent(snapshot?.priceChangePercent ?? null)}
 Relative volume: ${formatRelativeVolume(snapshot?.relativeVolume ?? null)}
-Signal action: ${snapshot?.signal.action ?? "--"}
 Signal freshness: ${formatSignalAge(snapshot?.signalAgeSeconds ?? null)}
-Top candle signal: ${primaryPattern ? `${primaryPattern.name} ${primaryPattern.bias} ${primaryPattern.confidence}%` : "none"}
-Candlestick bias: ${snapshot?.candlestickBias ?? "--"}
 EMA stack summary: ${
       snapshot?.ema5 && snapshot?.ema9 && snapshot?.ema20
         ? snapshot.ema5 > snapshot.ema9 && snapshot.ema9 > snapshot.ema20
@@ -1769,6 +1765,13 @@ Distance to EMA 20: ${
         ? formatSignedPercentValue(((snapshot.latestPrice - snapshot.ema20) / snapshot.ema20) * 100)
         : "--"
     }
+Confluence sensitivity: ${confluenceSensitivity}
+Order size target: ${formatNumber(orderQtyValue, isCrypto ? 2 : 0)}
+Current position qty: ${formatNumber(currentQty, isCrypto ? 4 : 0)}
+Current position P&L: ${formatSignedMoney(positionPnl)}
+Snapshot loading: ${isSnapshotLoading ? "yes" : "no"}
+Snapshot error: ${error || "(none)"}
+Action notice: ${actionNotice || "(none)"}
 
 Turbo contract context:
 Selected contract: ${topContractText}

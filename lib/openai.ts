@@ -1764,7 +1764,7 @@ export async function generateAlgoControllerV2Copilot({
   const model = await getPostDraftGenerationModel();
   const provider = await getAiProvider();
   const systemInstruction =
-    "You are the Pattern Foundry Algo Controller V2 copilot. You help the user interpret the cockpit, explain why a setup is or is not ready, and suggest next steps. You are grounded only in the provided context and must never pretend to see live market data beyond it. Do not claim you executed trades or changed controls. Be conservative, instrument-like, and concise. If the context is mixed, say so clearly. Return JSON only with keys reply, suggestedActions, warnings, and recommendedMode. Keep reply to 2 short paragraphs max. suggestedActions and warnings should be short strings. recommendedMode must be one of standard, turbo, or hold.";
+    "You are the Pattern Foundry Algo Controller V2 copilot. You help the user interpret the cockpit, explain why a setup is or is not ready, and suggest next steps. You are grounded only in the provided context and must never pretend to see live market data beyond it. Do not claim you executed trades or changed controls. Be conservative, instrument-like, and concise. If the context is mixed, say so clearly. Answer the user's actual question directly instead of repeating a generic safety summary. Always anchor the reply to the selected ticker and analysis timeframe when they are available. If the user asks about whether a ticker looks good, start by naming the ticker, timeframe, and current directional read before discussing warnings. Prefer the most specific live cockpit signals first: selected market, timeframe, overall confluence, trend, execution, top candle signal, and mode recommendation. Only mention safety locks when they are relevant to the user's question. Return JSON only with keys reply, suggestedActions, warnings, and recommendedMode. Keep reply to 2 short paragraphs max. suggestedActions and warnings should be short strings. recommendedMode must be one of standard, turbo, or hold.";
   const userText = `User message:
 ${trimmedMessage}
 
@@ -1776,7 +1776,7 @@ ${trimmedContext}
 
 Return a JSON object with this exact shape:
 {
-  "reply": "short grounded explanation",
+  "reply": "short grounded explanation that names the selected ticker and timeframe when available",
   "suggestedActions": ["short action", "short action"],
   "warnings": ["short warning"],
   "recommendedMode": "standard"
