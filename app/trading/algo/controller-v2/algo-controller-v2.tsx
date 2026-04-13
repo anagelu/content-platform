@@ -68,6 +68,17 @@ type CopilotMessage = {
   warnings?: string[];
   recommendedMode?: CopilotModeRecommendation;
 };
+type CopilotContextOptions = {
+  symbol: string;
+  snapshot: Snapshot | null;
+  controller: AlpacaTradeController | null;
+  position: AlpacaPosition | null;
+  confluenceModel: ConfluenceModel;
+  standardModel: StandardMarketModel;
+  lensReadout: LensReadout | null;
+  requestedSymbolInPrompt: string | null;
+  effectiveMode: ControllerMode;
+};
 const COMMON_CRYPTO_BASE_SYMBOLS = new Set([
   "BTC",
   "ETH",
@@ -83,6 +94,59 @@ const COMMON_CRYPTO_BASE_SYMBOLS = new Set([
   "MATIC",
   "AAVE",
   "SHIB",
+]);
+const COPILOT_SYMBOL_STOPWORDS = new Set([
+  "A",
+  "AN",
+  "AND",
+  "ARE",
+  "ASK",
+  "BASE",
+  "BE",
+  "BLOCKED",
+  "CAN",
+  "CHECK",
+  "COCKPIT",
+  "CONFLUENCE",
+  "DO",
+  "FOR",
+  "GAUGE",
+  "GAUGES",
+  "GOOD",
+  "HERE",
+  "HOW",
+  "I",
+  "IN",
+  "IS",
+  "IT",
+  "ITS",
+  "LOOKING",
+  "MARKET",
+  "ME",
+  "MODE",
+  "NOW",
+  "OF",
+  "ON",
+  "OR",
+  "QUESTION",
+  "READ",
+  "RIGHT",
+  "SAYING",
+  "SETUP",
+  "SHOULD",
+  "SIGNAL",
+  "STANDARD",
+  "TELL",
+  "TEXT",
+  "THE",
+  "THIS",
+  "TICKER",
+  "TIMEFRAME",
+  "TO",
+  "TURBO",
+  "V2",
+  "WHAT",
+  "WHY",
 ]);
 const ANALYSIS_TIMEFRAMES: Array<{ value: AlpacaBarTimeframe; label: string }> = [
   { value: "1Min", label: "1 Min" },
@@ -217,6 +281,34 @@ function canonicalizeMarketSymbol(symbol: string) {
   }
 
   return normalized;
+}
+
+function extractRequestedMarketSymbol(message: string) {
+  const tokens = message.match(/[A-Za-z]{1,10}(?:\/[A-Za-z]{2,10})?/g) ?? [];
+
+  for (const token of tokens) {
+    const normalized = canonicalizeMarketSymbol(token);
+
+    if (!normalized) {
+      continue;
+    }
+
+    const base = normalized.split("/")[0] ?? normalized;
+
+    if (COPILOT_SYMBOL_STOPWORDS.has(base)) {
+      continue;
+    }
+
+    if (normalized.includes("/")) {
+      return normalized;
+    }
+
+    if (/^[A-Z]{1,5}$/.test(base)) {
+      return normalized;
+    }
+  }
+
+  return null;
 }
 
 function isCryptoLikeSymbol(symbol: string) {
@@ -1682,9 +1774,40 @@ export function AlgoControllerV2({
       )}${selectedTurboContract.type === "call" ? "C" : "P"}`
     : "--";
 
-  const copilotContextText = useMemo(() => {
-    const controllerStatus = activeController?.status ?? "UNSET";
-    const primaryPattern = snapshot?.candlestickSignals[0] ?? null;
+  function buildCopilotContextText({
+    symbol: contextSymbol,
+    snapshot: contextSnapshot,
+    controller: contextController,
+    position: contextPosition,
+    confluenceModel,
+    standardModel,
+    lensReadout,
+    requestedSymbolInPrompt,
+    effectiveMode,
+  }: CopilotContextOptions) {
+    const controllerStatus = contextController?.status ?? "UNSET";
+    const primaryPattern = contextSnapshot?.candlestickSignals[0] ?? null;
+    const contextCurrentQty = contextSnapshot?.position?.qty ?? contextPosition?.qty ?? 0;
+    const contextPositionPnl =
+      contextSnapshot?.position?.unrealizedPl ?? contextPosition?.unrealizedPl ?? initialPnl;
+    const contextExecutionGauge =
+      confluenceModel.gauges.find((gauge) => gauge.key === "execution") ?? null;
+    const contextDisplayedOverallScore = confluenceModel.isReady ? confluenceModel.overallScore : null;
+    const contextDisplayedOverallBand =
+      contextDisplayedOverallScore === null ? "Unavailable" : getScoreBand(contextDisplayedOverallScore);
+    const contextDisplayedAlignmentLabel = confluenceModel.isReady
+      ? confluenceModel.alignmentLabel
+      : "0 of 0 favorable";
+    const contextDisplayedSessionState = getExecutionStateLabel(
+      contextController?.status ?? "UNSET",
+      Math.abs(contextCurrentQty) > 0,
+    );
+    const contextPlayLockReason =
+      !contextSymbol
+        ? "No symbol is selected."
+        : (contextExecutionGauge?.score ?? 0) < FAVORABLE_GAUGE_THRESHOLD
+          ? "Execution quality is below the safety threshold, so Play stays locked."
+          : "";
     const topContractText = selectedTurboContract
       ? `${selectedTurboContract.symbol} | fit ${selectedTurboContract.fitScore} | mark ${formatMoney(
           selectedTurboContract.markPrice,
@@ -1712,63 +1835,70 @@ export function AlgoControllerV2({
         : "(none)";
 
     return `Priority cockpit summary:
-Selected ticker: ${normalizedSymbol || "(not set)"}
+Selected ticker: ${contextSymbol || "(not set)"}
+Requested ticker from user message: ${requestedSymbolInPrompt || "(none, use cockpit ticker)"}
 Analysis timeframe: ${analysisTimeframe}
-Controller mode: ${mode}
-Recommended mode from cockpit: ${standardHandoffReady ? "turbo handoff available" : "hold current mode"}
-Overall confluence: ${displayedOverallScore ?? "--"} ${displayedOverallBand}
-Alignment: ${displayedAlignmentLabel}
+Controller mode: ${effectiveMode}
+Recommended mode from cockpit: ${
+      contextDisplayedOverallScore !== null && contextDisplayedOverallScore >= FAVORABLE_GAUGE_THRESHOLD
+        ? "turbo handoff available"
+        : "hold current mode"
+    }
+Overall confluence: ${contextDisplayedOverallScore ?? "--"} ${contextDisplayedOverallBand}
+Alignment: ${contextDisplayedAlignmentLabel}
 Controller status: ${controllerStatus}
-Displayed session state: ${displayedSessionState}
-Execution safety lock: ${playLocked ? playLockReason || "locked" : "clear"}
-Signal action: ${snapshot?.signal.action ?? "--"}
-Latest price: ${snapshot ? formatMoney(snapshot.latestPrice) : "--"}
-Price change: ${formatPercent(snapshot?.priceChangePercent ?? null)}
+Displayed session state: ${contextDisplayedSessionState}
+Execution safety lock: ${contextPlayLockReason || "clear"}
+Signal action: ${contextSnapshot?.signal.action ?? "--"}
+Latest price: ${contextSnapshot ? formatMoney(contextSnapshot.latestPrice) : "--"}
+Price change: ${formatPercent(contextSnapshot?.priceChangePercent ?? null)}
 Top candle signal: ${primaryPattern ? `${primaryPattern.name} ${primaryPattern.bias} ${primaryPattern.confidence}%` : "none"}
-Candlestick bias: ${snapshot?.candlestickBias ?? "--"}
-Timeframe lens: ${selectedLensReadout ? `${selectedLensReadout.label} ${selectedLensReadout.timeframe}` : "Base"}
+Candlestick bias: ${contextSnapshot?.candlestickBias ?? "--"}
+Timeframe lens: ${lensReadout ? `${lensReadout.label} ${lensReadout.timeframe}` : "Base"}
 Bias: ${bias}
 Auto bias: ${autoBiasEnabled ? "on" : "off"}
 
 Structural overview:
-${standardMarketModel.overview}
+${standardModel.overview}
 
 Standard cards:
-${standardMarketModel.cards
+${standardModel.cards
   .map((card) => `${card.label}: ${card.score} ${card.band} | ${card.summary}`)
   .join("\n")}
 
 Turbo gauges:
-${confluence.gauges
+${confluenceModel.gauges
   .map((gauge) => `${gauge.label}: ${gauge.score} ${gauge.band} | ${gauge.reason}`)
   .join("\n")}
 
 Overall confluence:
-${displayedOverallScore ?? "--"} ${displayedOverallBand}
-Alignment: ${displayedAlignmentLabel}
-Confluence reason: ${confluenceStatusReason}
+${contextDisplayedOverallScore ?? "--"} ${contextDisplayedOverallBand}
+Alignment: ${contextDisplayedAlignmentLabel}
+Confluence reason: ${confluenceModel.reason}
 
 Snapshot telemetry:
-Relative volume: ${formatRelativeVolume(snapshot?.relativeVolume ?? null)}
-Signal freshness: ${formatSignalAge(snapshot?.signalAgeSeconds ?? null)}
+Relative volume: ${formatRelativeVolume(contextSnapshot?.relativeVolume ?? null)}
+Signal freshness: ${formatSignalAge(contextSnapshot?.signalAgeSeconds ?? null)}
 EMA stack summary: ${
-      snapshot?.ema5 && snapshot?.ema9 && snapshot?.ema20
-        ? snapshot.ema5 > snapshot.ema9 && snapshot.ema9 > snapshot.ema20
+      contextSnapshot?.ema5 && contextSnapshot?.ema9 && contextSnapshot?.ema20
+        ? contextSnapshot.ema5 > contextSnapshot.ema9 && contextSnapshot.ema9 > contextSnapshot.ema20
           ? "fast bullish"
-          : snapshot.ema5 < snapshot.ema9 && snapshot.ema9 < snapshot.ema20
+          : contextSnapshot.ema5 < contextSnapshot.ema9 && contextSnapshot.ema9 < contextSnapshot.ema20
             ? "fast bearish"
             : "mixed"
         : "--"
     }
 Distance to EMA 20: ${
-      snapshot?.ema20
-        ? formatSignedPercentValue(((snapshot.latestPrice - snapshot.ema20) / snapshot.ema20) * 100)
+      contextSnapshot?.ema20
+        ? formatSignedPercentValue(
+            ((contextSnapshot.latestPrice - contextSnapshot.ema20) / contextSnapshot.ema20) * 100,
+          )
         : "--"
     }
 Confluence sensitivity: ${confluenceSensitivity}
 Order size target: ${formatNumber(orderQtyValue, isCrypto ? 2 : 0)}
-Current position qty: ${formatNumber(currentQty, isCrypto ? 4 : 0)}
-Current position P&L: ${formatSignedMoney(positionPnl)}
+Current position qty: ${formatNumber(contextCurrentQty, isCrypto ? 4 : 0)}
+Current position P&L: ${formatSignedMoney(contextPositionPnl)}
 Snapshot loading: ${isSnapshotLoading ? "yes" : "no"}
 Snapshot error: ${error || "(none)"}
 Action notice: ${actionNotice || "(none)"}
@@ -1784,42 +1914,31 @@ ${openOrderSummary}
 
 Recent orders:
 ${recentOrderSummary}`;
-  }, [
-    actionNotice,
-    activeController?.status,
-    analysisTimeframe,
-    autoBiasEnabled,
-    bias,
-    confluence.gauges,
-    confluenceStatusReason,
-    confluenceSensitivity,
-    currentQty,
-    displayedAlignmentLabel,
-    displayedOverallBand,
-    displayedOverallScore,
-    displayedSessionState,
-    error,
-    initialOpenOrders,
-    initialRecentOrders,
-    isCrypto,
-    isSnapshotLoading,
-    mode,
-    normalizedSymbol,
-    orderQtyValue,
-    playLockReason,
-    playLocked,
-    positionPnl,
-    selectedLensReadout,
-    selectedTurboContract,
-    snapshot,
-    standardHandoffReady,
-    standardMarketModel.cards,
-    standardMarketModel.overview,
-    turboContractStatus,
-    turboContracts.length,
-    turboFitBand,
-    turboFitScore,
-  ]);
+  }
+  const copilotContextText = useMemo(
+    () =>
+      buildCopilotContextText({
+        symbol: normalizedSymbol,
+        snapshot,
+        controller: activeController,
+        position: activePosition,
+        confluenceModel: confluence,
+        standardModel: standardMarketModel,
+        lensReadout: selectedLensReadout,
+        requestedSymbolInPrompt: null,
+        effectiveMode: mode,
+      }),
+    [
+      activeController,
+      activePosition,
+      confluence,
+      mode,
+      normalizedSymbol,
+      selectedLensReadout,
+      snapshot,
+      standardMarketModel,
+    ],
+  );
   const copilotConversationText = useMemo(
     () =>
       copilotMessages
@@ -2031,6 +2150,64 @@ ${recentOrderSummary}`;
     setIsCopilotLoading(true);
 
     try {
+      const requestedSymbol = extractRequestedMarketSymbol(trimmedInput);
+      let contextText = copilotContextText;
+
+      if (requestedSymbol && requestedSymbol !== normalizedSymbol) {
+        const overrideController =
+          controllers.find(
+            (controller) => canonicalizeMarketSymbol(controller.symbol) === requestedSymbol,
+          ) ?? null;
+        const overridePosition =
+          positions.find(
+            (position) => canonicalizeMarketSymbol(position.symbol) === requestedSymbol,
+          ) ?? null;
+        const overrideSnapshot = await getAlpacaAlgoSnapshot({
+          symbol: requestedSymbol,
+          strategyType: overrideController?.strategyType ?? "NONE",
+          strategyTimeframe: analysisTimeframe,
+          fastPeriod: overrideController?.fastPeriod ?? 5,
+          slowPeriod: overrideController?.slowPeriod ?? 20,
+          bollingerLength: overrideController?.bollingerLength ?? 20,
+          bollingerStdDev: overrideController?.bollingerStdDev ?? 2,
+          maxNotional: overrideController?.maxNotional ?? 100,
+          maxDailyLoss: overrideController?.maxDailyLoss ?? 25,
+        });
+        const overrideConfluence = buildConfluenceModel({
+          snapshot: overrideSnapshot,
+          isCrypto: isCryptoLikeSymbol(requestedSymbol),
+          sensitivity: confluenceSensitivity,
+        });
+        const overrideTimeframeGauge =
+          overrideConfluence.gauges.find((gauge) => gauge.key === "timeframeConfluence") ?? null;
+        const overrideLensReadout =
+          overrideTimeframeGauge?.lensReadouts?.find((readout) => readout.offset === marketLens) ??
+          null;
+        const overrideStandardBase = buildStandardMarketModel(overrideSnapshot);
+        const overrideTimeframeCard = buildStandardTimeframeCard({
+          gauge: overrideTimeframeGauge,
+          selectedLensReadout: overrideLensReadout,
+        });
+        const overrideStandardModel = {
+          ...overrideStandardBase,
+          cards: overrideTimeframeCard
+            ? [...overrideStandardBase.cards, overrideTimeframeCard]
+            : overrideStandardBase.cards,
+        };
+
+        contextText = buildCopilotContextText({
+          symbol: requestedSymbol,
+          snapshot: overrideSnapshot,
+          controller: overrideController,
+          position: overridePosition,
+          confluenceModel: overrideConfluence,
+          standardModel: overrideStandardModel,
+          lensReadout: overrideLensReadout,
+          requestedSymbolInPrompt: requestedSymbol,
+          effectiveMode: mode,
+        });
+      }
+
       const response = await fetch("/api/ai/algo-controller-v2", {
         method: "POST",
         headers: {
@@ -2038,7 +2215,7 @@ ${recentOrderSummary}`;
         },
         body: JSON.stringify({
           userMessage: trimmedInput,
-          contextText: copilotContextText,
+          contextText,
           conversationText: copilotConversationText,
         }),
       });
