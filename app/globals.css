@@ -1285,17 +1285,31 @@ main {
 }
 
 .algo-v2-stage {
+  --algo-v2-border: #e2e8f0;
+  --algo-v2-card-radius: 12px;
+  --algo-v2-control-radius: 8px;
+  --algo-v2-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  --algo-v2-mono:
+    "JetBrains Mono",
+    "Roboto Mono",
+    ui-monospace,
+    "SFMono-Regular",
+    "SF Mono",
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
   display: grid;
   gap: 1rem;
   padding: 1.2rem;
-  border-radius: 28px;
-  border: 1px solid rgba(217, 207, 190, 0.88);
+  border-radius: var(--algo-v2-card-radius);
+  border: 1px solid var(--algo-v2-border);
   background:
     radial-gradient(circle at top left, rgba(69, 124, 255, 0.08), transparent 24%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 240, 232, 0.94));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.84),
-    0 20px 42px rgba(73, 52, 24, 0.08);
+  box-shadow: var(--algo-v2-shadow);
+  font-variant-numeric: tabular-nums;
 }
 
 .algo-v2-topbar {
@@ -1304,9 +1318,10 @@ main {
   gap: 1rem;
   align-items: center;
   padding: 1rem 1.1rem;
-  border-radius: 20px;
-  border: 1px solid rgba(214, 222, 236, 0.9);
+  border-radius: var(--algo-v2-card-radius);
+  border: 1px solid var(--algo-v2-border);
   background: linear-gradient(180deg, rgba(252, 254, 255, 0.98), rgba(240, 245, 252, 0.92));
+  box-shadow: var(--algo-v2-shadow);
 }
 
 .algo-v2-topbar-left,
@@ -1414,9 +1429,12 @@ main {
   color: #6b7280;
   font-size: 0.95rem;
   font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .algo-v2-pnl {
+  font-family: var(--algo-v2-mono);
   font-size: clamp(1.35rem, 2.4vw, 1.85rem);
   line-height: 1;
 }
@@ -1471,6 +1489,7 @@ main {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 1rem;
   align-items: end;
+  font-family: var(--algo-v2-mono);
 }
 
 .algo-v2-field {
@@ -1517,17 +1536,17 @@ main {
   color: #7c4f18;
   font-size: 0.75rem;
   font-weight: 800;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
 .algo-v2-mode-toggle {
   display: inline-flex;
   padding: 0.3rem;
-  border-radius: 18px;
-  border: 1px solid rgba(209, 213, 219, 0.92);
+  border-radius: var(--algo-v2-card-radius);
+  border: 1px solid var(--algo-v2-border);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(241, 245, 249, 0.92));
-  box-shadow: 0 8px 20px rgba(148, 163, 184, 0.12);
+  box-shadow: var(--algo-v2-shadow);
 }
 
 .algo-v2-mode-button {
@@ -1536,7 +1555,7 @@ main {
   gap: 0.55rem;
   padding: 0.82rem 1.4rem;
   border: none;
-  border-radius: 14px;
+  border-radius: var(--algo-v2-control-radius);
   background: transparent;
   color: #374151;
   font: inherit;
@@ -1575,10 +1594,10 @@ main {
 .algo-v2-main-card,
 .algo-v2-side-card {
   padding: 1.25rem 1.3rem;
-  border-radius: 24px;
-  border: 1px solid rgba(214, 222, 236, 0.9);
+  border-radius: var(--algo-v2-card-radius);
+  border: 1px solid var(--algo-v2-border);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 252, 0.92));
-  box-shadow: 0 16px 34px rgba(148, 163, 184, 0.12);
+  box-shadow: var(--algo-v2-shadow);
 }
 
 .algo-v2-panel-heading {
@@ -1630,9 +1649,10 @@ main {
 .algo-v2-confluence-card {
   margin-bottom: 1rem;
   padding: 1rem 1.05rem;
-  border-radius: 20px;
-  border: 1px solid rgba(214, 222, 236, 0.92);
+  border-radius: var(--algo-v2-card-radius);
+  border: 1px solid var(--algo-v2-border);
   background: linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(238, 244, 252, 0.92));
+  box-shadow: var(--algo-v2-shadow);
 }
 
 .algo-v2-confluence-card.is-telemetry {
@@ -1647,6 +1667,7 @@ main {
 }
 
 .algo-v2-confluence-score {
+  font-family: var(--algo-v2-mono);
   font-size: 1.5rem;
   font-weight: 800;
   line-height: 1;
@@ -1658,6 +1679,7 @@ main {
   text-align: right;
   color: #6b7280;
   font-size: 0.86rem;
+  font-family: var(--algo-v2-mono);
 }
 
 .algo-v2-confluence-copy {
@@ -1699,9 +1721,10 @@ main {
 
 .algo-v2-mini-gauge-card {
   padding: 0.9rem 0.95rem;
-  border-radius: 18px;
-  border: 1px solid rgba(214, 222, 236, 0.92);
+  border-radius: var(--algo-v2-card-radius);
+  border: 1px solid var(--algo-v2-border);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(243, 246, 251, 0.92));
+  box-shadow: var(--algo-v2-shadow);
 }
 
 .algo-v2-mini-gauge-card.is-stack {
@@ -1721,6 +1744,7 @@ main {
 
 .algo-v2-mini-gauge-score {
   display: inline-block;
+  font-family: var(--algo-v2-mono);
   font-size: 1.35rem;
   font-weight: 800;
   line-height: 1;
@@ -1730,13 +1754,14 @@ main {
   display: inline-flex;
   align-items: center;
   padding: 0.22rem 0.55rem;
-  border-radius: 999px;
+  border-radius: var(--algo-v2-control-radius);
   background: rgba(226, 232, 240, 0.9);
   color: #475569;
   font-size: 0.72rem;
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
+  font-family: var(--algo-v2-mono);
 }
 
 .algo-v2-gauge-band.is-strong {
@@ -1791,6 +1816,7 @@ main {
   color: #7c4f18;
   font-size: 0.82rem;
   font-weight: 700;
+  font-family: var(--algo-v2-mono);
 }
 
 .algo-v2-gauge-toggle input {
@@ -1835,8 +1861,10 @@ main {
   display: flex;
   justify-content: space-between;
   gap: 0.75rem;
+  align-items: baseline;
   color: #6b7280;
   font-size: 0.88rem;
+  font-family: var(--algo-v2-mono);
 }
 
 .algo-v2-gauge-shell {
@@ -1907,7 +1935,7 @@ main {
 .algo-v2-health-meter-card {
   padding: 0.95rem 1rem;
   margin-bottom: 1rem;
-  border-radius: 18px;
+  border-radius: var(--algo-v2-card-radius);
   background: linear-gradient(180deg, #6b7280, #475569);
   color: #fff;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
@@ -1917,7 +1945,7 @@ main {
   margin: 0 0 0.55rem;
   font-size: 0.82rem;
   font-weight: 800;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
@@ -1976,13 +2004,14 @@ main {
 
 .algo-v2-bias-button {
   padding: 0.82rem 0.9rem;
-  border-radius: 14px;
-  border: 1px solid rgba(209, 213, 219, 0.92);
+  border-radius: var(--algo-v2-control-radius);
+  border: 1px solid var(--algo-v2-border);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 244, 246, 0.92));
   color: #374151;
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: var(--algo-v2-shadow);
 }
 
 .algo-v2-bias-button.is-active.is-bearish {
@@ -2002,9 +2031,10 @@ main {
 
 .algo-v2-slider-card {
   padding: 1rem 1.05rem;
-  border-radius: 18px;
-  border: 1px solid rgba(214, 222, 236, 0.92);
+  border-radius: var(--algo-v2-card-radius);
+  border: 1px solid var(--algo-v2-border);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.92));
+  box-shadow: var(--algo-v2-shadow);
 }
 
 .algo-v2-turbo-overview {
@@ -2017,9 +2047,10 @@ main {
 .algo-v2-turbo-rail-card,
 .algo-v2-turbo-readiness-card {
   padding: 1rem 1.05rem;
-  border-radius: 18px;
-  border: 1px solid rgba(214, 222, 236, 0.92);
+  border-radius: var(--algo-v2-card-radius);
+  border: 1px solid var(--algo-v2-border);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(243, 246, 251, 0.93));
+  box-shadow: var(--algo-v2-shadow);
 }
 
 .algo-v2-turbo-readiness-card .algo-v2-mini-track {
@@ -2034,6 +2065,27 @@ main {
   justify-content: space-between;
   gap: 1rem;
   align-items: baseline;
+}
+
+.algo-v2-slider-header strong,
+.algo-v2-slider-scale span,
+.algo-v2-stat-row strong,
+.algo-v2-mini-list strong,
+.algo-v2-mini-list span,
+.algo-v2-inline-stat {
+  font-family: var(--algo-v2-mono);
+}
+
+.algo-v2-mini-list {
+  line-height: 1.6;
+}
+
+.algo-v2-mini-list span,
+.algo-v2-debug-list span,
+.algo-v2-stat-label,
+.algo-v2-meter-label {
+  display: inline-block;
+  min-width: 120px;
 }
 
 .algo-v2-range {
@@ -2076,7 +2128,7 @@ main {
   font-size: 0.82rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
 }
 
 .algo-v2-turbo-grid {
@@ -2097,9 +2149,10 @@ main {
   padding-top: 0;
   border-top: none;
   padding: 1rem 1.05rem;
-  border-radius: 18px;
-  border: 1px solid rgba(214, 222, 236, 0.92);
+  border-radius: var(--algo-v2-card-radius);
+  border: 1px solid var(--algo-v2-border);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.92));
+  box-shadow: var(--algo-v2-shadow);
 }
 
 .algo-v2-handoff-card {
@@ -2109,7 +2162,7 @@ main {
   align-items: center;
   margin-bottom: 1rem;
   padding: 1rem 1.05rem;
-  border-radius: 18px;
+  border-radius: var(--algo-v2-card-radius);
   border: 1px solid rgba(34, 197, 94, 0.32);
   background: linear-gradient(180deg, rgba(240, 253, 244, 0.98), rgba(220, 252, 231, 0.92));
 }
@@ -2117,7 +2170,7 @@ main {
 .algo-v2-handoff-button {
   padding: 0.8rem 1rem;
   border: none;
-  border-radius: 14px;
+  border-radius: var(--algo-v2-control-radius);
   background: linear-gradient(180deg, #22c55e, #15803d);
   color: #fff;
   font: inherit;
@@ -2334,9 +2387,10 @@ main {
   display: grid;
   gap: 0.18rem;
   padding: 0.9rem 0.95rem;
-  border-radius: 16px;
-  border: 1px solid rgba(203, 213, 225, 0.88);
+  border-radius: var(--algo-v2-card-radius);
+  border: 1px solid var(--algo-v2-border);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 244, 246, 0.92));
+  box-shadow: var(--algo-v2-shadow);
 }
 
 .algo-v2-contract-card.is-primary {
@@ -2352,6 +2406,7 @@ main {
 .algo-v2-contract-card span {
   color: #6b7280;
   font-size: 0.92rem;
+  font-family: var(--algo-v2-mono);
 }
 
 .algo-v2-contract-top {
@@ -2376,7 +2431,7 @@ main {
 .algo-v2-contract-metrics span {
   font-size: 0.78rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
 }
 
 .algo-v2-contract-note {
@@ -2390,7 +2445,7 @@ main {
   margin-top: 0.35rem;
   padding: 0.72rem 0.85rem;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--algo-v2-control-radius);
   background: linear-gradient(180deg, #2563eb, #1d4ed8);
   color: #fff;
   font: inherit;
@@ -2402,7 +2457,7 @@ main {
 .algo-v2-contract-select-button {
   margin-top: 0.45rem;
   padding: 0.68rem 0.85rem;
-  border-radius: 12px;
+  border-radius: var(--algo-v2-control-radius);
   border: 1px solid rgba(59, 130, 246, 0.28);
   background: rgba(255, 255, 255, 0.9);
   color: #1d4ed8;
@@ -2448,7 +2503,7 @@ main {
   align-content: center;
   gap: 0.35rem;
   padding: 0.95rem 1rem;
-  border-radius: 18px;
+  border-radius: var(--algo-v2-card-radius);
   border: 1px solid rgba(148, 163, 184, 0.18);
   background: rgba(15, 23, 42, 0.28);
   color: #f8fafc;
@@ -2476,7 +2531,7 @@ main {
   min-height: 6.8rem;
   padding: 1rem 1.1rem;
   border: none;
-  border-radius: 20px;
+  border-radius: var(--algo-v2-card-radius);
   color: #fff;
   font: inherit;
   text-align: left;
@@ -2506,6 +2561,7 @@ main {
 }
 
 .algo-v2-action-label {
+  font-family: var(--algo-v2-mono);
   font-size: 1.55rem;
   font-weight: 800;
   line-height: 1.05;
