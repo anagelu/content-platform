@@ -4187,6 +4187,10 @@ main {
   min-width: 0;
 }
 
+.book-reader-content {
+  position: relative;
+}
+
 .book-workbench-header {
   margin-bottom: 1rem;
 }
@@ -4413,6 +4417,8 @@ main {
   gap: 1rem;
   align-items: flex-start;
   margin-bottom: 0.9rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid rgba(124, 79, 24, 0.12);
 }
 
 .book-reader-outline-meta {
@@ -4421,13 +4427,6 @@ main {
   justify-items: end;
   color: #6c6257;
   font-size: 0.88rem;
-}
-
-.book-outline-preview {
-  margin: 0 0 1rem;
-  white-space: pre-wrap;
-  font: inherit;
-  color: #3f382f;
 }
 
 .book-reader-nav {
@@ -4452,17 +4451,25 @@ main {
   text-align: left;
   font: inherit;
   cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
 }
 
 .book-reader-nav-meta {
+  margin: 0.1rem 0 0;
   color: #8a7a66;
   font-size: 0.8rem;
   line-height: 1.45;
+  padding-left: 0.2rem;
 }
 
 .book-reader-nav-link:hover {
   text-decoration: none;
   background: #fffaf1;
+  transform: translateX(2px);
 }
 
 .book-reader-nav-link.is-active {
@@ -4474,12 +4481,6 @@ main {
 
 .book-reader-nav-link.is-active .book-reader-nav-meta {
   color: rgba(255, 247, 233, 0.76);
-}
-
-.book-reader-subnav-link {
-  margin-left: 1rem;
-  border-left: 2px solid #ddc8a7;
-  border-radius: 0 14px 14px 0;
 }
 
 .book-subsection-stack {
@@ -4497,8 +4498,8 @@ main {
 
 .book-reader-sequence-bar {
   position: sticky;
-  top: 1rem;
-  z-index: 5;
+  top: 1.25rem;
+  z-index: 12;
   display: flex;
   justify-content: space-between;
   gap: 1rem;
@@ -4507,9 +4508,11 @@ main {
   padding: 0.95rem 1rem;
   border-radius: 18px;
   border: 1px solid #ddc8a7;
-  background: rgba(255, 251, 244, 0.9);
+  background: rgba(255, 251, 244, 0.97);
   backdrop-filter: blur(12px);
-  box-shadow: 0 12px 28px rgba(73, 52, 24, 0.08);
+  box-shadow:
+    0 12px 28px rgba(73, 52, 24, 0.08),
+    0 0 0 1px rgba(255, 255, 255, 0.45);
 }
 
 .book-reader-sequence-actions {
@@ -4690,6 +4693,10 @@ main {
 
   .book-reader-outline {
     position: static;
+  }
+
+  .book-reader-sequence-bar {
+    top: 0.75rem;
   }
 }
 
