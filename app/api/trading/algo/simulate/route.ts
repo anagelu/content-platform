@@ -20,6 +20,7 @@ export async function POST(request: Request) {
       trendThreshold?: number;
       timeframeConfluenceThreshold?: number;
       lookaheadBars?: number;
+      stopLossPercent?: number;
     };
 
     const credentials = await getUserAlpacaCredentials(Number(session.user.id));
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
       trendThreshold: body.trendThreshold,
       timeframeConfluenceThreshold: body.timeframeConfluenceThreshold,
       lookaheadBars: body.lookaheadBars,
+      stopLossPercent: body.stopLossPercent,
       credentials,
     });
 

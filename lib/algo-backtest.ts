@@ -62,6 +62,8 @@ export type AlgoBacktestTrade = {
   returnPercent: number;
   maxDrawdownPercent: number;
   barsHeld: number;
+  exitReason: "time" | "stop";
+  stopLossPercent: number;
   trendScore: number;
   timeframeConfluenceScore: number;
   overallScore: number;
@@ -87,9 +89,12 @@ export type AlgoBacktestReport = {
     timeframeConfluence: number;
   };
   lookaheadBars: number;
+  stopLossPercent: number;
   topSetups: AlgoBacktestTrade[];
   worstSetups: AlgoBacktestTrade[];
 };
+
+const DEFAULT_STOP_LOSS_PERCENT = 1;
 
 const FAVORABLE_GAUGE_THRESHOLD = 61;
 const STRONG_GAUGE_THRESHOLD = 81;
@@ -808,6 +813,7 @@ export async function runAlgoBacktest({
   trendThreshold = 70,
   timeframeConfluenceThreshold = 60,
   lookaheadBars = 60,
+  stopLossPercent = DEFAULT_STOP_LOSS_PERCENT,
   sensitivity = 50,
   credentials,
 }: {
@@ -818,6 +824,7 @@ export async function runAlgoBacktest({
   trendThreshold?: number;
   timeframeConfluenceThreshold?: number;
   lookaheadBars?: number;
+  stopLossPercent?: number;
   sensitivity?: number;
   credentials: AlpacaCredentials;
 }): Promise<AlgoBacktestReport> {
@@ -836,6 +843,10 @@ export async function runAlgoBacktest({
 
   if (start > end) {
     throw new Error("Start date must be on or before the end date.");
+  }
+
+  if (!Number.isFinite(stopLossPercent) || stopLossPercent <= 0) {
+    throw new Error("Stop loss must be greater than 0.");
   }
 
   const isCrypto = isAlpacaCryptoSymbol(normalizedSymbol);
@@ -871,20 +882,37 @@ export async function runAlgoBacktest({
     }
 
     const entryBar = bars[index];
-    const exitBar = future.at(-1) ?? future[0];
     const entryPrice = entryBar.close;
-    const exitPrice = exitBar.close;
-    const minFutureLow = Math.min(...future.map((bar) => bar.low));
+    const stopPrice = entryPrice * (1 - stopLossPercent / 100);
+    let exitPrice = (future.at(-1) ?? future[0]).close;
+    let barsHeld = future.length;
+    let exitReason: AlgoBacktestTrade["exitReason"] = "time";
+    let minObservedLow = entryPrice;
+
+    for (let futureIndex = 0; futureIndex < future.length; futureIndex += 1) {
+      const futureBar = future[futureIndex];
+      minObservedLow = Math.min(minObservedLow, futureBar.low);
+
+      if (futureBar.low <= stopPrice) {
+        exitPrice = stopPrice;
+        barsHeld = futureIndex + 1;
+        exitReason = "stop";
+        break;
+      }
+    }
+
     const returnPercent = ((exitPrice - entryPrice) / entryPrice) * 100;
-    const maxDrawdownPercent = ((minFutureLow - entryPrice) / entryPrice) * 100;
+    const maxDrawdownPercent = ((minObservedLow - entryPrice) / entryPrice) * 100;
 
     trades.push({
       timestamp: entryBar.timestamp,
-      entryPrice,
-      exitPrice,
+      entryPrice: Number(entryPrice.toFixed(2)),
+      exitPrice: Number(exitPrice.toFixed(2)),
       returnPercent: Number(returnPercent.toFixed(2)),
       maxDrawdownPercent: Number(maxDrawdownPercent.toFixed(2)),
-      barsHeld: future.length,
+      barsHeld,
+      exitReason,
+      stopLossPercent: Number(stopLossPercent.toFixed(2)),
       trendScore,
       timeframeConfluenceScore: timeframeScore,
       overallScore: confluence.overallScore,
@@ -924,6 +952,7 @@ export async function runAlgoBacktest({
       timeframeConfluence: timeframeConfluenceThreshold,
     },
     lookaheadBars,
+    stopLossPercent: Number(stopLossPercent.toFixed(2)),
     topSetups: [...trades].sort((a, b) => b.returnPercent - a.returnPercent).slice(0, 5),
     worstSetups: [...trades].sort((a, b) => a.returnPercent - b.returnPercent).slice(0, 5),
   };

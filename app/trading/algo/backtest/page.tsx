@@ -66,6 +66,7 @@ export default async function AlgoBacktestPage({
     trend?: string;
     timeframeConfluence?: string;
     lookaheadBars?: string;
+    stopLoss?: string;
   }>;
 }) {
   const session = await auth();
@@ -84,6 +85,7 @@ export default async function AlgoBacktestPage({
   const trendThreshold = Number(params?.trend || "70");
   const timeframeConfluenceThreshold = Number(params?.timeframeConfluence || "60");
   const lookaheadBars = Number(params?.lookaheadBars || "60");
+  const stopLossPercent = Number(params?.stopLoss || "1");
 
   let report:
     | Awaited<ReturnType<typeof runAlgoBacktest>>
@@ -101,6 +103,7 @@ export default async function AlgoBacktestPage({
         trendThreshold,
         timeframeConfluenceThreshold,
         lookaheadBars,
+        stopLossPercent,
         credentials,
       });
     } catch (backtestError) {
@@ -193,6 +196,18 @@ export default async function AlgoBacktestPage({
                   defaultValue={lookaheadBars}
                 />
               </label>
+              <label className="ekub-field">
+                <span className="site-sidebar-label">Stop Loss %</span>
+                <input
+                  type="number"
+                  name="stopLoss"
+                  className="form-input"
+                  min="0.1"
+                  max="100"
+                  step="0.1"
+                  defaultValue={stopLossPercent}
+                />
+              </label>
             </div>
 
             <div className="toolbar" style={{ marginBottom: 0 }}>
@@ -217,7 +232,7 @@ export default async function AlgoBacktestPage({
               </h2>
               <p className="meta">
                 {report.startDate} to {report.endDate} · Trend &gt; {report.thresholds.trend} ·
-                Timeframe Confluence &gt; {report.thresholds.timeframeConfluence} · {report.lookaheadBars} bars held
+                Timeframe Confluence &gt; {report.thresholds.timeframeConfluence} · Stop {formatPercent(report.stopLossPercent)} · {report.lookaheadBars} bars max hold
               </p>
 
               <div className="trading-metric-row" style={{ marginTop: "1rem" }}>
@@ -260,7 +275,7 @@ export default async function AlgoBacktestPage({
                         <div>
                           <strong>{formatTimestamp(trade.timestamp)}</strong>
                           <p className="meta">
-                            Entry {formatMoney(trade.entryPrice)} · Exit {formatMoney(trade.exitPrice)} · Trend {trade.trendScore} · TF {trade.timeframeConfluenceScore}
+                            Entry {formatMoney(trade.entryPrice)} · Exit {formatMoney(trade.exitPrice)} · {trade.exitReason === "stop" ? "Stopped" : "Timed exit"} · Trend {trade.trendScore} · TF {trade.timeframeConfluenceScore}
                           </p>
                         </div>
                         <strong style={{ color: "#166534" }}>{formatPercent(trade.returnPercent)}</strong>
@@ -281,7 +296,7 @@ export default async function AlgoBacktestPage({
                         <div>
                           <strong>{formatTimestamp(trade.timestamp)}</strong>
                           <p className="meta">
-                            Entry {formatMoney(trade.entryPrice)} · Exit {formatMoney(trade.exitPrice)} · Max DD {formatPercent(trade.maxDrawdownPercent)}
+                            Entry {formatMoney(trade.entryPrice)} · Exit {formatMoney(trade.exitPrice)} · {trade.exitReason === "stop" ? "Stopped" : "Timed exit"} · Max DD {formatPercent(trade.maxDrawdownPercent)}
                           </p>
                         </div>
                         <strong style={{ color: "#b91c1c" }}>{formatPercent(trade.returnPercent)}</strong>
