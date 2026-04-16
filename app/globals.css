@@ -3298,6 +3298,158 @@ main {
   gap: 0.75rem;
 }
 
+.ekub-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.ekub-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.ekub-group-card,
+.ekub-cycle-highlight,
+.ekub-form-stack,
+.ekub-list {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.ekub-card-header,
+.ekub-progress-meta,
+.ekub-list-row,
+.ekub-inline-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.ekub-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.95rem;
+}
+
+.ekub-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.ekub-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.ekub-metric-grid div {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.9rem 0.95rem;
+  border-radius: 16px;
+  border: 1px solid rgba(202, 165, 111, 0.22);
+  background: rgba(255, 251, 244, 0.84);
+}
+
+.ekub-metric-grid span {
+  color: #7c4f18;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.ekub-metric-grid strong {
+  font-size: 1.05rem;
+  line-height: 1.2;
+}
+
+.ekub-progress-stack {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.ekub-progress-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(31, 27, 22, 0.08);
+  overflow: hidden;
+}
+
+.ekub-progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7c4f18, #d69c4d);
+}
+
+.ekub-list-row {
+  padding: 0.95rem 1rem;
+  border-radius: 16px;
+  border: 1px solid rgba(202, 165, 111, 0.24);
+  background: rgba(255, 251, 244, 0.8);
+}
+
+.ekub-list-link {
+  color: inherit;
+  text-decoration: none;
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    border-color 140ms ease;
+}
+
+.ekub-list-link:hover {
+  text-decoration: none;
+  transform: translateY(-1px);
+  border-color: #caa56f;
+  box-shadow: 0 12px 24px rgba(73, 52, 24, 0.08);
+}
+
+.ekub-inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.ekub-inline-form .form-input {
+  min-width: 110px;
+}
+
+.ekub-contribution-form {
+  align-items: center;
+}
+
+@media (max-width: 980px) {
+  .ekub-card-grid,
+  .ekub-dashboard-grid,
+  .ekub-form-grid,
+  .ekub-metric-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .ekub-card-header,
+  .ekub-progress-meta,
+  .ekub-list-row,
+  .ekub-inline-toolbar,
+  .ekub-inline-form {
+    flex-direction: column;
+  }
+
+  .ekub-inline-form {
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+}
+
 .pipeline-score-row {
   display: flex;
   flex-wrap: wrap;

@@ -24,6 +24,27 @@ enum TradeOutcome {
   INVALIDATED
 }
 
+enum EkubCycleFrequency {
+  WEEKLY
+  MONTHLY
+}
+
+enum EkubPayoutMethod {
+  FIXED_ROTATION
+  RANDOM_DRAW
+}
+
+enum EkubParticipantStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum EkubCycleStatus {
+  UPCOMING
+  OPEN
+  COMPLETED
+}
+
 model User {
   id                   Int              @id @default(autoincrement())
   name                 String?
@@ -49,6 +70,7 @@ model User {
   contentDerivatives ContentDerivative[]
   patentRecords PatentRecord[]
   books                Book[]
+  ekubGroups           EkubGroup[]
 }
 
 model Post {
@@ -218,4 +240,103 @@ model BookSection {
 
   parentSection BookSection?  @relation("BookSectionChildren", fields: [parentSectionId], references: [id], onDelete: Cascade)
   subsections   BookSection[] @relation("BookSectionChildren")
+}
+
+model EkubGroup {
+  id                    Int                @id @default(autoincrement())
+  name                  String
+  description           String?
+  contributionAmount    Float
+  cycleFrequency        EkubCycleFrequency
+  maxParticipants       Int
+  payoutMethod          EkubPayoutMethod
+  reputationScore       Float?
+  reserveLogic          String?
+  feeLogic              String?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @default(now()) @updatedAt
+
+  ownerId               Int
+  owner                 User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  participants          EkubParticipant[]
+  cycles                EkubCycle[]
+}
+
+model EkubParticipant {
+  id                    Int                   @id @default(autoincrement())
+  name                  String
+  email                 String?
+  status                EkubParticipantStatus @default(ACTIVE)
+  rotationOrder         Int?
+  reputationScore       Float?
+  walletAddress         String?
+  notes                 String?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @default(now()) @updatedAt
+
+  groupId               Int
+  group                 EkubGroup             @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  contributions         EkubContribution[]
+  wonCycles             EkubCycle[]           @relation("EkubCycleRecipient")
+  payouts               EkubPayout[]          @relation("EkubPayoutRecipient")
+
+  @@unique([groupId, rotationOrder])
+}
+
+model EkubCycle {
+  id                         Int             @id @default(autoincrement())
+  cycleNumber                Int
+  dueDate                    DateTime
+  totalExpectedContribution  Float
+  totalCollected             Float           @default(0)
+  status                     EkubCycleStatus @default(UPCOMING)
+  recipientParticipantId     Int?
+  drawRunAt                  DateTime?
+  createdAt                  DateTime        @default(now())
+  updatedAt                  DateTime        @default(now()) @updatedAt
+
+  groupId                    Int
+  group                      EkubGroup       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  recipient                  EkubParticipant? @relation("EkubCycleRecipient", fields: [recipientParticipantId], references: [id], onDelete: SetNull)
+  contributions              EkubContribution[]
+  payout                     EkubPayout?
+
+  @@unique([groupId, cycleNumber])
+}
+
+model EkubContribution {
+  id                 Int             @id @default(autoincrement())
+  amountPaid         Float           @default(0)
+  paidAt             DateTime?
+  isPaid             Boolean         @default(false)
+  notes              String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @default(now()) @updatedAt
+
+  cycleId            Int
+  cycle              EkubCycle       @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  participantId      Int
+  participant        EkubParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([cycleId, participantId])
+}
+
+model EkubPayout {
+  id                    Int             @id @default(autoincrement())
+  amountPaidOut         Float
+  payoutDate            DateTime
+  notes                 String?
+  transactionHash       String?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @default(now()) @updatedAt
+
+  cycleId               Int             @unique
+  cycle                 EkubCycle       @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  recipientParticipantId Int
+  recipient             EkubParticipant @relation("EkubPayoutRecipient", fields: [recipientParticipantId], references: [id], onDelete: Restrict)
 }

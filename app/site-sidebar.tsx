@@ -33,6 +33,7 @@ const primarySections: NavSection[] = [
 
 const secondaryItems: NavItem[] = [
   { href: "/books", label: "Books", hint: "manuscripts" },
+  { href: "/ekub", label: "Ekub", hint: "cycles" },
   { href: "/search", label: "Search", hint: "finder" },
   { href: "/trading", label: "Trading", hint: "markets" },
   { href: "/categories", label: "Categories", hint: "taxonomy" },
@@ -54,6 +55,15 @@ const contextualSections: Array<{
       { href: "/books", label: "All Books", hint: "library", exact: true },
       { href: "/books/new", label: "New Book", hint: "start" },
       { href: "/posts/new", label: "New Post", hint: "spin out" },
+    ],
+  },
+  {
+    match: (pathname) => pathname.startsWith("/ekub"),
+    title: "Ekub",
+    description: "Small-group rotating contribution pools with simple cycle tracking.",
+    items: [
+      { href: "/ekub", label: "All Groups", hint: "overview", exact: true },
+      { href: "/ekub/new", label: "New Group", hint: "start" },
     ],
   },
   {
