@@ -771,10 +771,14 @@ export async function getStockBars(
     timeframe,
     limit,
     feed = process.env.ALPACA_DATA_FEED?.trim() || "iex",
+    start,
+    end,
   }: {
     timeframe: AlpacaBarTimeframe;
     limit: number;
     feed?: string;
+    start?: string | Date;
+    end?: string | Date;
   },
   credentials = getAlpacaCredentials(),
 ): Promise<AlpacaBar[]> {
@@ -784,6 +788,14 @@ export async function getStockBars(
   url.searchParams.set("timeframe", timeframe);
   url.searchParams.set("limit", String(limit));
   url.searchParams.set("feed", feed);
+
+  if (start) {
+    url.searchParams.set("start", start instanceof Date ? start.toISOString() : start);
+  }
+
+  if (end) {
+    url.searchParams.set("end", end instanceof Date ? end.toISOString() : end);
+  }
 
   const payload = await createAlpacaRequest<{
     bars?: Record<string, JsonRecord[]>;
@@ -801,9 +813,13 @@ export async function getCryptoBars(
   {
     timeframe,
     limit,
+    start,
+    end,
   }: {
     timeframe: AlpacaBarTimeframe;
     limit: number;
+    start?: string | Date;
+    end?: string | Date;
   },
   credentials = getAlpacaCredentials(),
 ): Promise<AlpacaBar[]> {
@@ -812,6 +828,14 @@ export async function getCryptoBars(
   url.searchParams.set("symbols", normalizedSymbol);
   url.searchParams.set("timeframe", timeframe);
   url.searchParams.set("limit", String(limit));
+
+  if (start) {
+    url.searchParams.set("start", start instanceof Date ? start.toISOString() : start);
+  }
+
+  if (end) {
+    url.searchParams.set("end", end instanceof Date ? end.toISOString() : end);
+  }
 
   const payload = await createAlpacaRequest<{
     bars?: Record<string, JsonRecord[]>;

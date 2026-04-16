@@ -154,6 +154,9 @@ export default async function TradingAlgoPage({
           <Link href="/trading/algo/controller-v2" className="button-link">
             Open Controller V2
           </Link>
+          <Link href="/trading/algo/backtest" className="button-link secondary">
+            Backtest
+          </Link>
           <Link href="/trading/algo/radar" className="button-link secondary">
             Open Radar
           </Link>

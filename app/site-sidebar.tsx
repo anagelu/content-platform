@@ -78,6 +78,7 @@ const contextualSections: Array<{
       { href: "/trading/screener", label: "Screener", hint: "scan" },
       { href: "/trading/tools", label: "Tools", hint: "readers" },
       { href: "/trading/algo", label: "Algo", hint: "automation" },
+      { href: "/trading/algo/backtest", label: "Backtest", hint: "historical" },
       { href: "/trading/algo/radar", label: "Radar", hint: "detectors" },
       { href: "/trading/algo/controller-v2", label: "Algo V2", hint: "experimental" },
       { href: "/trading/recommendations", label: "Recommendations", hint: "ideas" },
