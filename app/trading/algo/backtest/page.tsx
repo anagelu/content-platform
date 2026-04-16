@@ -45,6 +45,18 @@ function formatTimestamp(value: string) {
   }).format(new Date(value));
 }
 
+function getExitLabel(exitReason: "time" | "stop" | "target") {
+  if (exitReason === "stop") {
+    return "Stopped";
+  }
+
+  if (exitReason === "target") {
+    return "Target hit";
+  }
+
+  return "Timed exit";
+}
+
 function getDefaultStartDate() {
   const date = new Date();
   date.setDate(date.getDate() - 30);
@@ -67,6 +79,7 @@ export default async function AlgoBacktestPage({
     timeframeConfluence?: string;
     lookaheadBars?: string;
     stopLoss?: string;
+    profitTarget?: string;
   }>;
 }) {
   const session = await auth();
@@ -86,6 +99,7 @@ export default async function AlgoBacktestPage({
   const timeframeConfluenceThreshold = Number(params?.timeframeConfluence || "60");
   const lookaheadBars = Number(params?.lookaheadBars || "60");
   const stopLossPercent = Number(params?.stopLoss || "1");
+  const profitTargetPercent = Number(params?.profitTarget || "1");
 
   let report:
     | Awaited<ReturnType<typeof runAlgoBacktest>>
@@ -104,6 +118,7 @@ export default async function AlgoBacktestPage({
         timeframeConfluenceThreshold,
         lookaheadBars,
         stopLossPercent,
+        profitTargetPercent,
         credentials,
       });
     } catch (backtestError) {
@@ -208,6 +223,18 @@ export default async function AlgoBacktestPage({
                   defaultValue={stopLossPercent}
                 />
               </label>
+              <label className="ekub-field">
+                <span className="site-sidebar-label">Profit Target %</span>
+                <input
+                  type="number"
+                  name="profitTarget"
+                  className="form-input"
+                  min="0.1"
+                  max="100"
+                  step="0.1"
+                  defaultValue={profitTargetPercent}
+                />
+              </label>
             </div>
 
             <div className="toolbar" style={{ marginBottom: 0 }}>
@@ -232,7 +259,7 @@ export default async function AlgoBacktestPage({
               </h2>
               <p className="meta">
                 {report.startDate} to {report.endDate} · Trend &gt; {report.thresholds.trend} ·
-                Timeframe Confluence &gt; {report.thresholds.timeframeConfluence} · Stop {formatPercent(report.stopLossPercent)} · {report.lookaheadBars} bars max hold
+                Timeframe Confluence &gt; {report.thresholds.timeframeConfluence} · Stop {formatPercent(report.stopLossPercent)} · Target {formatPercent(report.profitTargetPercent)} · {report.lookaheadBars} bars max hold
               </p>
 
               <div className="trading-metric-row" style={{ marginTop: "1rem" }}>
@@ -275,7 +302,7 @@ export default async function AlgoBacktestPage({
                         <div>
                           <strong>{formatTimestamp(trade.timestamp)}</strong>
                           <p className="meta">
-                            Entry {formatMoney(trade.entryPrice)} · Exit {formatMoney(trade.exitPrice)} · {trade.exitReason === "stop" ? "Stopped" : "Timed exit"} · Trend {trade.trendScore} · TF {trade.timeframeConfluenceScore}
+                            Entry {formatMoney(trade.entryPrice)} · Exit {formatMoney(trade.exitPrice)} · {getExitLabel(trade.exitReason)} · Trend {trade.trendScore} · TF {trade.timeframeConfluenceScore}
                           </p>
                         </div>
                         <strong style={{ color: "#166534" }}>{formatPercent(trade.returnPercent)}</strong>
@@ -296,7 +323,7 @@ export default async function AlgoBacktestPage({
                         <div>
                           <strong>{formatTimestamp(trade.timestamp)}</strong>
                           <p className="meta">
-                            Entry {formatMoney(trade.entryPrice)} · Exit {formatMoney(trade.exitPrice)} · {trade.exitReason === "stop" ? "Stopped" : "Timed exit"} · Max DD {formatPercent(trade.maxDrawdownPercent)}
+                            Entry {formatMoney(trade.entryPrice)} · Exit {formatMoney(trade.exitPrice)} · {getExitLabel(trade.exitReason)} · Max DD {formatPercent(trade.maxDrawdownPercent)}
                           </p>
                         </div>
                         <strong style={{ color: "#b91c1c" }}>{formatPercent(trade.returnPercent)}</strong>

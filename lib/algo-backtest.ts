@@ -62,8 +62,9 @@ export type AlgoBacktestTrade = {
   returnPercent: number;
   maxDrawdownPercent: number;
   barsHeld: number;
-  exitReason: "time" | "stop";
+  exitReason: "time" | "stop" | "target";
   stopLossPercent: number;
+  profitTargetPercent: number;
   trendScore: number;
   timeframeConfluenceScore: number;
   overallScore: number;
@@ -90,11 +91,13 @@ export type AlgoBacktestReport = {
   };
   lookaheadBars: number;
   stopLossPercent: number;
+  profitTargetPercent: number;
   topSetups: AlgoBacktestTrade[];
   worstSetups: AlgoBacktestTrade[];
 };
 
 const DEFAULT_STOP_LOSS_PERCENT = 1;
+const DEFAULT_PROFIT_TARGET_PERCENT = 1;
 
 const FAVORABLE_GAUGE_THRESHOLD = 61;
 const STRONG_GAUGE_THRESHOLD = 81;
@@ -814,6 +817,7 @@ export async function runAlgoBacktest({
   timeframeConfluenceThreshold = 60,
   lookaheadBars = 60,
   stopLossPercent = DEFAULT_STOP_LOSS_PERCENT,
+  profitTargetPercent = DEFAULT_PROFIT_TARGET_PERCENT,
   sensitivity = 50,
   credentials,
 }: {
@@ -825,6 +829,7 @@ export async function runAlgoBacktest({
   timeframeConfluenceThreshold?: number;
   lookaheadBars?: number;
   stopLossPercent?: number;
+  profitTargetPercent?: number;
   sensitivity?: number;
   credentials: AlpacaCredentials;
 }): Promise<AlgoBacktestReport> {
@@ -847,6 +852,10 @@ export async function runAlgoBacktest({
 
   if (!Number.isFinite(stopLossPercent) || stopLossPercent <= 0) {
     throw new Error("Stop loss must be greater than 0.");
+  }
+
+  if (!Number.isFinite(profitTargetPercent) || profitTargetPercent <= 0) {
+    throw new Error("Profit target must be greater than 0.");
   }
 
   const isCrypto = isAlpacaCryptoSymbol(normalizedSymbol);
@@ -884,6 +893,7 @@ export async function runAlgoBacktest({
     const entryBar = bars[index];
     const entryPrice = entryBar.close;
     const stopPrice = entryPrice * (1 - stopLossPercent / 100);
+    const targetPrice = entryPrice * (1 + profitTargetPercent / 100);
     let exitPrice = (future.at(-1) ?? future[0]).close;
     let barsHeld = future.length;
     let exitReason: AlgoBacktestTrade["exitReason"] = "time";
@@ -897,6 +907,13 @@ export async function runAlgoBacktest({
         exitPrice = stopPrice;
         barsHeld = futureIndex + 1;
         exitReason = "stop";
+        break;
+      }
+
+      if (futureBar.high >= targetPrice) {
+        exitPrice = targetPrice;
+        barsHeld = futureIndex + 1;
+        exitReason = "target";
         break;
       }
     }
@@ -913,6 +930,7 @@ export async function runAlgoBacktest({
       barsHeld,
       exitReason,
       stopLossPercent: Number(stopLossPercent.toFixed(2)),
+      profitTargetPercent: Number(profitTargetPercent.toFixed(2)),
       trendScore,
       timeframeConfluenceScore: timeframeScore,
       overallScore: confluence.overallScore,
@@ -953,6 +971,7 @@ export async function runAlgoBacktest({
     },
     lookaheadBars,
     stopLossPercent: Number(stopLossPercent.toFixed(2)),
+    profitTargetPercent: Number(profitTargetPercent.toFixed(2)),
     topSetups: [...trades].sort((a, b) => b.returnPercent - a.returnPercent).slice(0, 5),
     worstSetups: [...trades].sort((a, b) => a.returnPercent - b.returnPercent).slice(0, 5),
   };
