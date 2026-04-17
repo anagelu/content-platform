@@ -55,6 +55,8 @@ type GaugeResult = {
   lensReadouts?: LensReadout[];
 };
 
+export type AlgoBacktestSensitivityProfile = "fast" | "balanced" | "strict";
+
 export type AlgoBacktestTrade = {
   timestamp: string;
   entryPrice: number;
@@ -73,6 +75,8 @@ export type AlgoBacktestTrade = {
 export type AlgoBacktestReport = {
   symbol: string;
   timeframe: AlpacaBarTimeframe;
+  sensitivityProfile: AlgoBacktestSensitivityProfile;
+  sensitivityValue: number;
   startDate: string;
   endDate: string;
   barCount: number;
@@ -98,6 +102,31 @@ export type AlgoBacktestReport = {
 
 const DEFAULT_STOP_LOSS_PERCENT = 1;
 const DEFAULT_PROFIT_TARGET_PERCENT = 1;
+const DEFAULT_SENSITIVITY_PROFILE: AlgoBacktestSensitivityProfile = "balanced";
+
+function resolveBacktestSensitivity(
+  profile: AlgoBacktestSensitivityProfile,
+  requestedTrendThreshold: number,
+) {
+  if (profile === "fast") {
+    return {
+      sensitivityValue: 20,
+      effectiveTrendThreshold: Math.min(requestedTrendThreshold, 40),
+    };
+  }
+
+  if (profile === "strict") {
+    return {
+      sensitivityValue: 80,
+      effectiveTrendThreshold: Math.max(requestedTrendThreshold, 75),
+    };
+  }
+
+  return {
+    sensitivityValue: 50,
+    effectiveTrendThreshold: requestedTrendThreshold,
+  };
+}
 
 const FAVORABLE_GAUGE_THRESHOLD = 61;
 const STRONG_GAUGE_THRESHOLD = 81;
@@ -818,7 +847,7 @@ export async function runAlgoBacktest({
   lookaheadBars = 60,
   stopLossPercent = DEFAULT_STOP_LOSS_PERCENT,
   profitTargetPercent = DEFAULT_PROFIT_TARGET_PERCENT,
-  sensitivity = 50,
+  sensitivityProfile = DEFAULT_SENSITIVITY_PROFILE,
   credentials,
 }: {
   symbol: string;
@@ -830,7 +859,7 @@ export async function runAlgoBacktest({
   lookaheadBars?: number;
   stopLossPercent?: number;
   profitTargetPercent?: number;
-  sensitivity?: number;
+  sensitivityProfile?: AlgoBacktestSensitivityProfile;
   credentials: AlpacaCredentials;
 }): Promise<AlgoBacktestReport> {
   const normalizedSymbol = normalizeAlpacaTradingSymbol(symbol);
@@ -858,6 +887,11 @@ export async function runAlgoBacktest({
     throw new Error("Profit target must be greater than 0.");
   }
 
+  const { sensitivityValue, effectiveTrendThreshold } = resolveBacktestSensitivity(
+    sensitivityProfile,
+    trendThreshold,
+  );
+
   const isCrypto = isAlpacaCryptoSymbol(normalizedSymbol);
   const bars = (
     isCrypto
@@ -881,12 +915,12 @@ export async function runAlgoBacktest({
     }
 
     const snapshot = buildHistoricalSnapshot(normalizedSymbol, timeframe, history);
-    const confluence = buildConfluenceModel(snapshot, sensitivity);
+    const confluence = buildConfluenceModel(snapshot, sensitivityValue);
     const trendScore = confluence.gauges.find((gauge) => gauge.key === "trend")?.score ?? 0;
     const timeframeScore =
       confluence.gauges.find((gauge) => gauge.key === "timeframeConfluence")?.score ?? 0;
 
-    if (trendScore < trendThreshold || timeframeScore < timeframeConfluenceThreshold) {
+    if (trendScore < effectiveTrendThreshold || timeframeScore < timeframeConfluenceThreshold) {
       continue;
     }
 
@@ -953,6 +987,8 @@ export async function runAlgoBacktest({
   return {
     symbol: normalizedSymbol,
     timeframe,
+    sensitivityProfile,
+    sensitivityValue,
     startDate,
     endDate,
     barCount: bars.length,
@@ -966,7 +1002,7 @@ export async function runAlgoBacktest({
     worstReturnPercent: trades.length > 0 ? Math.min(...trades.map((trade) => trade.returnPercent)) : null,
     maxDrawdownPercent,
     thresholds: {
-      trend: trendThreshold,
+      trend: effectiveTrendThreshold,
       timeframeConfluence: timeframeConfluenceThreshold,
     },
     lookaheadBars,

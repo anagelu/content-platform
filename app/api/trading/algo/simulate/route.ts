@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { type AlpacaBarTimeframe } from "@/lib/alpaca";
-import { runAlgoBacktest } from "@/lib/algo-backtest";
+import { type AlgoBacktestSensitivityProfile, runAlgoBacktest } from "@/lib/algo-backtest";
 import { getUserAlpacaCredentials } from "@/lib/alpaca-oauth";
 import { NextResponse } from "next/server";
 
@@ -22,6 +22,7 @@ export async function POST(request: Request) {
       lookaheadBars?: number;
       stopLossPercent?: number;
       profitTargetPercent?: number;
+      sensitivityProfile?: AlgoBacktestSensitivityProfile;
     };
 
     const credentials = await getUserAlpacaCredentials(Number(session.user.id));
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
       lookaheadBars: body.lookaheadBars,
       stopLossPercent: body.stopLossPercent,
       profitTargetPercent: body.profitTargetPercent,
+      sensitivityProfile: body.sensitivityProfile,
       credentials,
     });
 

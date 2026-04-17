@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { getUserAlpacaCredentials } from "@/lib/alpaca-oauth";
 import { type AlpacaBarTimeframe } from "@/lib/alpaca";
-import { runAlgoBacktest } from "@/lib/algo-backtest";
+import { type AlgoBacktestSensitivityProfile, runAlgoBacktest } from "@/lib/algo-backtest";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -13,6 +13,15 @@ const TIMEFRAMES: AlpacaBarTimeframe[] = [
   "1Hour",
   "1Day",
   "1Week",
+];
+
+const SENSITIVITY_PROFILES: Array<{
+  value: AlgoBacktestSensitivityProfile;
+  label: string;
+}> = [
+  { value: "fast", label: "Fast" },
+  { value: "balanced", label: "Balanced" },
+  { value: "strict", label: "Strict" },
 ];
 
 function formatMoney(value: number | null) {
@@ -80,6 +89,7 @@ export default async function AlgoBacktestPage({
     lookaheadBars?: string;
     stopLoss?: string;
     profitTarget?: string;
+    sensitivityProfile?: AlgoBacktestSensitivityProfile;
   }>;
 }) {
   const session = await auth();
@@ -100,6 +110,11 @@ export default async function AlgoBacktestPage({
   const lookaheadBars = Number(params?.lookaheadBars || "60");
   const stopLossPercent = Number(params?.stopLoss || "1");
   const profitTargetPercent = Number(params?.profitTarget || "1");
+  const sensitivityProfile = SENSITIVITY_PROFILES.some(
+    (profile) => profile.value === params?.sensitivityProfile,
+  )
+    ? (params?.sensitivityProfile as AlgoBacktestSensitivityProfile)
+    : "balanced";
 
   let report:
     | Awaited<ReturnType<typeof runAlgoBacktest>>
@@ -119,6 +134,7 @@ export default async function AlgoBacktestPage({
         lookaheadBars,
         stopLossPercent,
         profitTargetPercent,
+        sensitivityProfile,
         credentials,
       });
     } catch (backtestError) {
@@ -166,6 +182,20 @@ export default async function AlgoBacktestPage({
                   {TIMEFRAMES.map((value) => (
                     <option key={value} value={value}>
                       {value}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="ekub-field">
+                <span className="site-sidebar-label">Sensitivity Profile</span>
+                <select
+                  name="sensitivityProfile"
+                  className="form-input"
+                  defaultValue={sensitivityProfile}
+                >
+                  {SENSITIVITY_PROFILES.map((profile) => (
+                    <option key={profile.value} value={profile.value}>
+                      {profile.label}
                     </option>
                   ))}
                 </select>
@@ -258,7 +288,7 @@ export default async function AlgoBacktestPage({
                 {report.symbol} · {report.timeframe}
               </h2>
               <p className="meta">
-                {report.startDate} to {report.endDate} · Trend &gt; {report.thresholds.trend} ·
+                {report.startDate} to {report.endDate} · {report.sensitivityProfile} sensitivity · Trend &gt; {report.thresholds.trend} ·
                 Timeframe Confluence &gt; {report.thresholds.timeframeConfluence} · Stop {formatPercent(report.stopLossPercent)} · Target {formatPercent(report.profitTargetPercent)} · {report.lookaheadBars} bars max hold
               </p>
 
