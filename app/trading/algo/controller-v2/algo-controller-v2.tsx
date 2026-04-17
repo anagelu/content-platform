@@ -1432,6 +1432,7 @@ export function AlgoControllerV2({
     execution: true,
     timeframeConfluence: true,
   });
+  const [selectedTurboGauge, setSelectedTurboGauge] = useState<GaugeKey>("trend");
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [turboCandidates, setTurboCandidates] = useState<TurboOptionCandidatesResult | null>(null);
   const [turboCandidatesError, setTurboCandidatesError] = useState("");
@@ -1778,6 +1779,8 @@ export function AlgoControllerV2({
         ? "Select a contract before you start Turbo."
         : bias === "neutral"
           ? "Choose a directional bias before arming Turbo."
+          : (executionGauge?.score ?? 0) < 20
+            ? "Execution conditions are poor, so entry is blocked."
           : (executionGauge?.score ?? 0) < FAVORABLE_GAUGE_THRESHOLD
             ? "Execution quality is below the safety threshold, so Play stays locked."
             : (turboFitScore ?? 0) < FAVORABLE_GAUGE_THRESHOLD
@@ -2437,15 +2440,15 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                 className="algo-v2-range"
               />
               <div className="algo-v2-slider-scale">
-                <span>Fast</span>
+                <span>Aggressive</span>
                 <span>
                   {confluenceSensitivity < 35
-                    ? "Fast"
+                    ? "Aggressive"
                     : confluenceSensitivity > 65
-                      ? "Strict"
+                      ? "Conservative"
                       : "Balanced"}
                 </span>
-                <span>Strict</span>
+                <span>Conservative</span>
               </div>
             </label>
           ) : null}
@@ -2778,11 +2781,34 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                         <strong>Read the stack before you touch execution.</strong>
                       </div>
                     </div>
-                    <div className="algo-v2-mini-gauge-grid is-stack">
+                    <div className="algo-v2-compact-gauge-row">
                       {confluence.gauges.map((gauge) => (
+                        <button
+                          key={gauge.key}
+                          type="button"
+                          className={
+                            gauge.key === selectedTurboGauge
+                              ? gaugeToggles[gauge.key]
+                                ? "algo-v2-compact-gauge is-selected"
+                                : "algo-v2-compact-gauge is-selected is-disabled"
+                              : gaugeToggles[gauge.key]
+                                ? "algo-v2-compact-gauge"
+                                : "algo-v2-compact-gauge is-disabled"
+                          }
+                          onClick={() => setSelectedTurboGauge(gauge.key)}
+                        >
+                          <span className="algo-v2-compact-gauge-label">{gauge.label}</span>
+                          <strong className={`algo-v2-compact-gauge-score ${gauge.tone}`}>{gauge.score}</strong>
+                          <span className={`algo-v2-gauge-band ${gauge.tone}`}>{gauge.band}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {confluence.gauges
+                      .filter((gauge) => gauge.key === selectedTurboGauge)
+                      .map((gauge) => (
                         <article
                           key={gauge.key}
-                          className={gaugeToggles[gauge.key] ? "algo-v2-mini-gauge-card is-stack" : "algo-v2-mini-gauge-card is-stack is-disabled"}
+                          className={gaugeToggles[gauge.key] ? "algo-v2-mini-gauge-card is-stack is-focus" : "algo-v2-mini-gauge-card is-stack is-focus is-disabled"}
                         >
                           <div className="algo-v2-mini-gauge-top">
                             <div>
@@ -2848,7 +2874,6 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                           </details>
                         </article>
                       ))}
-                    </div>
                   </div>
                 </div>
 
@@ -2911,48 +2936,61 @@ The requested follow-up market refresh could not be loaded, so answer using the 
 
                   <div className="algo-v2-slider-card">
                     <div className="algo-v2-slider-header">
-                      <strong>Delta Target</strong>
-                      <strong>{deltaTarget.toFixed(2)}</strong>
+                      <strong>Contract Settings</strong>
+                      <strong>{deltaTarget.toFixed(2)} · {formatDteLabel(daysToExpiry)}</strong>
                     </div>
-                    <input
-                      type="range"
-                      min="20"
-                      max="60"
-                      value={Math.round(deltaTarget * 100)}
-                      onChange={(event) => setDeltaTarget(Number(event.target.value) / 100)}
-                      className="algo-v2-range"
-                    />
-                    <div className="algo-v2-slider-scale">
-                      <span>0.20</span>
-                      <span>{Math.round(deltaTarget * 100)} Delta</span>
-                      <span>0.60</span>
-                    </div>
-                  </div>
-
-                  <div className="algo-v2-slider-card">
-                    <div className="algo-v2-slider-header">
-                      <strong>Time Horizon</strong>
-                      <strong>{formatDteLabel(daysToExpiry)}</strong>
-                    </div>
-                    <input
-                      type="range"
-                      min="7"
-                      max="60"
-                      value={daysToExpiry}
-                      onChange={(event) => setDaysToExpiry(Number(event.target.value))}
-                      className="algo-v2-range is-purple"
-                    />
-                    <div className="algo-v2-slider-scale">
-                      <span>7</span>
-                      <span>Days to expiration</span>
-                      <span>60</span>
+                    <div className="algo-v2-contract-settings-grid">
+                      <div>
+                        <div className="algo-v2-slider-header">
+                          <strong>Delta Target</strong>
+                          <strong>{deltaTarget.toFixed(2)}</strong>
+                        </div>
+                        <input
+                          type="range"
+                          min="20"
+                          max="60"
+                          value={Math.round(deltaTarget * 100)}
+                          onChange={(event) => setDeltaTarget(Number(event.target.value) / 100)}
+                          className="algo-v2-range"
+                        />
+                        <div className="algo-v2-slider-scale">
+                          <span>0.20</span>
+                          <span>{Math.round(deltaTarget * 100)} Delta</span>
+                          <span>0.60</span>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="algo-v2-slider-header">
+                          <strong>Time Horizon</strong>
+                          <strong>{formatDteLabel(daysToExpiry)}</strong>
+                        </div>
+                        <input
+                          type="range"
+                          min="7"
+                          max="60"
+                          value={daysToExpiry}
+                          onChange={(event) => setDaysToExpiry(Number(event.target.value))}
+                          className="algo-v2-range is-purple"
+                        />
+                        <div className="algo-v2-slider-scale">
+                          <span>7</span>
+                          <span>Days to expiration</span>
+                          <span>60</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </section>
 
-            <aside className="algo-v2-side-card">
+            <aside
+              className={
+                turboContracts.length > 0 || turboContractStatus !== "UNSET"
+                  ? "algo-v2-side-card algo-v2-turbo-sidecard is-live"
+                  : "algo-v2-side-card algo-v2-turbo-sidecard is-idle"
+              }
+            >
               <h3 className="algo-v2-mini-title">Suggested Contracts</h3>
               <div className="algo-v2-mini-list">
                 <div>
@@ -3120,7 +3158,13 @@ The requested follow-up market refresh could not be loaded, so answer using the 
               ) : (
                 <button
                   type="button"
-                  className={displayedSessionState === "Paused" ? "algo-v2-action-button is-positive" : displayedCommand.tone}
+                  className={
+                    displayedSessionState === "Paused"
+                      ? "algo-v2-action-button is-positive"
+                      : mode === "turbo" && !isCrypto && (executionGauge?.score ?? 0) < 20
+                        ? "algo-v2-action-button is-blocked"
+                        : displayedCommand.tone
+                  }
                   onClick={() =>
                     mode === "turbo" && !isCrypto
                       ? handleTurboPrimaryCommand(displayedSessionState === "Paused" ? "RESUME" : "PLAY")
@@ -3128,11 +3172,19 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                   }
                   disabled={displayedSessionState === "Armed" ? playLocked : isBusy}
                 >
-                  <span className="algo-v2-action-label">{displayedSessionState === "Paused" ? "Resume Session" : "Arm"}</span>
+                  <span className="algo-v2-action-label">
+                    {mode === "turbo" && !isCrypto && displayedSessionState === "Armed" && (executionGauge?.score ?? 0) < 20
+                      ? "Blocked"
+                      : displayedSessionState === "Paused"
+                        ? "Resume Session"
+                        : "Arm"}
+                  </span>
                   <span className="algo-v2-action-copy">
-                    {displayedSessionState === "Paused"
-                      ? "Resume the session from cash while preserving the plan."
-                      : displayedCommand.helper}
+                    {mode === "turbo" && !isCrypto && displayedSessionState === "Armed" && (executionGauge?.score ?? 0) < 20
+                      ? "Execution conditions poor. Entry not advised."
+                      : displayedSessionState === "Paused"
+                        ? "Resume the session from cash while preserving the plan."
+                        : displayedCommand.helper}
                   </span>
                 </button>
               )}
