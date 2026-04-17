@@ -1492,6 +1492,10 @@ main {
   font-family: var(--algo-v2-mono);
 }
 
+.algo-v2-controls-row.is-turbo {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .algo-v2-field {
   display: grid;
   gap: 0.35rem;
@@ -1501,6 +1505,10 @@ main {
 .algo-v2-field-wide {
   min-width: 240px;
   flex: 1 1 260px;
+}
+
+.algo-v2-sensitivity-field {
+  grid-column: 1 / -1;
 }
 
 .algo-v2-inline-controls {
@@ -1589,6 +1597,10 @@ main {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.9fr);
   gap: 1rem;
+}
+
+.algo-v2-panel-grid.is-turbo-layout {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .algo-v2-main-card,
@@ -2258,13 +2270,13 @@ main {
 
 .algo-v2-turbo-columns {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.9rem;
 }
 
 .algo-v2-compact-gauge-row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
 }
 
@@ -2307,6 +2319,10 @@ main {
   display: grid;
   gap: 0.85rem;
   align-content: start;
+}
+
+.algo-v2-turbo-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .algo-v2-mini-gauge-card.is-focus {
@@ -2503,7 +2519,7 @@ main {
 }
 
 .algo-v2-turbo-sidecard.is-idle {
-  opacity: 0.38;
+  opacity: 0.62;
   border-color: rgba(203, 213, 225, 0.58);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.38), rgba(241, 245, 249, 0.28));
   backdrop-filter: blur(8px);
@@ -3868,6 +3884,7 @@ main {
   .algo-v2-controls-row,
   .algo-v2-order-row,
   .algo-v2-turbo-columns,
+  .algo-v2-turbo-options,
   .algo-v2-action-cluster,
   .section-command-surface,
   .home-activity-grid,
@@ -5187,6 +5204,7 @@ main {
   .algo-v2-order-row,
   .algo-v2-contract-settings-grid,
   .algo-v2-turbo-columns,
+  .algo-v2-turbo-options,
   .algo-v2-action-cluster,
   .about-hero,
   .trading-grid,

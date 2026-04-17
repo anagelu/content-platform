@@ -2363,7 +2363,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
           </div>
         </div>
 
-        <div className="algo-v2-controls-row">
+        <div className={mode === "turbo" ? "algo-v2-controls-row is-turbo" : "algo-v2-controls-row"}>
           <label className="algo-v2-field">
             <span className="algo-v2-field-label">Market Ticker</span>
             <input
@@ -2428,7 +2428,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
           </div>
 
           {mode === "turbo" ? (
-            <label className="algo-v2-field algo-v2-field-wide">
+            <label className="algo-v2-field algo-v2-field-wide algo-v2-sensitivity-field">
               <span className="algo-v2-field-label">Sensitivity</span>
               <input
                 type="range"
