@@ -71,6 +71,44 @@ model User {
   patentRecords PatentRecord[]
   books                Book[]
   ekubGroups           EkubGroup[]
+  directMessageThreadsStarted DirectMessageThread[] @relation("DirectMessageStarter")
+  directMessageThreadsA DirectMessageThread[] @relation("DirectMessageParticipantA")
+  directMessageThreadsB DirectMessageThread[] @relation("DirectMessageParticipantB")
+  sentDirectMessages   DirectMessage[]
+}
+
+model DirectMessageThread {
+  id             Int      @id @default(autoincrement())
+  subject        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
+  lastMessageAt  DateTime @default(now())
+
+  starterId      Int
+  starter        User     @relation("DirectMessageStarter", fields: [starterId], references: [id], onDelete: Cascade)
+
+  participantAId Int
+  participantA   User     @relation("DirectMessageParticipantA", fields: [participantAId], references: [id], onDelete: Cascade)
+
+  participantBId Int
+  participantB   User     @relation("DirectMessageParticipantB", fields: [participantBId], references: [id], onDelete: Cascade)
+
+  messages       DirectMessage[]
+
+  @@unique([participantAId, participantBId])
+}
+
+model DirectMessage {
+  id         Int      @id @default(autoincrement())
+  body       String
+  createdAt  DateTime @default(now())
+  readAt     DateTime?
+
+  threadId   Int
+  thread     DirectMessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  senderId   Int
+  sender     User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
 }
 
 model Post {

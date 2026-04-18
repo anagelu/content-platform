@@ -5,6 +5,10 @@ import {
   createMessageInboxItem,
   deleteMessageInboxItem,
 } from "@/lib/message-inbox";
+import {
+  createOrGetDirectMessageThread,
+  sendDirectMessage,
+} from "@/lib/direct-messages";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -59,4 +63,48 @@ export async function removeMessageInboxItem(formData: FormData) {
 
   await deleteMessageInboxItem(userId, id);
   revalidatePath("/inbox/messages");
+}
+
+export async function startDirectMessageThread(formData: FormData) {
+  const userId = await requireSignedInUser();
+  const recipientId = Number(formData.get("recipientId"));
+  const subject = formData.get("subject")?.toString().trim() || "";
+  const body = formData.get("body")?.toString().trim() || "";
+
+  if (!Number.isFinite(recipientId) || recipientId <= 0) {
+    throw new Error("Choose a recipient first.");
+  }
+
+  if (!body) {
+    throw new Error("Write a message before starting the conversation.");
+  }
+
+  const threadId = await createOrGetDirectMessageThread({
+    senderId: userId,
+    recipientId,
+    subject,
+    initialBody: body,
+  });
+
+  revalidatePath("/inbox/messages");
+  redirect(`/inbox/messages/${threadId}`);
+}
+
+export async function sendDirectMessageReply(formData: FormData) {
+  const userId = await requireSignedInUser();
+  const threadId = Number(formData.get("threadId"));
+  const body = formData.get("body")?.toString().trim() || "";
+
+  if (!Number.isFinite(threadId) || threadId <= 0) {
+    throw new Error("Conversation ID is required.");
+  }
+
+  await sendDirectMessage({
+    senderId: userId,
+    threadId,
+    body,
+  });
+
+  revalidatePath("/inbox/messages");
+  revalidatePath(`/inbox/messages/${threadId}`);
 }

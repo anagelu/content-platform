@@ -2,9 +2,13 @@ import { auth } from "@/auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
+  listDirectMessageCandidates,
+  listDirectMessageThreads,
+} from "@/lib/direct-messages";
+import {
   listMessageInboxItems,
 } from "@/lib/message-inbox";
-import { importMessageInboxItem, removeMessageInboxItem } from "./actions";
+import { importMessageInboxItem, removeMessageInboxItem, startDirectMessageThread } from "./actions";
 
 function formatTimestamp(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -23,6 +27,8 @@ export default async function MessageInboxPage() {
   }
 
   const inboxItems = await listMessageInboxItems(Number(session.user.id));
+  const directThreads = await listDirectMessageThreads(Number(session.user.id));
+  const directCandidates = await listDirectMessageCandidates(Number(session.user.id));
 
   return (
     <main>
@@ -34,6 +40,9 @@ export default async function MessageInboxPage() {
         </p>
 
         <div className="toolbar">
+          <Link href="/inbox/messages" className="button-link">
+            Peer Messages
+          </Link>
           <Link href="/posts/new" className="button-link secondary">
             Create Post Directly
           </Link>
@@ -41,6 +50,112 @@ export default async function MessageInboxPage() {
             Browse Posts
           </Link>
         </div>
+
+        <section className="form-card">
+          <div className="form-callout">
+            <h2 className="form-callout-title">Peer Messaging</h2>
+            <p className="form-callout-text">
+              Start a direct conversation with another Pattern Foundry user, keep the thread inside the site, and continue it from a dedicated conversation view.
+            </p>
+          </div>
+
+          <div className="trading-grid">
+            <form action={startDirectMessageThread} className="card" style={{ margin: 0 }}>
+              <h3 className="card-title" style={{ marginBottom: "0.85rem" }}>
+                Start a conversation
+              </h3>
+              <div className="form-group">
+                <label htmlFor="recipientId" className="form-label">
+                  Recipient
+                </label>
+                <select id="recipientId" name="recipientId" className="form-input" defaultValue="">
+                  <option value="" disabled>
+                    Select a user
+                  </option>
+                  {directCandidates.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {(candidate.name?.trim() || candidate.username) + (candidate.email ? ` · ${candidate.email}` : "")}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label htmlFor="peerSubject" className="form-label">
+                  Subject
+                </label>
+                <input
+                  id="peerSubject"
+                  name="subject"
+                  type="text"
+                  className="form-input"
+                  placeholder="Optional conversation subject"
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="peerBody" className="form-label">
+                  Message
+                </label>
+                <textarea
+                  id="peerBody"
+                  name="body"
+                  rows={6}
+                  className="form-textarea form-textarea-compact"
+                  placeholder="Write your message..."
+                />
+              </div>
+              <button type="submit" className="submit-button">
+                Send Message
+              </button>
+            </form>
+
+            <div className="card" style={{ margin: 0 }}>
+              <h3 className="card-title" style={{ marginBottom: "0.85rem" }}>
+                Conversations
+              </h3>
+              {directThreads.length === 0 ? (
+                <p className="meta" style={{ marginBottom: 0 }}>
+                  No peer conversations yet. Start one from the form and it will show up here.
+                </p>
+              ) : (
+                <ul className="card-list" style={{ margin: 0 }}>
+                  {directThreads.map((thread) => (
+                    <li key={thread.id} className="card" style={{ margin: 0 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          gap: "1rem",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <div style={{ flex: "1 1 320px" }}>
+                          <h4 className="card-title" style={{ marginBottom: "0.35rem" }}>
+                            {thread.counterpartLabel}
+                          </h4>
+                          <p className="meta">
+                            {thread.subject?.trim() || "Direct conversation"} · updated {formatTimestamp(thread.lastMessageAt.toISOString())}
+                          </p>
+                          <p className="preview" style={{ marginBottom: 0 }}>
+                            {thread.lastMessage?.body || "No messages yet."}
+                          </p>
+                        </div>
+                        <div style={{ display: "grid", gap: "0.65rem", minWidth: "180px" }}>
+                          {thread.unreadCount > 0 ? (
+                            <span className="badge">{thread.unreadCount} unread</span>
+                          ) : null}
+                          <Link href={`/inbox/messages/${thread.id}`} className="button-link">
+                            Open Conversation
+                          </Link>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </section>
 
         <section className="form-card">
           <div className="form-callout">
