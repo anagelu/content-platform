@@ -2638,36 +2638,46 @@ The requested follow-up market refresh could not be loaded, so answer using the 
     setSpatialQuery("");
   }
 
-  function toggleSpatialHudPin() {
-    setSpatialHudPinned((current) => {
-      const next = !current;
+  function freezeSpatialHud() {
+    if (spatialHudPinned) {
+      return;
+    }
 
-      if (next) {
-        setSpatialHudPinnedPosition({
-          x: Math.max(16, cursorPosition.x + 18),
-          y: Math.max(16, cursorPosition.y + 18),
-        });
-        window.setTimeout(() => {
-          spatialHudRef.current?.focus();
-        }, 0);
-      } else {
-        setSpatialHudPinnedPosition(null);
-      }
-
-      return next;
+    setSpatialHudPinned(true);
+    setSpatialHudPinnedPosition({
+      x: spatialHudPinnedPosition?.x ?? Math.max(16, cursorPosition.x + 18),
+      y: spatialHudPinnedPosition?.y ?? Math.max(16, cursorPosition.y + 18),
     });
+    window.setTimeout(() => {
+      spatialHudRef.current?.focus();
+    }, 0);
+  }
+
+  function releaseSpatialHud() {
+    setSpatialHudPinned(false);
+    setSpatialHudPinnedPosition(null);
   }
 
   function handleSpatialHudTapHold(event: React.MouseEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement;
+
+    if (event.detail > 1 || target.closest("button, input, textarea, form")) {
+      return;
+    }
+
+    if (!spatialHudPinned) {
+      freezeSpatialHud();
+    }
+  }
+
+  function handleSpatialHudDoubleClick(event: React.MouseEvent<HTMLDivElement>) {
     const target = event.target as HTMLElement;
 
     if (target.closest("button, input, textarea, form")) {
       return;
     }
 
-    if (!spatialHudPinned) {
-      toggleSpatialHudPin();
-    }
+    freezeSpatialHud();
   }
 
   return (
@@ -3719,7 +3729,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
           className={`algo-v2-spatial-hud${spatialHudPinned ? " is-pinned" : ""}${spatialHudMinimized ? " is-minimized" : ""}${spatialHudExpanded ? " is-expanded" : ""}`}
           tabIndex={0}
           onClick={handleSpatialHudTapHold}
-          onDoubleClick={toggleSpatialHudPin}
+          onDoubleClick={handleSpatialHudDoubleClick}
           onMouseEnter={() => {
             if (!spatialHudPinned) {
               setSpatialHudInteractive(true);
@@ -3771,7 +3781,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
               <button
                 type="button"
                 className="algo-v2-spatial-hud-pin"
-                onClick={toggleSpatialHudPin}
+                onClick={spatialHudPinned ? releaseSpatialHud : freezeSpatialHud}
               >
                 {spatialHudPinned ? "Release Lens" : "Freeze Lens"}
               </button>
@@ -3833,7 +3843,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                 </button>
               </form>
               <p className="algo-v2-spatial-hud-hint">
-                Hover to auto-explain after a short delay. Tap the lens to hold, or double-click anywhere on it to freeze in place.
+                Hover to auto-explain after a short delay. Tap the lens to hold, or double-click anywhere on it to freeze it in place.
               </p>
               <ul className="algo-v2-spatial-hud-list">
                 {spatialHud.nextActions.slice(0, 3).map((action) => (
