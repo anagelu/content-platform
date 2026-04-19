@@ -1463,6 +1463,10 @@ export function AlgoControllerV2({
   const [spatialInsight, setSpatialInsight] = useState("");
   const [isSpatialInsightLoading, setIsSpatialInsightLoading] = useState(false);
   const [spatialHudPinned, setSpatialHudPinned] = useState(false);
+  const [spatialHudPinnedPosition, setSpatialHudPinnedPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [lastAutoInsightKey, setLastAutoInsightKey] = useState("");
   const [spatialQuery, setSpatialQuery] = useState("");
   const [copilotFocusSymbol, setCopilotFocusSymbol] = useState<string | null>(null);
@@ -2192,37 +2196,6 @@ ${recentOrderSummary}`;
   ]);
 
   useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key.toLowerCase() !== "h") {
-        return;
-      }
-
-      if (!spatialHud) {
-        return;
-      }
-
-      event.preventDefault();
-      setSpatialHudPinned((current) => {
-        const next = !current;
-
-        if (next) {
-          window.setTimeout(() => {
-            spatialHudRef.current?.focus();
-          }, 0);
-        }
-
-        return next;
-      });
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [spatialHud]);
-
-  useEffect(() => {
     try {
       if (clipboardMemory.trim()) {
         window.sessionStorage.setItem("algo-v2-clipboard-memory", clipboardMemory);
@@ -2655,6 +2628,26 @@ The requested follow-up market refresh could not be loaded, so answer using the 
     }
 
     await handleSpatialInsightRequest(trimmedQuery);
+  }
+
+  function toggleSpatialHudPin() {
+    setSpatialHudPinned((current) => {
+      const next = !current;
+
+      if (next) {
+        setSpatialHudPinnedPosition({
+          x: Math.max(16, cursorPosition.x + 18),
+          y: Math.max(16, cursorPosition.y + 18),
+        });
+        window.setTimeout(() => {
+          spatialHudRef.current?.focus();
+        }, 0);
+      } else {
+        setSpatialHudPinnedPosition(null);
+      }
+
+      return next;
+    });
   }
 
   return (
@@ -3704,11 +3697,14 @@ The requested follow-up market refresh could not be loaded, so answer using the 
           ref={spatialHudRef}
           className="algo-v2-spatial-hud"
           tabIndex={0}
+          onDoubleClick={toggleSpatialHudPin}
           style={{
-            left: spatialHudPinned ? "auto" : `${Math.max(16, cursorPosition.x + 18)}px`,
-            top: spatialHudPinned ? "auto" : `${Math.max(16, cursorPosition.y + 18)}px`,
-            right: spatialHudPinned ? "1rem" : undefined,
-            bottom: spatialHudPinned ? "1rem" : undefined,
+            left: `${spatialHudPinned
+              ? spatialHudPinnedPosition?.x ?? Math.max(16, cursorPosition.x + 18)
+              : Math.max(16, cursorPosition.x + 18)}px`,
+            top: `${spatialHudPinned
+              ? spatialHudPinnedPosition?.y ?? Math.max(16, cursorPosition.y + 18)
+              : Math.max(16, cursorPosition.y + 18)}px`,
           }}
         >
           <div className="algo-v2-spatial-hud-header">
@@ -3722,14 +3718,9 @@ The requested follow-up market refresh could not be loaded, so answer using the 
               <button
                 type="button"
                 className="algo-v2-spatial-hud-pin"
-                onClick={() => {
-                  setSpatialHudPinned((current) => !current);
-                  window.setTimeout(() => {
-                    spatialHudRef.current?.focus();
-                  }, 0);
-                }}
+                onClick={toggleSpatialHudPin}
               >
-                {spatialHudPinned ? "Unpin" : "Pin HUD"}
+                {spatialHudPinned ? "Release Lens" : "Freeze Lens"}
               </button>
             </div>
           </div>
@@ -3787,7 +3778,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
             </button>
           </form>
           <p className="algo-v2-spatial-hud-hint">
-            Hover to auto-explain after a short delay. Press <kbd>H</kbd> to pin and focus this panel.
+            Hover to auto-explain after a short delay. Double-click the lens to freeze it in place.
           </p>
           <ul className="algo-v2-spatial-hud-list">
             {spatialHud.nextActions.slice(0, 3).map((action) => (
