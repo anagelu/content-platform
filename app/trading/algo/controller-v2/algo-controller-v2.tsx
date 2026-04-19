@@ -68,6 +68,14 @@ type CopilotMessage = {
   warnings?: string[];
   recommendedMode?: CopilotModeRecommendation;
 };
+type SpatialHoverTarget = {
+  kind: "header" | "gauge" | "timeframe" | "contract" | "controls" | "actions";
+  label: string;
+  summary: string;
+  score?: number | null;
+  tone?: string;
+  symbol?: string | null;
+};
 type CopilotContextOptions = {
   symbol: string;
   snapshot: Snapshot | null;
@@ -1444,6 +1452,9 @@ export function AlgoControllerV2({
   const [snapshotRefreshKey, setSnapshotRefreshKey] = useState(0);
   const [actionNotice, setActionNotice] = useState("");
   const [isBusy, setIsBusy] = useState(false);
+  const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
+  const [hoveredSpatialTarget, setHoveredSpatialTarget] = useState<SpatialHoverTarget | null>(null);
+  const [clipboardMemory, setClipboardMemory] = useState("");
   const [copilotFocusSymbol, setCopilotFocusSymbol] = useState<string | null>(null);
   const [copilotFocusTimeframe, setCopilotFocusTimeframe] = useState<AlpacaBarTimeframe | null>(null);
   const [copilotInput, setCopilotInput] = useState("");
@@ -1456,6 +1467,10 @@ export function AlgoControllerV2({
     },
   ]);
   const normalizedSymbol = canonicalizeMarketSymbol(symbol);
+  const clipboardSymbol = useMemo(
+    () => extractRequestedMarketSymbol(clipboardMemory),
+    [clipboardMemory],
+  );
 
   const activeController = useMemo(
     () =>
@@ -1802,6 +1817,45 @@ export function AlgoControllerV2({
         selectedTurboContract.strikePrice,
       )}${selectedTurboContract.type === "call" ? "C" : "P"}`
     : "--";
+  const spatialHud = useMemo(() => {
+    if (!hoveredSpatialTarget) {
+      return null;
+    }
+
+    const nextActions: string[] = [];
+
+    if (clipboardSymbol && clipboardSymbol !== normalizedSymbol) {
+      nextActions.push(`Load copied ticker ${clipboardSymbol} into the cockpit`);
+    }
+
+    if (
+      hoveredSpatialTarget.kind === "gauge" ||
+      hoveredSpatialTarget.kind === "timeframe"
+    ) {
+      nextActions.push(
+        `Inspect ${hoveredSpatialTarget.label.toLowerCase()} before changing risk`,
+      );
+    }
+
+    if (hoveredSpatialTarget.kind === "actions") {
+      nextActions.push("Confirm whether the session is Armed, Active, or Paused");
+    }
+
+    if (
+      hoveredSpatialTarget.kind === "contract" &&
+      hoveredSpatialTarget.symbol &&
+      hoveredSpatialTarget.symbol !== selectedTurboContract?.symbol
+    ) {
+      nextActions.push(`Select ${hoveredSpatialTarget.symbol} as the active contract`);
+    }
+
+    return {
+      title: hoveredSpatialTarget.label,
+      summary: hoveredSpatialTarget.summary,
+      tone: hoveredSpatialTarget.tone ?? "is-neutral",
+      nextActions,
+    };
+  }, [clipboardSymbol, hoveredSpatialTarget, normalizedSymbol, selectedTurboContract?.symbol]);
 
   function buildCopilotContextText({
     symbol: contextSymbol,
@@ -1976,6 +2030,53 @@ ${recentOrderSummary}`;
         .join("\n"),
     [copilotMessages],
   );
+
+  useEffect(() => {
+    try {
+      const storedClipboard = window.sessionStorage.getItem("algo-v2-clipboard-memory");
+
+      if (storedClipboard) {
+        setClipboardMemory(storedClipboard);
+      }
+    } catch {
+      setClipboardMemory("");
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (clipboardMemory.trim()) {
+        window.sessionStorage.setItem("algo-v2-clipboard-memory", clipboardMemory);
+      } else {
+        window.sessionStorage.removeItem("algo-v2-clipboard-memory");
+      }
+    } catch {}
+  }, [clipboardMemory]);
+
+  useEffect(() => {
+    function handleMouseMove(event: MouseEvent) {
+      setCursorPosition({ x: event.clientX, y: event.clientY });
+    }
+
+    function handleCopy(event: ClipboardEvent) {
+      const copiedText =
+        event.clipboardData?.getData("text/plain")?.trim() ||
+        document.getSelection()?.toString().trim() ||
+        "";
+
+      if (copiedText) {
+        setClipboardMemory(copiedText.slice(0, 120));
+      }
+    }
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("copy", handleCopy);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("copy", handleCopy);
+    };
+  }, []);
 
   useEffect(() => {
     if (!autoBiasEnabled || mode !== "turbo") {
@@ -2326,9 +2427,23 @@ The requested follow-up market refresh could not be loaded, so answer using the 
   }
 
   return (
-    <section className="algo-v2-shell">
+    <section
+      className="algo-v2-shell"
+      onMouseLeave={() => setHoveredSpatialTarget(null)}
+    >
       <div className="algo-v2-stage">
-        <div className="algo-v2-topbar">
+        <div
+          className="algo-v2-topbar"
+          onMouseEnter={() =>
+            setHoveredSpatialTarget({
+              kind: "header",
+              label: `${normalizedSymbol || "Market"} cockpit`,
+              summary: `Session is ${displayedSessionState.toLowerCase()} with ${
+                displayedOverallScore ?? "--"
+              } overall confluence on ${analysisTimeframe}.`,
+            })
+          }
+        >
           <div className="algo-v2-topbar-left">
             <div className="algo-v2-symbol-badge">{normalizedSymbol || "--"}</div>
             <div>
@@ -2363,7 +2478,20 @@ The requested follow-up market refresh could not be loaded, so answer using the 
           </div>
         </div>
 
-        <div className={mode === "turbo" ? "algo-v2-controls-row is-turbo" : "algo-v2-controls-row"}>
+        <div
+          className={mode === "turbo" ? "algo-v2-controls-row is-turbo" : "algo-v2-controls-row"}
+          onMouseEnter={() =>
+            setHoveredSpatialTarget({
+              kind: "controls",
+              label: "Snapshot controls",
+              summary: `${
+                clipboardSymbol && clipboardSymbol !== normalizedSymbol
+                  ? `Copied ticker ${clipboardSymbol} is ready to load. `
+                  : ""
+              }Change the market, timeframe, or order size from here.`,
+            })
+          }
+        >
           <label className="algo-v2-field">
             <span className="algo-v2-field-label">Market Ticker</span>
             <input
@@ -2545,7 +2673,19 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                 </div>
                 <div className="algo-v2-mini-gauge-grid is-stack">
                   {standardMarketModel.cards.map((gauge) => (
-                    <article key={gauge.key} className="algo-v2-mini-gauge-card is-stack">
+                    <article
+                      key={gauge.key}
+                      className="algo-v2-mini-gauge-card is-stack"
+                      onMouseEnter={() =>
+                        setHoveredSpatialTarget({
+                          kind: gauge.label === "Timeframe Confluence" ? "timeframe" : "gauge",
+                          label: gauge.label,
+                          summary: gauge.summary,
+                          score: gauge.score,
+                          tone: gauge.tone,
+                        })
+                      }
+                    >
                       <div className="algo-v2-mini-gauge-top">
                         <div>
                           <p className="algo-v2-meter-label">{gauge.label}</p>
@@ -2796,6 +2936,15 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                                 : "algo-v2-compact-gauge is-disabled"
                           }
                           onClick={() => setSelectedTurboGauge(gauge.key)}
+                          onMouseEnter={() =>
+                            setHoveredSpatialTarget({
+                              kind: gauge.key === "timeframeConfluence" ? "timeframe" : "gauge",
+                              label: gauge.label,
+                              summary: gauge.reason,
+                              score: gauge.score,
+                              tone: gauge.tone,
+                            })
+                          }
                         >
                           <span className="algo-v2-compact-gauge-label">{gauge.label}</span>
                           <strong className={`algo-v2-compact-gauge-score ${gauge.tone}`}>{gauge.score}</strong>
@@ -2809,6 +2958,15 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                         <article
                           key={gauge.key}
                           className={gaugeToggles[gauge.key] ? "algo-v2-mini-gauge-card is-stack is-focus" : "algo-v2-mini-gauge-card is-stack is-focus is-disabled"}
+                          onMouseEnter={() =>
+                            setHoveredSpatialTarget({
+                              kind: gauge.key === "timeframeConfluence" ? "timeframe" : "gauge",
+                              label: gauge.label,
+                              summary: gauge.reason,
+                              score: gauge.score,
+                              tone: gauge.tone,
+                            })
+                          }
                         >
                           <div className="algo-v2-mini-gauge-top">
                             <div>
@@ -3030,6 +3188,16 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                           ? "algo-v2-contract-card is-primary is-selected"
                           : "algo-v2-contract-card"
                       }
+                      onMouseEnter={() =>
+                        setHoveredSpatialTarget({
+                          kind: "contract",
+                          label: `${normalizedSymbol} ${Math.round(contract.strikePrice)}${contract.type === "call" ? "C" : "P"}`,
+                          summary: `Fit ${contract.fitScore}, mark ${formatMoney(contract.markPrice)}, breakeven ${formatMoney(contract.breakevenPrice)}.`,
+                          score: contract.fitScore,
+                          tone: getScoreTone(contract.fitScore),
+                          symbol: contract.symbol,
+                        })
+                      }
                     >
                       <div className="algo-v2-contract-top">
                         <div>
@@ -3112,7 +3280,18 @@ The requested follow-up market refresh could not be loaded, so answer using the 
           </div>
         )}
 
-        <div className="algo-v2-actions is-media-player">
+        <div
+          className="algo-v2-actions is-media-player"
+          onMouseEnter={() =>
+            setHoveredSpatialTarget({
+              kind: "actions",
+              label: "Execution bar",
+              summary: `The cockpit is ${displayedSessionState.toLowerCase()}. Primary control is ${
+                displayedSessionState === "Paused" ? "Resume Session" : displayedSessionState === "Active" ? "Pause Session" : "Arm"
+              }.`,
+            })
+          }
+        >
           <div className="algo-v2-action-bar">
             <div className="algo-v2-action-state">
               <p className="algo-v2-meter-label">Media Player</p>
@@ -3285,6 +3464,53 @@ The requested follow-up market refresh could not be loaded, so answer using the 
         {actionNotice ? <p className="form-help">{actionNotice}</p> : null}
         {error ? <p className="form-error">{error}</p> : null}
       </div>
+      {spatialHud ? (
+        <div
+          className="algo-v2-spatial-hud"
+          style={{
+            left: `${Math.max(16, cursorPosition.x + 18)}px`,
+            top: `${Math.max(16, cursorPosition.y + 18)}px`,
+          }}
+        >
+          <div className="algo-v2-spatial-hud-header">
+            <span className="algo-v2-spatial-hud-label">Cursor HUD</span>
+            {clipboardMemory ? (
+              <span className="algo-v2-spatial-hud-memory">
+                Copied: {clipboardSymbol || clipboardMemory}
+              </span>
+            ) : null}
+          </div>
+          <strong className={`algo-v2-spatial-hud-title ${spatialHud.tone}`}>{spatialHud.title}</strong>
+          <p className="algo-v2-spatial-hud-copy">{spatialHud.summary}</p>
+          <div className="algo-v2-spatial-hud-actions">
+            {clipboardSymbol && clipboardSymbol !== normalizedSymbol ? (
+              <button
+                type="button"
+                className="algo-v2-spatial-hud-button"
+                onClick={() => setSymbol(clipboardSymbol)}
+              >
+                Load {clipboardSymbol}
+              </button>
+            ) : null}
+            {hoveredSpatialTarget?.kind === "contract" &&
+            hoveredSpatialTarget.symbol &&
+            hoveredSpatialTarget.symbol !== selectedTurboContract?.symbol ? (
+              <button
+                type="button"
+                className="algo-v2-spatial-hud-button is-secondary"
+                onClick={() => setSelectedTurboContractSymbol(hoveredSpatialTarget.symbol ?? "")}
+              >
+                Select Contract
+              </button>
+            ) : null}
+          </div>
+          <ul className="algo-v2-spatial-hud-list">
+            {spatialHud.nextActions.slice(0, 3).map((action) => (
+              <li key={action}>{action}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </section>
   );
 }
