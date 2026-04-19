@@ -1457,19 +1457,13 @@ export function AlgoControllerV2({
   const [snapshotRefreshKey, setSnapshotRefreshKey] = useState(0);
   const [actionNotice, setActionNotice] = useState("");
   const [isBusy, setIsBusy] = useState(false);
-  const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
   const [hoveredSpatialTarget, setHoveredSpatialTarget] = useState<SpatialHoverTarget | null>(null);
+  const [lockedSpatialTarget, setLockedSpatialTarget] = useState<SpatialHoverTarget | null>(null);
   const [clipboardMemory, setClipboardMemory] = useState("");
   const [spatialInsight, setSpatialInsight] = useState("");
   const [isSpatialInsightLoading, setIsSpatialInsightLoading] = useState(false);
-  const [spatialHudPinned, setSpatialHudPinned] = useState(false);
-  const [spatialHudInteractive, setSpatialHudInteractive] = useState(false);
   const [spatialHudMinimized, setSpatialHudMinimized] = useState(false);
   const [spatialHudExpanded, setSpatialHudExpanded] = useState(false);
-  const [spatialHudPinnedPosition, setSpatialHudPinnedPosition] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
   const [lastAutoInsightKey, setLastAutoInsightKey] = useState("");
   const [spatialQuery, setSpatialQuery] = useState("");
   const [copilotFocusSymbol, setCopilotFocusSymbol] = useState<string | null>(null);
@@ -1484,7 +1478,6 @@ export function AlgoControllerV2({
     },
   ]);
   const spatialHudRef = useRef<HTMLDivElement | null>(null);
-  const spatialHudHoldTimerRef = useRef<number | null>(null);
   const normalizedSymbol = canonicalizeMarketSymbol(symbol);
   const clipboardSymbol = useMemo(
     () => extractRequestedMarketSymbol(clipboardMemory),
@@ -1835,12 +1828,9 @@ export function AlgoControllerV2({
     ? `${formatOptionExpiration(selectedTurboContract.expirationDate)} ${Math.round(
         selectedTurboContract.strikePrice,
       )}${selectedTurboContract.type === "call" ? "C" : "P"}`
-    : "--";
+      : "--";
+  const activeSpatialTarget = lockedSpatialTarget ?? hoveredSpatialTarget;
   const spatialHud = useMemo(() => {
-    if (!hoveredSpatialTarget) {
-      return null;
-    }
-
     const nextActions: string[] = [];
 
     if (clipboardSymbol && clipboardSymbol !== normalizedSymbol) {
@@ -1848,33 +1838,36 @@ export function AlgoControllerV2({
     }
 
     if (
-      hoveredSpatialTarget.kind === "gauge" ||
-      hoveredSpatialTarget.kind === "timeframe"
+      activeSpatialTarget?.kind === "gauge" ||
+      activeSpatialTarget?.kind === "timeframe"
     ) {
       nextActions.push(
-        `Inspect ${hoveredSpatialTarget.label.toLowerCase()} before changing risk`,
+        `Inspect ${activeSpatialTarget.label.toLowerCase()} before changing risk`,
       );
     }
 
-    if (hoveredSpatialTarget.kind === "actions") {
+    if (activeSpatialTarget?.kind === "actions") {
       nextActions.push("Confirm whether the session is Armed, Active, or Paused");
     }
 
     if (
-      hoveredSpatialTarget.kind === "contract" &&
-      hoveredSpatialTarget.symbol &&
-      hoveredSpatialTarget.symbol !== selectedTurboContract?.symbol
+      activeSpatialTarget?.kind === "contract" &&
+      activeSpatialTarget.symbol &&
+      activeSpatialTarget.symbol !== selectedTurboContract?.symbol
     ) {
-      nextActions.push(`Select ${hoveredSpatialTarget.symbol} as the active contract`);
+      nextActions.push(`Select ${activeSpatialTarget.symbol} as the active contract`);
     }
 
     return {
-      title: hoveredSpatialTarget.label,
-      summary: hoveredSpatialTarget.summary,
-      tone: hoveredSpatialTarget.tone ?? "is-neutral",
+      title: activeSpatialTarget?.label ?? "Scope Panel",
+      summary:
+        activeSpatialTarget?.summary ??
+        "Hover any cockpit surface to preview it here, then click once to lock that target into the panel.",
+      tone: activeSpatialTarget?.tone ?? "is-neutral",
       nextActions,
+      isEmpty: !activeSpatialTarget,
     };
-  }, [clipboardSymbol, hoveredSpatialTarget, normalizedSymbol, selectedTurboContract?.symbol]);
+  }, [activeSpatialTarget, clipboardSymbol, normalizedSymbol, selectedTurboContract?.symbol]);
   const spatialCockpitContext = useMemo<SpatialCockpitContext>(
     () => ({
       symbol: normalizedSymbol || "--",
@@ -1901,46 +1894,46 @@ export function AlgoControllerV2({
     () => ({
       copiedText: clipboardMemory || undefined,
       copiedSymbol: clipboardSymbol || undefined,
-      recentHoverPattern: hoveredSpatialTarget ? [hoveredSpatialTarget.label] : [],
-      inferredInterests: hoveredSpatialTarget ? [hoveredSpatialTarget.kind] : [],
+      recentHoverPattern: activeSpatialTarget ? [activeSpatialTarget.label] : [],
+      inferredInterests: activeSpatialTarget ? [activeSpatialTarget.kind] : [],
     }),
-    [clipboardMemory, clipboardSymbol, hoveredSpatialTarget],
+    [activeSpatialTarget, clipboardMemory, clipboardSymbol],
   );
   const spatialPromptTarget = useMemo<SpatialPromptTarget | null>(() => {
-    if (!hoveredSpatialTarget) {
+    if (!activeSpatialTarget) {
       return null;
     }
 
-    if (hoveredSpatialTarget.kind === "contract" && hoveredSpatialTarget.symbol) {
+    if (activeSpatialTarget.kind === "contract" && activeSpatialTarget.symbol) {
       const contract = turboContracts.find(
-        (entry) => entry.symbol === hoveredSpatialTarget.symbol,
+        (entry) => entry.symbol === activeSpatialTarget.symbol,
       );
 
       return {
         kind: "contract_card",
-        label: hoveredSpatialTarget.label,
-        symbol: hoveredSpatialTarget.symbol,
-        fitScore: hoveredSpatialTarget.score ?? contract?.fitScore ?? 0,
+        label: activeSpatialTarget.label,
+        symbol: activeSpatialTarget.symbol,
+        fitScore: activeSpatialTarget.score ?? contract?.fitScore ?? 0,
         markPrice: contract?.markPrice ?? null,
         breakevenPrice: contract?.breakevenPrice ?? null,
         impliedVolatility: contract?.snapshot.impliedVolatility ?? null,
         spreadLabel: contract ? formatOptionSpreadLabel(contract.spreadPercent) : undefined,
         delta: contract?.snapshot.delta ?? null,
-        summary: hoveredSpatialTarget.summary,
+        summary: activeSpatialTarget.summary,
       };
     }
 
     const gauge = confluence.gauges.find(
-      (entry) => entry.label === hoveredSpatialTarget.label,
+      (entry) => entry.label === activeSpatialTarget.label,
     );
 
-    if (hoveredSpatialTarget.kind === "timeframe" || hoveredSpatialTarget.label === "Timeframe Confluence") {
+    if (activeSpatialTarget.kind === "timeframe" || activeSpatialTarget.label === "Timeframe Confluence") {
       return {
         kind: "timeframe_confluence",
-        label: hoveredSpatialTarget.label,
-        score: hoveredSpatialTarget.score ?? gauge?.score ?? 0,
+        label: activeSpatialTarget.label,
+        score: activeSpatialTarget.score ?? gauge?.score ?? 0,
         band: gauge?.band ?? "Mixed",
-        summary: hoveredSpatialTarget.summary,
+        summary: activeSpatialTarget.summary,
         subscores: gauge?.subscores,
         nearbyTimeframes: gauge?.lensReadouts?.map((entry) => ({
           label: entry.label,
@@ -1952,9 +1945,9 @@ export function AlgoControllerV2({
     }
 
     const gaugeKind =
-      hoveredSpatialTarget.label === "Execution"
+      activeSpatialTarget.label === "Execution"
         ? "execution"
-        : hoveredSpatialTarget.label === "Trend"
+        : activeSpatialTarget.label === "Trend"
           ? "trend"
           : null;
 
@@ -1964,13 +1957,13 @@ export function AlgoControllerV2({
 
     return {
       kind: gaugeKind,
-      label: hoveredSpatialTarget.label,
-      score: hoveredSpatialTarget.score ?? gauge?.score ?? 0,
+      label: activeSpatialTarget.label,
+      score: activeSpatialTarget.score ?? gauge?.score ?? 0,
       band: gauge?.band ?? "Mixed",
-      summary: hoveredSpatialTarget.summary,
+      summary: activeSpatialTarget.summary,
       subscores: gauge?.subscores,
     };
-  }, [confluence.gauges, hoveredSpatialTarget, turboContracts]);
+  }, [activeSpatialTarget, confluence.gauges, turboContracts]);
   const spatialPromptTargetKey = useMemo(() => {
     if (!spatialPromptTarget) {
       return "";
@@ -2174,7 +2167,7 @@ ${recentOrderSummary}`;
 
   useEffect(() => {
     setSpatialInsight("");
-  }, [hoveredSpatialTarget]);
+  }, [activeSpatialTarget]);
 
   useEffect(() => {
     if (!spatialPromptTarget || !spatialPromptTargetKey) {
@@ -2210,14 +2203,6 @@ ${recentOrderSummary}`;
   }, [clipboardMemory]);
 
   useEffect(() => {
-    function handleMouseMove(event: MouseEvent) {
-      if (spatialHudPinned || spatialHudInteractive) {
-        return;
-      }
-
-      setCursorPosition({ x: event.clientX, y: event.clientY });
-    }
-
     function handleCopy(event: ClipboardEvent) {
       const copiedText =
         event.clipboardData?.getData("text/plain")?.trim() ||
@@ -2229,14 +2214,12 @@ ${recentOrderSummary}`;
       }
     }
 
-    window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("copy", handleCopy);
 
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("copy", handleCopy);
     };
-  }, [spatialHudInteractive, spatialHudPinned]);
+  }, []);
 
   useEffect(() => {
     if (!autoBiasEnabled || mode !== "turbo") {
@@ -2639,101 +2622,48 @@ The requested follow-up market refresh could not be loaded, so answer using the 
     setSpatialQuery("");
   }
 
-  function getSpatialHudPositionFromRect() {
-    const rect = spatialHudRef.current?.getBoundingClientRect();
-
-    if (!rect) {
-      return {
-        x: spatialHudPinnedPosition?.x ?? Math.max(16, cursorPosition.x + 18),
-        y: spatialHudPinnedPosition?.y ?? Math.max(16, cursorPosition.y + 18),
-      };
-    }
-
-    return {
-      x: Math.max(16, rect.left),
-      y: Math.max(16, rect.top),
-    };
-  }
-
-  function clearSpatialHudHoldTimer() {
-    if (spatialHudHoldTimerRef.current !== null) {
-      window.clearTimeout(spatialHudHoldTimerRef.current);
-      spatialHudHoldTimerRef.current = null;
-    }
-  }
-
-  function freezeSpatialHud(position = getSpatialHudPositionFromRect()) {
-    if (spatialHudPinned) {
-      return;
-    }
-
-    setSpatialHudPinned(true);
-    setSpatialHudPinnedPosition(position);
+  function focusSpatialHud() {
     window.setTimeout(() => {
       spatialHudRef.current?.focus();
     }, 0);
   }
 
-  function releaseSpatialHud() {
-    clearSpatialHudHoldTimer();
-    setSpatialHudPinned(false);
-    setSpatialHudPinnedPosition(null);
+  function previewSpatialTarget(target: SpatialHoverTarget) {
+    setHoveredSpatialTarget(target);
   }
 
-  function isSpatialHudInteractiveTarget(target: HTMLElement) {
-    return Boolean(
-      target.closest(
-        "button, input, textarea, form, a, select, option, label, [role='button'], [data-spatial-hud-interactive='true']",
-      ),
-    );
+  function lockSpatialTarget(target: SpatialHoverTarget) {
+    setLockedSpatialTarget(target);
+    setHoveredSpatialTarget(target);
+    setSpatialHudMinimized(false);
+    focusSpatialHud();
   }
 
-  function handleSpatialHudHoldStart(event: React.MouseEvent<HTMLDivElement>) {
-    const target = event.target as HTMLElement;
-
-    if (event.button !== 0 || isSpatialHudInteractiveTarget(target)) {
-      return;
-    }
-
-    clearSpatialHudHoldTimer();
-
-    if (spatialHudPinned) {
-      return;
-    }
-
-    freezeSpatialHud(getSpatialHudPositionFromRect());
-  }
-
-  function handleSpatialHudHoldEnd() {
-    clearSpatialHudHoldTimer();
-  }
-
-  function handleSpatialHudDoubleClick(event: React.MouseEvent<HTMLDivElement>) {
-    const target = event.target as HTMLElement;
-
-    if (isSpatialHudInteractiveTarget(target)) {
-      return;
-    }
-
-    clearSpatialHudHoldTimer();
-    freezeSpatialHud(getSpatialHudPositionFromRect());
+  function clearLockedSpatialTarget() {
+    setLockedSpatialTarget(null);
   }
 
   return (
     <section
       className="algo-v2-shell"
       onMouseLeave={() => {
-        if (!spatialHudPinned) {
-          setHoveredSpatialTarget(null);
-          setSpatialHudInteractive(false);
-        }
+        setHoveredSpatialTarget(null);
       }}
     >
       <div className="algo-v2-stage">
         <div
           className="algo-v2-topbar"
           onMouseEnter={() =>
-            setHoveredSpatialTarget({
+            previewSpatialTarget({
+              kind: "header",
+              label: `${normalizedSymbol || "Market"} cockpit`,
+              summary: `Session is ${displayedSessionState.toLowerCase()} with ${
+                displayedOverallScore ?? "--"
+              } overall confluence on ${analysisTimeframe}.`,
+            })
+          }
+          onClick={() =>
+            lockSpatialTarget({
               kind: "header",
               label: `${normalizedSymbol || "Market"} cockpit`,
               summary: `Session is ${displayedSessionState.toLowerCase()} with ${
@@ -2779,7 +2709,18 @@ The requested follow-up market refresh could not be loaded, so answer using the 
         <div
           className={mode === "turbo" ? "algo-v2-controls-row is-turbo" : "algo-v2-controls-row"}
           onMouseEnter={() =>
-            setHoveredSpatialTarget({
+            previewSpatialTarget({
+              kind: "controls",
+              label: "Snapshot controls",
+              summary: `${
+                clipboardSymbol && clipboardSymbol !== normalizedSymbol
+                  ? `Copied ticker ${clipboardSymbol} is ready to load. `
+                  : ""
+              }Change the market, timeframe, or order size from here.`,
+            })
+          }
+          onClick={() =>
+            lockSpatialTarget({
               kind: "controls",
               label: "Snapshot controls",
               summary: `${
@@ -2975,7 +2916,16 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                       key={gauge.key}
                       className="algo-v2-mini-gauge-card is-stack"
                       onMouseEnter={() =>
-                        setHoveredSpatialTarget({
+                        previewSpatialTarget({
+                          kind: gauge.label === "Timeframe Confluence" ? "timeframe" : "gauge",
+                          label: gauge.label,
+                          summary: gauge.summary,
+                          score: gauge.score,
+                          tone: gauge.tone,
+                        })
+                      }
+                      onClick={() =>
+                        lockSpatialTarget({
                           kind: gauge.label === "Timeframe Confluence" ? "timeframe" : "gauge",
                           label: gauge.label,
                           summary: gauge.summary,
@@ -3235,7 +3185,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                           }
                           onClick={() => setSelectedTurboGauge(gauge.key)}
                           onMouseEnter={() =>
-                            setHoveredSpatialTarget({
+                            previewSpatialTarget({
                               kind: gauge.key === "timeframeConfluence" ? "timeframe" : "gauge",
                               label: gauge.label,
                               summary: gauge.reason,
@@ -3257,7 +3207,16 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                           key={gauge.key}
                           className={gaugeToggles[gauge.key] ? "algo-v2-mini-gauge-card is-stack is-focus" : "algo-v2-mini-gauge-card is-stack is-focus is-disabled"}
                           onMouseEnter={() =>
-                            setHoveredSpatialTarget({
+                            previewSpatialTarget({
+                              kind: gauge.key === "timeframeConfluence" ? "timeframe" : "gauge",
+                              label: gauge.label,
+                              summary: gauge.reason,
+                              score: gauge.score,
+                              tone: gauge.tone,
+                            })
+                          }
+                          onClick={() =>
+                            lockSpatialTarget({
                               kind: gauge.key === "timeframeConfluence" ? "timeframe" : "gauge",
                               label: gauge.label,
                               summary: gauge.reason,
@@ -3487,7 +3446,17 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                           : "algo-v2-contract-card"
                       }
                       onMouseEnter={() =>
-                        setHoveredSpatialTarget({
+                        previewSpatialTarget({
+                          kind: "contract",
+                          label: `${normalizedSymbol} ${Math.round(contract.strikePrice)}${contract.type === "call" ? "C" : "P"}`,
+                          summary: `Fit ${contract.fitScore}, mark ${formatMoney(contract.markPrice)}, breakeven ${formatMoney(contract.breakevenPrice)}.`,
+                          score: contract.fitScore,
+                          tone: getScoreTone(contract.fitScore),
+                          symbol: contract.symbol,
+                        })
+                      }
+                      onClick={() =>
+                        lockSpatialTarget({
                           kind: "contract",
                           label: `${normalizedSymbol} ${Math.round(contract.strikePrice)}${contract.type === "call" ? "C" : "P"}`,
                           summary: `Fit ${contract.fitScore}, mark ${formatMoney(contract.markPrice)}, breakeven ${formatMoney(contract.breakevenPrice)}.`,
@@ -3581,7 +3550,16 @@ The requested follow-up market refresh could not be loaded, so answer using the 
         <div
           className="algo-v2-actions is-media-player"
           onMouseEnter={() =>
-            setHoveredSpatialTarget({
+            previewSpatialTarget({
+              kind: "actions",
+              label: "Execution bar",
+              summary: `The cockpit is ${displayedSessionState.toLowerCase()}. Primary control is ${
+                displayedSessionState === "Paused" ? "Resume Session" : displayedSessionState === "Active" ? "Pause Session" : "Arm"
+              }.`,
+            })
+          }
+          onClick={() =>
+            lockSpatialTarget({
               kind: "actions",
               label: "Execution bar",
               summary: `The cockpit is ${displayedSessionState.toLowerCase()}. Primary control is ${
@@ -3762,146 +3740,127 @@ The requested follow-up market refresh could not be loaded, so answer using the 
         {actionNotice ? <p className="form-help">{actionNotice}</p> : null}
         {error ? <p className="form-error">{error}</p> : null}
       </div>
-      {spatialHud ? (
-        <div
-          ref={spatialHudRef}
-          className={`algo-v2-spatial-hud${spatialHudPinned ? " is-pinned" : ""}${spatialHudMinimized ? " is-minimized" : ""}${spatialHudExpanded ? " is-expanded" : ""}`}
-          tabIndex={0}
-          onMouseDown={handleSpatialHudHoldStart}
-          onMouseUp={handleSpatialHudHoldEnd}
-          onDoubleClick={handleSpatialHudDoubleClick}
-          onMouseEnter={() => {
-            if (!spatialHudPinned) {
-              setSpatialHudInteractive(true);
-              setSpatialHudPinnedPosition(getSpatialHudPositionFromRect());
-            }
-          }}
-          onMouseLeave={() => {
-            clearSpatialHudHoldTimer();
-            if (!spatialHudPinned) {
-              setSpatialHudInteractive(false);
-              setSpatialHudPinnedPosition(null);
-            }
-          }}
-          style={{
-            left: `${spatialHudPinned || spatialHudInteractive
-              ? spatialHudPinnedPosition?.x ?? Math.max(16, cursorPosition.x + 18)
-              : Math.max(16, cursorPosition.x + 18)}px`,
-            top: `${spatialHudPinned || spatialHudInteractive
-              ? spatialHudPinnedPosition?.y ?? Math.max(16, cursorPosition.y + 18)
-              : Math.max(16, cursorPosition.y + 18)}px`,
-          }}
-        >
-          <div className="algo-v2-spatial-hud-header">
-            <span className="algo-v2-spatial-hud-label">Cursor HUD</span>
-            <div className="algo-v2-spatial-hud-topline">
-              {clipboardMemory ? (
-                <span className="algo-v2-spatial-hud-memory">
-                  Copied: {clipboardSymbol || clipboardMemory}
-                </span>
-              ) : null}
+      <aside
+        ref={spatialHudRef}
+        className={`algo-v2-spatial-hud${spatialHudMinimized ? " is-minimized" : ""}${spatialHudExpanded ? " is-expanded" : ""}`}
+        tabIndex={0}
+      >
+        <div className="algo-v2-spatial-hud-handle" />
+        <div className="algo-v2-spatial-hud-header">
+          <div>
+            <span className="algo-v2-spatial-hud-label">Scope Panel</span>
+            <strong className={`algo-v2-spatial-hud-title ${spatialHud.tone}`}>{spatialHud.title}</strong>
+          </div>
+          <div className="algo-v2-spatial-hud-topline">
+            {lockedSpatialTarget ? (
+              <span className="algo-v2-spatial-hud-memory">Locked</span>
+            ) : (
+              <span className="algo-v2-spatial-hud-memory">Live preview</span>
+            )}
+            <button
+              type="button"
+              className="algo-v2-spatial-hud-pin"
+              onClick={() => setSpatialHudMinimized((current) => !current)}
+            >
+              {spatialHudMinimized ? "Open" : "Minimize"}
+            </button>
+            {!spatialHudMinimized ? (
               <button
                 type="button"
                 className="algo-v2-spatial-hud-pin"
-                onClick={() => setSpatialHudMinimized((current) => !current)}
+                onClick={() => setSpatialHudExpanded((current) => !current)}
               >
-                {spatialHudMinimized ? "Maximize" : "Minimize"}
+                {spatialHudExpanded ? "Compact" : "Expand"}
               </button>
-              {!spatialHudMinimized ? (
+            ) : null}
+          </div>
+        </div>
+        {!spatialHudMinimized ? (
+          <>
+            {clipboardMemory ? (
+              <p className="algo-v2-spatial-hud-chip-row">
+                Copied: <strong>{clipboardSymbol || clipboardMemory}</strong>
+              </p>
+            ) : null}
+            <p className="algo-v2-spatial-hud-copy">{spatialHud.summary}</p>
+            <div className="algo-v2-spatial-hud-actions">
+              {spatialPromptTarget ? (
                 <button
                   type="button"
-                  className="algo-v2-spatial-hud-pin"
-                  onClick={() => setSpatialHudExpanded((current) => !current)}
-                >
-                  {spatialHudExpanded ? "Compact" : "Expand"}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="algo-v2-spatial-hud-pin"
-                onClick={() => {
-                  if (spatialHudPinned) {
-                    releaseSpatialHud();
-                  } else {
-                    freezeSpatialHud();
-                  }
-                }}
-              >
-                {spatialHudPinned ? "Release Lens" : "Freeze Lens"}
-              </button>
-            </div>
-          </div>
-          <strong className={`algo-v2-spatial-hud-title ${spatialHud.tone}`}>{spatialHud.title}</strong>
-          {!spatialHudMinimized ? (
-            <>
-              <p className="algo-v2-spatial-hud-copy">{spatialHud.summary}</p>
-              <div className="algo-v2-spatial-hud-actions">
-                {spatialPromptTarget ? (
-                  <button
-                    type="button"
-                    className="algo-v2-spatial-hud-button is-secondary"
-                    onClick={() => {
-                      void handleSpatialInsightRequest();
-                    }}
-                  >
-                    {isSpatialInsightLoading ? "Thinking..." : "Explain"}
-                  </button>
-                ) : null}
-                {clipboardSymbol && clipboardSymbol !== normalizedSymbol ? (
-                  <button
-                    type="button"
-                    className="algo-v2-spatial-hud-button"
-                    onClick={() => setSymbol(clipboardSymbol)}
-                  >
-                    Load {clipboardSymbol}
-                  </button>
-                ) : null}
-                {hoveredSpatialTarget?.kind === "contract" &&
-                hoveredSpatialTarget.symbol &&
-                hoveredSpatialTarget.symbol !== selectedTurboContract?.symbol ? (
-                  <button
-                    type="button"
-                    className="algo-v2-spatial-hud-button is-secondary"
-                    onClick={() => setSelectedTurboContractSymbol(hoveredSpatialTarget.symbol ?? "")}
-                  >
-                    Select Contract
-                  </button>
-                ) : null}
-              </div>
-              {spatialInsight ? (
-                <p className="algo-v2-spatial-hud-copy is-insight">{spatialInsight}</p>
-              ) : null}
-              <form className="algo-v2-spatial-hud-form" onSubmit={handleSpatialQuerySubmit}>
-                <input
-                  className="form-input algo-v2-spatial-hud-input"
-                  value={spatialQuery}
-                  onChange={(event) => setSpatialQuery(event.target.value)}
-                  placeholder="Ask about this target..."
-                />
-                <button
-                  type="submit"
                   className="algo-v2-spatial-hud-button is-secondary"
-                  disabled={isSpatialInsightLoading || !spatialQuery.trim()}
+                  onClick={() => {
+                    void handleSpatialInsightRequest();
+                  }}
                 >
-                  Ask
+                  {isSpatialInsightLoading ? "Thinking..." : "Explain"}
                 </button>
-              </form>
-              <p className="algo-v2-spatial-hud-hint">
-                Hover to auto-explain after a short delay. Press and hold to freeze, or double-click anywhere on the lens to lock it in place.
-              </p>
+              ) : null}
+              {clipboardSymbol && clipboardSymbol !== normalizedSymbol ? (
+                <button
+                  type="button"
+                  className="algo-v2-spatial-hud-button"
+                  onClick={() => setSymbol(clipboardSymbol)}
+                >
+                  Load {clipboardSymbol}
+                </button>
+              ) : null}
+              {activeSpatialTarget?.kind === "contract" &&
+              activeSpatialTarget.symbol &&
+              activeSpatialTarget.symbol !== selectedTurboContract?.symbol ? (
+                <button
+                  type="button"
+                  className="algo-v2-spatial-hud-button is-secondary"
+                  onClick={() => setSelectedTurboContractSymbol(activeSpatialTarget.symbol ?? "")}
+                >
+                  Select Contract
+                </button>
+              ) : null}
+              {lockedSpatialTarget ? (
+                <button
+                  type="button"
+                  className="algo-v2-spatial-hud-button is-ghost"
+                  onClick={clearLockedSpatialTarget}
+                >
+                  Unlock
+                </button>
+              ) : null}
+            </div>
+            {spatialInsight ? (
+              <p className="algo-v2-spatial-hud-copy is-insight">{spatialInsight}</p>
+            ) : null}
+            <form className="algo-v2-spatial-hud-form" onSubmit={handleSpatialQuerySubmit}>
+              <input
+                className="form-input algo-v2-spatial-hud-input"
+                value={spatialQuery}
+                onChange={(event) => setSpatialQuery(event.target.value)}
+                placeholder="Ask about this target..."
+                disabled={!activeSpatialTarget && !isSpatialInsightLoading}
+              />
+              <button
+                type="submit"
+                className="algo-v2-spatial-hud-button is-secondary"
+                disabled={isSpatialInsightLoading || !spatialQuery.trim() || !activeSpatialTarget}
+              >
+                Ask
+              </button>
+            </form>
+            <p className="algo-v2-spatial-hud-hint">
+              Hover to preview. Click once on any cockpit surface to lock it into this panel, just like selecting a card in a mobile sheet.
+            </p>
+            {spatialHud.nextActions.length > 0 ? (
               <ul className="algo-v2-spatial-hud-list">
                 {spatialHud.nextActions.slice(0, 3).map((action) => (
                   <li key={action}>{action}</li>
                 ))}
               </ul>
-            </>
-          ) : (
-            <p className="algo-v2-spatial-hud-hint">
-              Lens minimized. Restore it to ask questions or inspect this target.
-            </p>
-          )}
-        </div>
-      ) : null}
+            ) : null}
+          </>
+        ) : (
+          <p className="algo-v2-spatial-hud-hint">
+            Mobile-style scope minimized. Reopen it to inspect or ask about the current target.
+          </p>
+        )}
+      </aside>
     </section>
   );
 }
