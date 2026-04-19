@@ -1484,6 +1484,7 @@ export function AlgoControllerV2({
     },
   ]);
   const spatialHudRef = useRef<HTMLDivElement | null>(null);
+  const spatialHudHoldTimerRef = useRef<number | null>(null);
   const normalizedSymbol = canonicalizeMarketSymbol(symbol);
   const clipboardSymbol = useMemo(
     () => extractRequestedMarketSymbol(clipboardMemory),
@@ -2638,36 +2639,69 @@ The requested follow-up market refresh could not be loaded, so answer using the 
     setSpatialQuery("");
   }
 
-  function freezeSpatialHud() {
+  function getSpatialHudPositionFromRect() {
+    const rect = spatialHudRef.current?.getBoundingClientRect();
+
+    if (!rect) {
+      return {
+        x: spatialHudPinnedPosition?.x ?? Math.max(16, cursorPosition.x + 18),
+        y: spatialHudPinnedPosition?.y ?? Math.max(16, cursorPosition.y + 18),
+      };
+    }
+
+    return {
+      x: Math.max(16, rect.left),
+      y: Math.max(16, rect.top),
+    };
+  }
+
+  function clearSpatialHudHoldTimer() {
+    if (spatialHudHoldTimerRef.current !== null) {
+      window.clearTimeout(spatialHudHoldTimerRef.current);
+      spatialHudHoldTimerRef.current = null;
+    }
+  }
+
+  function freezeSpatialHud(position = getSpatialHudPositionFromRect()) {
     if (spatialHudPinned) {
       return;
     }
 
     setSpatialHudPinned(true);
-    setSpatialHudPinnedPosition({
-      x: spatialHudPinnedPosition?.x ?? Math.max(16, cursorPosition.x + 18),
-      y: spatialHudPinnedPosition?.y ?? Math.max(16, cursorPosition.y + 18),
-    });
+    setSpatialHudPinnedPosition(position);
     window.setTimeout(() => {
       spatialHudRef.current?.focus();
     }, 0);
   }
 
   function releaseSpatialHud() {
+    clearSpatialHudHoldTimer();
     setSpatialHudPinned(false);
     setSpatialHudPinnedPosition(null);
   }
 
-  function handleSpatialHudTapHold(event: React.MouseEvent<HTMLDivElement>) {
+  function handleSpatialHudHoldStart(event: React.MouseEvent<HTMLDivElement>) {
     const target = event.target as HTMLElement;
 
-    if (event.detail > 1 || target.closest("button, input, textarea, form")) {
+    if (target.closest("button, input, textarea, form")) {
       return;
     }
 
-    if (!spatialHudPinned) {
-      freezeSpatialHud();
+    clearSpatialHudHoldTimer();
+
+    if (spatialHudPinned) {
+      return;
     }
+
+    const position = getSpatialHudPositionFromRect();
+    spatialHudHoldTimerRef.current = window.setTimeout(() => {
+      freezeSpatialHud(position);
+      spatialHudHoldTimerRef.current = null;
+    }, 240);
+  }
+
+  function handleSpatialHudHoldEnd() {
+    clearSpatialHudHoldTimer();
   }
 
   function handleSpatialHudDoubleClick(event: React.MouseEvent<HTMLDivElement>) {
@@ -2677,7 +2711,8 @@ The requested follow-up market refresh could not be loaded, so answer using the 
       return;
     }
 
-    freezeSpatialHud();
+    clearSpatialHudHoldTimer();
+    freezeSpatialHud(getSpatialHudPositionFromRect());
   }
 
   return (
@@ -3728,18 +3763,17 @@ The requested follow-up market refresh could not be loaded, so answer using the 
           ref={spatialHudRef}
           className={`algo-v2-spatial-hud${spatialHudPinned ? " is-pinned" : ""}${spatialHudMinimized ? " is-minimized" : ""}${spatialHudExpanded ? " is-expanded" : ""}`}
           tabIndex={0}
-          onClick={handleSpatialHudTapHold}
+          onMouseDown={handleSpatialHudHoldStart}
+          onMouseUp={handleSpatialHudHoldEnd}
           onDoubleClick={handleSpatialHudDoubleClick}
           onMouseEnter={() => {
             if (!spatialHudPinned) {
               setSpatialHudInteractive(true);
-              setSpatialHudPinnedPosition({
-                x: Math.max(16, cursorPosition.x + 18),
-                y: Math.max(16, cursorPosition.y + 18),
-              });
+              setSpatialHudPinnedPosition(getSpatialHudPositionFromRect());
             }
           }}
           onMouseLeave={() => {
+            clearSpatialHudHoldTimer();
             if (!spatialHudPinned) {
               setSpatialHudInteractive(false);
               setSpatialHudPinnedPosition(null);
@@ -3781,7 +3815,13 @@ The requested follow-up market refresh could not be loaded, so answer using the 
               <button
                 type="button"
                 className="algo-v2-spatial-hud-pin"
-                onClick={spatialHudPinned ? releaseSpatialHud : freezeSpatialHud}
+                onClick={() => {
+                  if (spatialHudPinned) {
+                    releaseSpatialHud();
+                  } else {
+                    freezeSpatialHud();
+                  }
+                }}
               >
                 {spatialHudPinned ? "Release Lens" : "Freeze Lens"}
               </button>
@@ -3843,7 +3883,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                 </button>
               </form>
               <p className="algo-v2-spatial-hud-hint">
-                Hover to auto-explain after a short delay. Tap the lens to hold, or double-click anywhere on it to freeze it in place.
+                Hover to auto-explain after a short delay. Press and hold to freeze, or double-click anywhere on the lens to lock it in place.
               </p>
               <ul className="algo-v2-spatial-hud-list">
                 {spatialHud.nextActions.slice(0, 3).map((action) => (
