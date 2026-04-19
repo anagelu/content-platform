@@ -239,6 +239,17 @@ type GenerateAlgoControllerV2CopilotOutput = {
   usage: OpenAIUsageStats;
 };
 
+type GenerateSpatialAgentInsightInput = {
+  systemInstruction: string;
+  userText: string;
+};
+
+type GenerateSpatialAgentInsightOutput = {
+  reply: string;
+  model: string;
+  usage: OpenAIUsageStats;
+};
+
 type OpenAIUsageStats = {
   inputTokens: number;
   outputTokens: number;
@@ -1846,6 +1857,78 @@ Return a JSON object with this exact shape:
       .filter(Boolean)
       .slice(0, 4),
     recommendedMode: parsed.recommendedMode,
+    model,
+    usage: provider === "gemini" ? parseGeminiUsage(payload) : parseOpenAIUsage(payload),
+  };
+}
+
+export async function generateSpatialAgentInsight({
+  systemInstruction,
+  userText,
+}: GenerateSpatialAgentInsightInput): Promise<GenerateSpatialAgentInsightOutput> {
+  const trimmedSystemInstruction = systemInstruction.trim();
+  const trimmedUserText = userText.trim();
+
+  if (!trimmedSystemInstruction || !trimmedUserText) {
+    throw new Error("Spatial agent prompt content is incomplete.");
+  }
+
+  const model = await getPostDraftGenerationModel();
+  const provider = await getAiProvider();
+  const replyInstruction =
+    `${trimmedSystemInstruction} Return JSON only with a single key, reply. Keep the reply compact and grounded in the hovered UI target.`;
+
+  const payload =
+    provider === "gemini"
+      ? await createGeminiResponse({
+          model,
+          systemInstruction: replyInstruction,
+          userText: `${trimmedUserText}
+
+Return a JSON object with this exact shape:
+{
+  "reply": "short spatial explanation"
+}`,
+          maxOutputTokens: 400,
+        })
+      : await createOpenAIResponse({
+          model,
+          max_output_tokens: 400,
+          input: [
+            {
+              role: "system",
+              content: [{ type: "input_text", text: replyInstruction }],
+            },
+            {
+              role: "user",
+              content: [{ type: "input_text", text: `${trimmedUserText}
+
+Return a JSON object with this exact shape:
+{
+  "reply": "short spatial explanation"
+}` }],
+            },
+          ],
+        });
+
+  const responseText =
+    provider === "gemini" ? getGeminiResponseText(payload) : getResponseText(payload);
+  const jsonText = extractJson(responseText);
+
+  let parsed: Partial<{ reply: string }>;
+
+  try {
+    parsed = JSON.parse(jsonText) as Partial<{ reply: string }>;
+  } catch {
+    throw new Error("The model returned an unreadable spatial agent response.");
+  }
+
+  if (!parsed || typeof parsed.reply !== "string") {
+    throw new Error("The model returned an incomplete spatial agent response.");
+  }
+
+  return {
+    reply: parsed.reply.trim(),
     model,
     usage: provider === "gemini" ? parseGeminiUsage(payload) : parseOpenAIUsage(payload),
   };

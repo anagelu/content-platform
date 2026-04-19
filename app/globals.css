@@ -2956,6 +2956,12 @@ main {
   line-height: 1.5;
 }
 
+.algo-v2-spatial-hud-copy.is-insight {
+  padding-top: 0.2rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  color: #0f172a;
+}
+
 .algo-v2-spatial-hud-actions {
   display: flex;
   flex-wrap: wrap;

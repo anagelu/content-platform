@@ -10,6 +10,11 @@ import {
 } from "../actions";
 import type { AlpacaTradeController } from "@/lib/alpaca-trade-controller";
 import type { AlpacaBarTimeframe, AlpacaOrder, AlpacaPosition } from "@/lib/alpaca";
+import type {
+  SpatialBehaviorProfile,
+  SpatialCockpitContext,
+  SpatialPromptTarget,
+} from "@/lib/spatial-agent-prompts";
 
 type Snapshot = Awaited<ReturnType<typeof getAlpacaAlgoSnapshot>>;
 type TurboOptionCandidatesResult = Awaited<ReturnType<typeof getTurboOptionCandidates>>;
@@ -1455,6 +1460,8 @@ export function AlgoControllerV2({
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
   const [hoveredSpatialTarget, setHoveredSpatialTarget] = useState<SpatialHoverTarget | null>(null);
   const [clipboardMemory, setClipboardMemory] = useState("");
+  const [spatialInsight, setSpatialInsight] = useState("");
+  const [isSpatialInsightLoading, setIsSpatialInsightLoading] = useState(false);
   const [copilotFocusSymbol, setCopilotFocusSymbol] = useState<string | null>(null);
   const [copilotFocusTimeframe, setCopilotFocusTimeframe] = useState<AlpacaBarTimeframe | null>(null);
   const [copilotInput, setCopilotInput] = useState("");
@@ -1856,6 +1863,102 @@ export function AlgoControllerV2({
       nextActions,
     };
   }, [clipboardSymbol, hoveredSpatialTarget, normalizedSymbol, selectedTurboContract?.symbol]);
+  const spatialCockpitContext = useMemo<SpatialCockpitContext>(
+    () => ({
+      symbol: normalizedSymbol || "--",
+      timeframe: analysisTimeframe,
+      mode,
+      overallConfluence: displayedOverallScore,
+      sessionState: displayedSessionState,
+      price: snapshot?.latestPrice ?? null,
+      priceChangePercent: snapshot?.priceChangePercent ?? null,
+      topCandleSignal: snapshot?.candlestickSignals[0]?.name ?? "",
+      executionLockReason: playLockReason,
+    }),
+    [
+      analysisTimeframe,
+      displayedOverallScore,
+      displayedSessionState,
+      mode,
+      normalizedSymbol,
+      playLockReason,
+      snapshot,
+    ],
+  );
+  const spatialBehaviorProfile = useMemo<SpatialBehaviorProfile>(
+    () => ({
+      copiedText: clipboardMemory || undefined,
+      copiedSymbol: clipboardSymbol || undefined,
+      recentHoverPattern: hoveredSpatialTarget ? [hoveredSpatialTarget.label] : [],
+      inferredInterests: hoveredSpatialTarget ? [hoveredSpatialTarget.kind] : [],
+    }),
+    [clipboardMemory, clipboardSymbol, hoveredSpatialTarget],
+  );
+  const spatialPromptTarget = useMemo<SpatialPromptTarget | null>(() => {
+    if (!hoveredSpatialTarget) {
+      return null;
+    }
+
+    if (hoveredSpatialTarget.kind === "contract" && hoveredSpatialTarget.symbol) {
+      const contract = turboContracts.find(
+        (entry) => entry.symbol === hoveredSpatialTarget.symbol,
+      );
+
+      return {
+        kind: "contract_card",
+        label: hoveredSpatialTarget.label,
+        symbol: hoveredSpatialTarget.symbol,
+        fitScore: hoveredSpatialTarget.score ?? contract?.fitScore ?? 0,
+        markPrice: contract?.markPrice ?? null,
+        breakevenPrice: contract?.breakevenPrice ?? null,
+        impliedVolatility: contract?.snapshot.impliedVolatility ?? null,
+        spreadLabel: contract ? formatOptionSpreadLabel(contract.spreadPercent) : undefined,
+        delta: contract?.snapshot.delta ?? null,
+        summary: hoveredSpatialTarget.summary,
+      };
+    }
+
+    const gauge = confluence.gauges.find(
+      (entry) => entry.label === hoveredSpatialTarget.label,
+    );
+
+    if (hoveredSpatialTarget.kind === "timeframe" || hoveredSpatialTarget.label === "Timeframe Confluence") {
+      return {
+        kind: "timeframe_confluence",
+        label: hoveredSpatialTarget.label,
+        score: hoveredSpatialTarget.score ?? gauge?.score ?? 0,
+        band: gauge?.band ?? "Mixed",
+        summary: hoveredSpatialTarget.summary,
+        subscores: gauge?.subscores,
+        nearbyTimeframes: gauge?.lensReadouts?.map((entry) => ({
+          label: entry.label,
+          timeframe: entry.timeframe,
+          score: entry.score,
+          summary: entry.summary,
+        })),
+      };
+    }
+
+    const gaugeKind =
+      hoveredSpatialTarget.label === "Execution"
+        ? "execution"
+        : hoveredSpatialTarget.label === "Trend"
+          ? "trend"
+          : null;
+
+    if (!gaugeKind) {
+      return null;
+    }
+
+    return {
+      kind: gaugeKind,
+      label: hoveredSpatialTarget.label,
+      score: hoveredSpatialTarget.score ?? gauge?.score ?? 0,
+      band: gauge?.band ?? "Mixed",
+      summary: hoveredSpatialTarget.summary,
+      subscores: gauge?.subscores,
+    };
+  }, [confluence.gauges, hoveredSpatialTarget, turboContracts]);
 
   function buildCopilotContextText({
     symbol: contextSymbol,
@@ -2042,6 +2145,10 @@ ${recentOrderSummary}`;
       setClipboardMemory("");
     }
   }, []);
+
+  useEffect(() => {
+    setSpatialInsight("");
+  }, [hoveredSpatialTarget]);
 
   useEffect(() => {
     try {
@@ -2423,6 +2530,45 @@ The requested follow-up market refresh could not be loaded, so answer using the 
       ]);
     } finally {
       setIsCopilotLoading(false);
+    }
+  }
+
+  async function handleSpatialInsightRequest() {
+    if (!spatialPromptTarget || isSpatialInsightLoading) {
+      return;
+    }
+
+    setIsSpatialInsightLoading(true);
+
+    try {
+      const response = await fetch("/api/ai/spatial-agent", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          cockpit: spatialCockpitContext,
+          target: spatialPromptTarget,
+          behavior: spatialBehaviorProfile,
+          mode: spatialPromptTarget.kind === "contract_card" ? "active_workspace" : "passive_hud",
+        }),
+      });
+
+      const payload = (await response.json()) as { error?: string; reply?: string };
+
+      if (!response.ok || !payload.reply) {
+        throw new Error(payload.error || "Spatial insight could not load right now.");
+      }
+
+      setSpatialInsight(payload.reply);
+    } catch (spatialError) {
+      setSpatialInsight(
+        spatialError instanceof Error
+          ? spatialError.message
+          : "Spatial insight could not load right now.",
+      );
+    } finally {
+      setIsSpatialInsightLoading(false);
     }
   }
 
@@ -3483,6 +3629,15 @@ The requested follow-up market refresh could not be loaded, so answer using the 
           <strong className={`algo-v2-spatial-hud-title ${spatialHud.tone}`}>{spatialHud.title}</strong>
           <p className="algo-v2-spatial-hud-copy">{spatialHud.summary}</p>
           <div className="algo-v2-spatial-hud-actions">
+            {spatialPromptTarget ? (
+              <button
+                type="button"
+                className="algo-v2-spatial-hud-button is-secondary"
+                onClick={handleSpatialInsightRequest}
+              >
+                {isSpatialInsightLoading ? "Thinking..." : "Explain"}
+              </button>
+            ) : null}
             {clipboardSymbol && clipboardSymbol !== normalizedSymbol ? (
               <button
                 type="button"
@@ -3504,6 +3659,9 @@ The requested follow-up market refresh could not be loaded, so answer using the 
               </button>
             ) : null}
           </div>
+          {spatialInsight ? (
+            <p className="algo-v2-spatial-hud-copy is-insight">{spatialInsight}</p>
+          ) : null}
           <ul className="algo-v2-spatial-hud-list">
             {spatialHud.nextActions.slice(0, 3).map((action) => (
               <li key={action}>{action}</li>
