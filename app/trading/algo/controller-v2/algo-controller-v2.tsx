@@ -1464,6 +1464,8 @@ export function AlgoControllerV2({
   const [isSpatialInsightLoading, setIsSpatialInsightLoading] = useState(false);
   const [spatialHudPinned, setSpatialHudPinned] = useState(false);
   const [spatialHudInteractive, setSpatialHudInteractive] = useState(false);
+  const [spatialHudMinimized, setSpatialHudMinimized] = useState(false);
+  const [spatialHudExpanded, setSpatialHudExpanded] = useState(false);
   const [spatialHudPinnedPosition, setSpatialHudPinnedPosition] = useState<{
     x: number;
     y: number;
@@ -2633,6 +2635,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
     }
 
     await handleSpatialInsightRequest(trimmedQuery);
+    setSpatialQuery("");
   }
 
   function toggleSpatialHudPin() {
@@ -2653,6 +2656,18 @@ The requested follow-up market refresh could not be loaded, so answer using the 
 
       return next;
     });
+  }
+
+  function handleSpatialHudTapHold(event: React.MouseEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement;
+
+    if (target.closest("button, input, textarea, form")) {
+      return;
+    }
+
+    if (!spatialHudPinned) {
+      toggleSpatialHudPin();
+    }
   }
 
   return (
@@ -3701,8 +3716,9 @@ The requested follow-up market refresh could not be loaded, so answer using the 
       {spatialHud ? (
         <div
           ref={spatialHudRef}
-          className="algo-v2-spatial-hud"
+          className={`algo-v2-spatial-hud${spatialHudPinned ? " is-pinned" : ""}${spatialHudMinimized ? " is-minimized" : ""}${spatialHudExpanded ? " is-expanded" : ""}`}
           tabIndex={0}
+          onClick={handleSpatialHudTapHold}
           onDoubleClick={toggleSpatialHudPin}
           onMouseEnter={() => {
             if (!spatialHudPinned) {
@@ -3739,6 +3755,22 @@ The requested follow-up market refresh could not be loaded, so answer using the 
               <button
                 type="button"
                 className="algo-v2-spatial-hud-pin"
+                onClick={() => setSpatialHudMinimized((current) => !current)}
+              >
+                {spatialHudMinimized ? "Maximize" : "Minimize"}
+              </button>
+              {!spatialHudMinimized ? (
+                <button
+                  type="button"
+                  className="algo-v2-spatial-hud-pin"
+                  onClick={() => setSpatialHudExpanded((current) => !current)}
+                >
+                  {spatialHudExpanded ? "Compact" : "Expand"}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="algo-v2-spatial-hud-pin"
                 onClick={toggleSpatialHudPin}
               >
                 {spatialHudPinned ? "Release Lens" : "Freeze Lens"}
@@ -3746,66 +3778,74 @@ The requested follow-up market refresh could not be loaded, so answer using the 
             </div>
           </div>
           <strong className={`algo-v2-spatial-hud-title ${spatialHud.tone}`}>{spatialHud.title}</strong>
-          <p className="algo-v2-spatial-hud-copy">{spatialHud.summary}</p>
-          <div className="algo-v2-spatial-hud-actions">
-            {spatialPromptTarget ? (
-              <button
-                type="button"
-                className="algo-v2-spatial-hud-button is-secondary"
-                onClick={() => {
-                  void handleSpatialInsightRequest();
-                }}
-              >
-                {isSpatialInsightLoading ? "Thinking..." : "Explain"}
-              </button>
-            ) : null}
-            {clipboardSymbol && clipboardSymbol !== normalizedSymbol ? (
-              <button
-                type="button"
-                className="algo-v2-spatial-hud-button"
-                onClick={() => setSymbol(clipboardSymbol)}
-              >
-                Load {clipboardSymbol}
-              </button>
-            ) : null}
-            {hoveredSpatialTarget?.kind === "contract" &&
-            hoveredSpatialTarget.symbol &&
-            hoveredSpatialTarget.symbol !== selectedTurboContract?.symbol ? (
-              <button
-                type="button"
-                className="algo-v2-spatial-hud-button is-secondary"
-                onClick={() => setSelectedTurboContractSymbol(hoveredSpatialTarget.symbol ?? "")}
-              >
-                Select Contract
-              </button>
-            ) : null}
-          </div>
-          {spatialInsight ? (
-            <p className="algo-v2-spatial-hud-copy is-insight">{spatialInsight}</p>
-          ) : null}
-          <form className="algo-v2-spatial-hud-form" onSubmit={handleSpatialQuerySubmit}>
-            <input
-              className="form-input algo-v2-spatial-hud-input"
-              value={spatialQuery}
-              onChange={(event) => setSpatialQuery(event.target.value)}
-              placeholder="Ask about this target..."
-            />
-            <button
-              type="submit"
-              className="algo-v2-spatial-hud-button is-secondary"
-              disabled={isSpatialInsightLoading || !spatialQuery.trim()}
-            >
-              Ask
-            </button>
-          </form>
-          <p className="algo-v2-spatial-hud-hint">
-            Hover to auto-explain after a short delay. Double-click the lens to freeze it in place.
-          </p>
-          <ul className="algo-v2-spatial-hud-list">
-            {spatialHud.nextActions.slice(0, 3).map((action) => (
-              <li key={action}>{action}</li>
-            ))}
-          </ul>
+          {!spatialHudMinimized ? (
+            <>
+              <p className="algo-v2-spatial-hud-copy">{spatialHud.summary}</p>
+              <div className="algo-v2-spatial-hud-actions">
+                {spatialPromptTarget ? (
+                  <button
+                    type="button"
+                    className="algo-v2-spatial-hud-button is-secondary"
+                    onClick={() => {
+                      void handleSpatialInsightRequest();
+                    }}
+                  >
+                    {isSpatialInsightLoading ? "Thinking..." : "Explain"}
+                  </button>
+                ) : null}
+                {clipboardSymbol && clipboardSymbol !== normalizedSymbol ? (
+                  <button
+                    type="button"
+                    className="algo-v2-spatial-hud-button"
+                    onClick={() => setSymbol(clipboardSymbol)}
+                  >
+                    Load {clipboardSymbol}
+                  </button>
+                ) : null}
+                {hoveredSpatialTarget?.kind === "contract" &&
+                hoveredSpatialTarget.symbol &&
+                hoveredSpatialTarget.symbol !== selectedTurboContract?.symbol ? (
+                  <button
+                    type="button"
+                    className="algo-v2-spatial-hud-button is-secondary"
+                    onClick={() => setSelectedTurboContractSymbol(hoveredSpatialTarget.symbol ?? "")}
+                  >
+                    Select Contract
+                  </button>
+                ) : null}
+              </div>
+              {spatialInsight ? (
+                <p className="algo-v2-spatial-hud-copy is-insight">{spatialInsight}</p>
+              ) : null}
+              <form className="algo-v2-spatial-hud-form" onSubmit={handleSpatialQuerySubmit}>
+                <input
+                  className="form-input algo-v2-spatial-hud-input"
+                  value={spatialQuery}
+                  onChange={(event) => setSpatialQuery(event.target.value)}
+                  placeholder="Ask about this target..."
+                />
+                <button
+                  type="submit"
+                  className="algo-v2-spatial-hud-button is-secondary"
+                  disabled={isSpatialInsightLoading || !spatialQuery.trim()}
+                >
+                  Ask
+                </button>
+              </form>
+              <p className="algo-v2-spatial-hud-hint">
+                Hover to auto-explain after a short delay. Tap the lens to hold, or double-click anywhere on it to freeze in place.
+              </p>
+              <ul className="algo-v2-spatial-hud-list">
+                {spatialHud.nextActions.slice(0, 3).map((action) => (
+                  <li key={action}>{action}</li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="algo-v2-spatial-hud-hint">
+              Lens minimized. Restore it to ask questions or inspect this target.
+            </p>
+          )}
         </div>
       ) : null}
     </section>
