@@ -57,6 +57,13 @@ export type SpatialPromptContract = {
   userText: string;
 };
 
+export type SpatialQueryPromptInput = {
+  cockpit: SpatialCockpitContext;
+  target: SpatialPromptTarget;
+  behavior?: SpatialBehaviorProfile;
+  userQuery: string;
+};
+
 function joinList(values: string[] | undefined, fallback = "(none)") {
   if (!values || values.length === 0) {
     return fallback;
@@ -301,4 +308,32 @@ export function buildSpatialPromptForTarget({
     behavior,
     mode,
   });
+}
+
+export function buildSpatialQueryPrompt({
+  cockpit,
+  target,
+  behavior,
+  userQuery,
+}: SpatialQueryPromptInput): SpatialPromptContract {
+  const hoveredTargetText =
+    target.kind === "contract_card" ? formatContractTarget(target) : formatGaugeTarget(target);
+
+  return {
+    systemInstruction:
+      "You are the Pattern Foundry Scope Panel. Answer the user's question by combining the explicit query with the current hovered or locked UI target, cockpit context, and behavior profile. Stay grounded in the provided structured context. Do not invent hidden values. Answer directly, compactly, and with instrument-like clarity.",
+    userText: `User query:
+${userQuery.trim()}
+
+Cockpit context:
+${formatCockpitContext(cockpit)}
+
+Current scope target:
+${hoveredTargetText}
+
+Behavior profile:
+${formatBehaviorProfile(behavior)}
+
+Answer the user's question directly. If their request depends on missing data, say what is missing and use the available cockpit context.`,
+  };
 }

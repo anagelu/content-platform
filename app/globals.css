@@ -2977,6 +2977,18 @@ main {
   pointer-events: auto;
 }
 
+.algo-v2-spatial-hud-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.algo-v2-spatial-hud-input {
+  min-width: 0;
+  padding: 0.7rem 0.85rem;
+}
+
 .algo-v2-spatial-hud-pin {
   border: 1px solid rgba(148, 163, 184, 0.35);
   border-radius: 999px;

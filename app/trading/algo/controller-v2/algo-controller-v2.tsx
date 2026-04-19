@@ -1464,6 +1464,7 @@ export function AlgoControllerV2({
   const [isSpatialInsightLoading, setIsSpatialInsightLoading] = useState(false);
   const [spatialHudPinned, setSpatialHudPinned] = useState(false);
   const [lastAutoInsightKey, setLastAutoInsightKey] = useState("");
+  const [spatialQuery, setSpatialQuery] = useState("");
   const [copilotFocusSymbol, setCopilotFocusSymbol] = useState<string | null>(null);
   const [copilotFocusTimeframe, setCopilotFocusTimeframe] = useState<AlpacaBarTimeframe | null>(null);
   const [copilotInput, setCopilotInput] = useState("");
@@ -2604,7 +2605,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
     }
   }
 
-  async function handleSpatialInsightRequest() {
+  async function handleSpatialInsightRequest(userQuery = "") {
     if (!spatialPromptTarget || isSpatialInsightLoading) {
       return;
     }
@@ -2622,6 +2623,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
           target: spatialPromptTarget,
           behavior: spatialBehaviorProfile,
           mode: spatialPromptTarget.kind === "contract_card" ? "active_workspace" : "passive_hud",
+          userQuery: userQuery.trim() || undefined,
         }),
       });
 
@@ -2641,6 +2643,18 @@ The requested follow-up market refresh could not be loaded, so answer using the 
     } finally {
       setIsSpatialInsightLoading(false);
     }
+  }
+
+  async function handleSpatialQuerySubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const trimmedQuery = spatialQuery.trim();
+
+    if (!trimmedQuery) {
+      return;
+    }
+
+    await handleSpatialInsightRequest(trimmedQuery);
   }
 
   return (
@@ -3726,7 +3740,9 @@ The requested follow-up market refresh could not be loaded, so answer using the 
               <button
                 type="button"
                 className="algo-v2-spatial-hud-button is-secondary"
-                onClick={handleSpatialInsightRequest}
+                onClick={() => {
+                  void handleSpatialInsightRequest();
+                }}
               >
                 {isSpatialInsightLoading ? "Thinking..." : "Explain"}
               </button>
@@ -3755,6 +3771,21 @@ The requested follow-up market refresh could not be loaded, so answer using the 
           {spatialInsight ? (
             <p className="algo-v2-spatial-hud-copy is-insight">{spatialInsight}</p>
           ) : null}
+          <form className="algo-v2-spatial-hud-form" onSubmit={handleSpatialQuerySubmit}>
+            <input
+              className="form-input algo-v2-spatial-hud-input"
+              value={spatialQuery}
+              onChange={(event) => setSpatialQuery(event.target.value)}
+              placeholder="Ask about this target..."
+            />
+            <button
+              type="submit"
+              className="algo-v2-spatial-hud-button is-secondary"
+              disabled={isSpatialInsightLoading || !spatialQuery.trim()}
+            >
+              Ask
+            </button>
+          </form>
           <p className="algo-v2-spatial-hud-hint">
             Hover to auto-explain after a short delay. Press <kbd>H</kbd> to pin and focus this panel.
           </p>

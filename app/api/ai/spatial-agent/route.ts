@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { recordAiUsageEvent } from "@/lib/ai-usage";
 import { generateSpatialAgentInsight } from "@/lib/openai";
 import {
+  buildSpatialQueryPrompt,
   buildSpatialPromptForTarget,
   type SpatialAgentMode,
   type SpatialBehaviorProfile,
@@ -24,18 +25,26 @@ export async function POST(request: Request) {
       target?: SpatialPromptTarget;
       behavior?: SpatialBehaviorProfile;
       mode?: SpatialAgentMode;
+      userQuery?: string;
     };
 
     if (!body.cockpit || !body.target) {
       throw new Error("Spatial cockpit context is missing.");
     }
 
-    const prompt = buildSpatialPromptForTarget({
-      cockpit: body.cockpit,
-      target: body.target,
-      behavior: body.behavior,
-      mode: body.mode,
-    });
+    const prompt = body.userQuery?.trim()
+      ? buildSpatialQueryPrompt({
+          cockpit: body.cockpit,
+          target: body.target,
+          behavior: body.behavior,
+          userQuery: body.userQuery,
+        })
+      : buildSpatialPromptForTarget({
+          cockpit: body.cockpit,
+          target: body.target,
+          behavior: body.behavior,
+          mode: body.mode,
+        });
 
     const result = await generateSpatialAgentInsight(prompt);
 
