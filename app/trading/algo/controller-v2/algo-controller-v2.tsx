@@ -2680,10 +2680,18 @@ The requested follow-up market refresh could not be loaded, so answer using the 
     setSpatialHudPinnedPosition(null);
   }
 
+  function isSpatialHudInteractiveTarget(target: HTMLElement) {
+    return Boolean(
+      target.closest(
+        "button, input, textarea, form, a, select, option, label, [role='button'], [data-spatial-hud-interactive='true']",
+      ),
+    );
+  }
+
   function handleSpatialHudHoldStart(event: React.MouseEvent<HTMLDivElement>) {
     const target = event.target as HTMLElement;
 
-    if (target.closest("button, input, textarea, form")) {
+    if (event.button !== 0 || isSpatialHudInteractiveTarget(target)) {
       return;
     }
 
@@ -2693,11 +2701,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
       return;
     }
 
-    const position = getSpatialHudPositionFromRect();
-    spatialHudHoldTimerRef.current = window.setTimeout(() => {
-      freezeSpatialHud(position);
-      spatialHudHoldTimerRef.current = null;
-    }, 240);
+    freezeSpatialHud(getSpatialHudPositionFromRect());
   }
 
   function handleSpatialHudHoldEnd() {
@@ -2707,7 +2711,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
   function handleSpatialHudDoubleClick(event: React.MouseEvent<HTMLDivElement>) {
     const target = event.target as HTMLElement;
 
-    if (target.closest("button, input, textarea, form")) {
+    if (isSpatialHudInteractiveTarget(target)) {
       return;
     }
 
