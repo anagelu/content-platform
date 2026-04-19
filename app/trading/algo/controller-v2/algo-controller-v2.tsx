@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import {
   getAlpacaAlgoSnapshot,
   getTurboOptionCandidates,
@@ -1462,6 +1462,8 @@ export function AlgoControllerV2({
   const [clipboardMemory, setClipboardMemory] = useState("");
   const [spatialInsight, setSpatialInsight] = useState("");
   const [isSpatialInsightLoading, setIsSpatialInsightLoading] = useState(false);
+  const [spatialHudPinned, setSpatialHudPinned] = useState(false);
+  const [lastAutoInsightKey, setLastAutoInsightKey] = useState("");
   const [copilotFocusSymbol, setCopilotFocusSymbol] = useState<string | null>(null);
   const [copilotFocusTimeframe, setCopilotFocusTimeframe] = useState<AlpacaBarTimeframe | null>(null);
   const [copilotInput, setCopilotInput] = useState("");
@@ -1473,6 +1475,7 @@ export function AlgoControllerV2({
         "Algo Controller V2 copilot is online. Ask why the setup is blocked, whether Standard or Turbo fits better, or what the current gauges are saying.",
     },
   ]);
+  const spatialHudRef = useRef<HTMLDivElement | null>(null);
   const normalizedSymbol = canonicalizeMarketSymbol(symbol);
   const clipboardSymbol = useMemo(
     () => extractRequestedMarketSymbol(clipboardMemory),
@@ -1959,6 +1962,20 @@ export function AlgoControllerV2({
       subscores: gauge?.subscores,
     };
   }, [confluence.gauges, hoveredSpatialTarget, turboContracts]);
+  const spatialPromptTargetKey = useMemo(() => {
+    if (!spatialPromptTarget) {
+      return "";
+    }
+
+    return JSON.stringify({
+      kind: spatialPromptTarget.kind,
+      label: spatialPromptTarget.label,
+      symbol: "symbol" in spatialPromptTarget ? spatialPromptTarget.symbol : null,
+      score: "score" in spatialPromptTarget ? spatialPromptTarget.score : spatialPromptTarget.fitScore,
+      timeframe: analysisTimeframe,
+      market: normalizedSymbol,
+    });
+  }, [analysisTimeframe, normalizedSymbol, spatialPromptTarget]);
 
   function buildCopilotContextText({
     symbol: contextSymbol,
@@ -2149,6 +2166,60 @@ ${recentOrderSummary}`;
   useEffect(() => {
     setSpatialInsight("");
   }, [hoveredSpatialTarget]);
+
+  useEffect(() => {
+    if (!spatialPromptTarget || !spatialPromptTargetKey) {
+      return;
+    }
+
+    if (isSpatialInsightLoading || spatialInsight || lastAutoInsightKey === spatialPromptTargetKey) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setLastAutoInsightKey(spatialPromptTargetKey);
+      void handleSpatialInsightRequest();
+    }, 700);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    isSpatialInsightLoading,
+    lastAutoInsightKey,
+    spatialInsight,
+    spatialPromptTarget,
+    spatialPromptTargetKey,
+  ]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key.toLowerCase() !== "h") {
+        return;
+      }
+
+      if (!spatialHud) {
+        return;
+      }
+
+      event.preventDefault();
+      setSpatialHudPinned((current) => {
+        const next = !current;
+
+        if (next) {
+          window.setTimeout(() => {
+            spatialHudRef.current?.focus();
+          }, 0);
+        }
+
+        return next;
+      });
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [spatialHud]);
 
   useEffect(() => {
     try {
@@ -2575,7 +2646,11 @@ The requested follow-up market refresh could not be loaded, so answer using the 
   return (
     <section
       className="algo-v2-shell"
-      onMouseLeave={() => setHoveredSpatialTarget(null)}
+      onMouseLeave={() => {
+        if (!spatialHudPinned) {
+          setHoveredSpatialTarget(null);
+        }
+      }}
     >
       <div className="algo-v2-stage">
         <div
@@ -3612,19 +3687,37 @@ The requested follow-up market refresh could not be loaded, so answer using the 
       </div>
       {spatialHud ? (
         <div
+          ref={spatialHudRef}
           className="algo-v2-spatial-hud"
+          tabIndex={0}
           style={{
-            left: `${Math.max(16, cursorPosition.x + 18)}px`,
-            top: `${Math.max(16, cursorPosition.y + 18)}px`,
+            left: spatialHudPinned ? "auto" : `${Math.max(16, cursorPosition.x + 18)}px`,
+            top: spatialHudPinned ? "auto" : `${Math.max(16, cursorPosition.y + 18)}px`,
+            right: spatialHudPinned ? "1rem" : undefined,
+            bottom: spatialHudPinned ? "1rem" : undefined,
           }}
         >
           <div className="algo-v2-spatial-hud-header">
             <span className="algo-v2-spatial-hud-label">Cursor HUD</span>
-            {clipboardMemory ? (
-              <span className="algo-v2-spatial-hud-memory">
-                Copied: {clipboardSymbol || clipboardMemory}
-              </span>
-            ) : null}
+            <div className="algo-v2-spatial-hud-topline">
+              {clipboardMemory ? (
+                <span className="algo-v2-spatial-hud-memory">
+                  Copied: {clipboardSymbol || clipboardMemory}
+                </span>
+              ) : null}
+              <button
+                type="button"
+                className="algo-v2-spatial-hud-pin"
+                onClick={() => {
+                  setSpatialHudPinned((current) => !current);
+                  window.setTimeout(() => {
+                    spatialHudRef.current?.focus();
+                  }, 0);
+                }}
+              >
+                {spatialHudPinned ? "Unpin" : "Pin HUD"}
+              </button>
+            </div>
           </div>
           <strong className={`algo-v2-spatial-hud-title ${spatialHud.tone}`}>{spatialHud.title}</strong>
           <p className="algo-v2-spatial-hud-copy">{spatialHud.summary}</p>
@@ -3662,6 +3755,9 @@ The requested follow-up market refresh could not be loaded, so answer using the 
           {spatialInsight ? (
             <p className="algo-v2-spatial-hud-copy is-insight">{spatialInsight}</p>
           ) : null}
+          <p className="algo-v2-spatial-hud-hint">
+            Hover to auto-explain after a short delay. Press <kbd>H</kbd> to pin and focus this panel.
+          </p>
           <ul className="algo-v2-spatial-hud-list">
             {spatialHud.nextActions.slice(0, 3).map((action) => (
               <li key={action}>{action}</li>
