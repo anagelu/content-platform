@@ -1463,6 +1463,7 @@ export function AlgoControllerV2({
   const [spatialInsight, setSpatialInsight] = useState("");
   const [isSpatialInsightLoading, setIsSpatialInsightLoading] = useState(false);
   const [spatialHudPinned, setSpatialHudPinned] = useState(false);
+  const [spatialHudInteractive, setSpatialHudInteractive] = useState(false);
   const [spatialHudPinnedPosition, setSpatialHudPinnedPosition] = useState<{
     x: number;
     y: number;
@@ -2207,6 +2208,10 @@ ${recentOrderSummary}`;
 
   useEffect(() => {
     function handleMouseMove(event: MouseEvent) {
+      if (spatialHudPinned || spatialHudInteractive) {
+        return;
+      }
+
       setCursorPosition({ x: event.clientX, y: event.clientY });
     }
 
@@ -2228,7 +2233,7 @@ ${recentOrderSummary}`;
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("copy", handleCopy);
     };
-  }, []);
+  }, [spatialHudInteractive, spatialHudPinned]);
 
   useEffect(() => {
     if (!autoBiasEnabled || mode !== "turbo") {
@@ -2656,6 +2661,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
       onMouseLeave={() => {
         if (!spatialHudPinned) {
           setHoveredSpatialTarget(null);
+          setSpatialHudInteractive(false);
         }
       }}
     >
@@ -3698,11 +3704,26 @@ The requested follow-up market refresh could not be loaded, so answer using the 
           className="algo-v2-spatial-hud"
           tabIndex={0}
           onDoubleClick={toggleSpatialHudPin}
+          onMouseEnter={() => {
+            if (!spatialHudPinned) {
+              setSpatialHudInteractive(true);
+              setSpatialHudPinnedPosition({
+                x: Math.max(16, cursorPosition.x + 18),
+                y: Math.max(16, cursorPosition.y + 18),
+              });
+            }
+          }}
+          onMouseLeave={() => {
+            if (!spatialHudPinned) {
+              setSpatialHudInteractive(false);
+              setSpatialHudPinnedPosition(null);
+            }
+          }}
           style={{
-            left: `${spatialHudPinned
+            left: `${spatialHudPinned || spatialHudInteractive
               ? spatialHudPinnedPosition?.x ?? Math.max(16, cursorPosition.x + 18)
               : Math.max(16, cursorPosition.x + 18)}px`,
-            top: `${spatialHudPinned
+            top: `${spatialHudPinned || spatialHudInteractive
               ? spatialHudPinnedPosition?.y ?? Math.max(16, cursorPosition.y + 18)
               : Math.max(16, cursorPosition.y + 18)}px`,
           }}
