@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -10,11 +10,6 @@ type ReaderSubsection = {
   title: string;
   summary: string | null;
   content: string;
-  characterIdsJson?: string | null;
-  settingIdsJson?: string | null;
-  sceneGoal?: string | null;
-  sceneConflict?: string | null;
-  povCharacterId?: string | null;
 };
 
 type ReaderSection = {
@@ -23,11 +18,6 @@ type ReaderSection = {
   title: string;
   summary: string | null;
   content: string;
-  characterIdsJson?: string | null;
-  settingIdsJson?: string | null;
-  sceneGoal?: string | null;
-  sceneConflict?: string | null;
-  povCharacterId?: string | null;
   subsections: ReaderSubsection[];
 };
 
@@ -37,6 +27,7 @@ type ReaderEntry = {
   title: string;
   kind: string;
   level: "section" | "subsection";
+  parentId?: number;
   parentTitle?: string;
 };
 
@@ -55,12 +46,14 @@ function buildReaderEntries(sections: ReaderSection[]): ReaderEntry[] {
       title: subsection.title,
       kind: subsection.kind,
       level: "subsection" as const,
+      parentId: section.id,
       parentTitle: section.title,
     })),
   ]);
 }
 
 export function BookReaderWorkspace({
+  outline,
   sections,
 }: {
   outline: string | null;
@@ -68,211 +61,215 @@ export function BookReaderWorkspace({
   characterProfilesJson?: string | null;
   settingProfilesJson?: string | null;
 }) {
-  const entries = buildReaderEntries(sections);
+  const entries = useMemo(() => buildReaderEntries(sections), [sections]);
   const [activeEntryId, setActiveEntryId] = useState<number | null>(entries[0]?.id ?? null);
-  const [hoveredEntryId, setHoveredEntryId] = useState<number | null>(null);
-  const [pinnedEntryIds, setPinnedEntryIds] = useState<number[]>(() =>
-    entries[0] ? [entries[0].id] : [],
-  );
+  const [isOutlineOpen, setIsOutlineOpen] = useState(true);
 
-  function focusEntry(id: number, pin = false) {
-    setActiveEntryId(id);
+  const activeEntry = entries.find((entry) => entry.id === activeEntryId) ?? entries[0] ?? null;
+  const activeSection = sections.find(
+    (section) => section.id === activeEntry?.id || section.id === activeEntry?.parentId,
+  ) ?? sections[0] ?? null;
+  const activeSubsection =
+    activeEntry?.level === "subsection"
+      ? activeSection?.subsections.find((subsection) => subsection.id === activeEntry.id) ?? null
+      : null;
 
-    if (pin) {
-      setPinnedEntryIds((current) => (current.includes(id) ? current : [...current, id]));
-    }
-
-    const target = document.getElementById(`section-${id}`);
-    target?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  function togglePinned(id: number) {
-    setActiveEntryId(id);
-    setPinnedEntryIds((current) =>
-      current.includes(id) ? current.filter((entryId) => entryId !== id) : [...current, id],
-    );
-  }
-
-  const activeIndex = entries.findIndex((entry) => entry.id === activeEntryId);
+  const activeIndex = entries.findIndex((entry) => entry.id === activeEntry?.id);
   const previousEntry = activeIndex > 0 ? entries[activeIndex - 1] : null;
   const nextEntry = activeIndex >= 0 && activeIndex < entries.length - 1 ? entries[activeIndex + 1] : null;
 
+  function focusEntry(id: number) {
+    setActiveEntryId(id);
+    setIsOutlineOpen(false);
+    window.requestAnimationFrame(() => {
+      document.getElementById("book-reader-surface")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
   return (
-    <section className="book-reader-layout">
-      <aside className="book-reader-outline">
-        <div className="book-reader-outline-header">
-          <div>
-            <h2 className="trading-section-title">Chapters</h2>
-            <p className="meta">
-              Move chapter to chapter from the left rail, then use reader controls to step through the active manuscript path.
-            </p>
-          </div>
-          <div className="book-reader-outline-meta">
-            <strong>{sections.length}</strong>
-            <span>chapters</span>
-          </div>
-        </div>
-        <div className="book-reader-nav">
-          {sections.map((section, index) => (
-            <div key={section.id} className="book-reader-nav-group">
+    <section className="book-reader-shell">
+      <div className="book-reader-stage">
+        <aside className={isOutlineOpen ? "book-reader-overlay is-open" : "book-reader-overlay"}>
+          <div className="book-reader-overlay-backdrop" onClick={() => setIsOutlineOpen(false)} />
+          <div className="book-reader-overlay-panel">
+            <div className="book-reader-overlay-header">
+              <div>
+                <p className="book-reader-overlay-kicker">Outline</p>
+                <h2 className="trading-section-title">Reading Path</h2>
+                <p className="meta">
+                  Choose a chapter or subsection, then let the manuscript take over the page.
+                </p>
+              </div>
               <button
                 type="button"
-                onClick={() => focusEntry(section.id, true)}
-                className={
-                  activeEntryId === section.id
-                    ? "book-reader-nav-link is-active"
-                    : "book-reader-nav-link"
-                }
-                >
-                  <span>
-                    Chapter {index + 1}
-                  </span>
-                  <strong>{section.title}</strong>
-                </button>
-              {section.subsections.length > 0 ? (
-                <p className="book-reader-nav-meta">
-                  {section.subsections.length} section{section.subsections.length === 1 ? "" : "s"} inside this chapter
-                </p>
-              ) : null}
+                className="mini-button"
+                onClick={() => setIsOutlineOpen(false)}
+              >
+                Close
+              </button>
             </div>
-          ))}
-        </div>
-      </aside>
 
-      <div className="book-reader-content">
-        <div className="book-reader-sequence-bar">
-          <div className="book-reader-sequence-copy">
-            <span className="book-editor-status-kicker">Reader Position</span>
-            <strong>
-              {activeIndex >= 0 ? `${activeIndex + 1} of ${entries.length}` : `0 of ${entries.length}`}
-            </strong>
-            <p className="book-reader-sequence-note">
-              Follow the manuscript in order or jump to a different stop from the outline.
-            </p>
-          </div>
-          <div className="book-reader-sequence-actions">
-            <button
-              type="button"
-              className="button-link secondary"
-              onClick={() => previousEntry && focusEntry(previousEntry.id, true)}
-              disabled={!previousEntry}
-            >
-              Previous
-            </button>
-            <button
-              type="button"
-              className="button-link secondary"
-              onClick={() => nextEntry && focusEntry(nextEntry.id, true)}
-              disabled={!nextEntry}
-            >
-              Next
-            </button>
-          </div>
-        </div>
-
-        {sections.map((section, index) => {
-          const sectionExpanded =
-            activeEntryId === section.id ||
-            hoveredEntryId === section.id ||
-            pinnedEntryIds.includes(section.id);
-
-          return (
-            <section
-              key={section.id}
-              id={`section-${section.id}`}
-              className={sectionExpanded ? "book-reader-panel is-expanded" : "book-reader-panel"}
-              onMouseEnter={() => {
-                setHoveredEntryId(section.id);
-                setActiveEntryId(section.id);
-              }}
-              onMouseLeave={() => setHoveredEntryId((current) => (current === section.id ? null : current))}
-            >
-              <div className="book-reader-folio">
-                <span>Folio {index + 1}</span>
-                <span>{section.kind}</span>
+            {outline ? (
+              <div className="book-reader-outline-note">
+                <p className="book-reader-outline-note-label">Story Frame</p>
+                <p>{outline}</p>
               </div>
-              <div className="book-reader-panel-header">
-                <div>
-                  <p className="meta book-reader-label">
-                    Section {index + 1} · {section.kind}
-                  </p>
-                  <h2 className="card-title book-reader-entry-title">{section.title}</h2>
+            ) : null}
+
+            <div className="book-reader-overlay-nav">
+              {sections.map((section, index) => (
+                <div key={section.id} className="book-reader-overlay-group">
+                  <button
+                    type="button"
+                    className={
+                      activeEntry?.id === section.id
+                        ? "book-reader-overlay-link is-active"
+                        : "book-reader-overlay-link"
+                    }
+                    onClick={() => focusEntry(section.id)}
+                  >
+                    <span>Chapter {index + 1}</span>
+                    <strong>{section.title}</strong>
+                  </button>
+                  {section.subsections.length > 0 ? (
+                    <div className="book-reader-overlay-subnav">
+                      {section.subsections.map((subsection, childIndex) => (
+                        <button
+                          key={subsection.id}
+                          type="button"
+                          className={
+                            activeEntry?.id === subsection.id
+                              ? "book-reader-overlay-sublink is-active"
+                              : "book-reader-overlay-sublink"
+                          }
+                          onClick={() => focusEntry(subsection.id)}
+                        >
+                          <span>{index + 1}.{childIndex + 1}</span>
+                          <strong>{subsection.title}</strong>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
-                <button
-                  type="button"
-                  className="mini-button"
-                  onClick={() => togglePinned(section.id)}
-                >
-                  {pinnedEntryIds.includes(section.id) ? "Collapse" : "Pin Open"}
-                </button>
-              </div>
-              {section.summary ? <p className="preview book-reader-summary">{section.summary}</p> : null}
-              <div className="markdown book-reader-panel-body book-reader-prose">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {section.content || "No content yet."}
-                </ReactMarkdown>
-              </div>
+              ))}
+            </div>
+          </div>
+        </aside>
 
-              {section.subsections.length > 0 ? (
-                <div className="book-subsection-stack">
-                  {section.subsections.map((subsection, childIndex) => {
-                    const subsectionExpanded =
-                      activeEntryId === subsection.id ||
-                      hoveredEntryId === subsection.id ||
-                      pinnedEntryIds.includes(subsection.id);
+        <div
+          id="book-reader-surface"
+          className="book-reader-window"
+          onClick={() => {
+            if (isOutlineOpen) {
+              setIsOutlineOpen(false);
+            }
+          }}
+        >
+          <div className="book-reader-toolbar">
+            <button
+              type="button"
+              className="button-link secondary"
+              onClick={() => setIsOutlineOpen((current) => !current)}
+            >
+              {isOutlineOpen ? "Hide Outline" : "Show Outline"}
+            </button>
+            <button
+              type="button"
+              className="button-link"
+              onClick={() => {
+                if (entries[0]) {
+                  focusEntry(entries[0].id);
+                }
+              }}
+            >
+              Start Reading
+            </button>
+            <div className="book-reader-sequence-actions">
+              <button
+                type="button"
+                className="button-link secondary"
+                onClick={() => previousEntry && focusEntry(previousEntry.id)}
+                disabled={!previousEntry}
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                className="button-link secondary"
+                onClick={() => nextEntry && focusEntry(nextEntry.id)}
+                disabled={!nextEntry}
+              >
+                Next
+              </button>
+            </div>
+          </div>
 
-                    return (
-                      <section
-                        key={subsection.id}
-                        id={`section-${subsection.id}`}
-                        className={
-                          subsectionExpanded
-                            ? "book-subsection-card book-reader-panel is-expanded"
-                            : "book-subsection-card book-reader-panel"
-                        }
-                        onMouseEnter={() => {
-                          setHoveredEntryId(subsection.id);
-                          setActiveEntryId(subsection.id);
-                        }}
-                        onMouseLeave={() =>
-                          setHoveredEntryId((current) => (current === subsection.id ? null : current))
-                        }
-                      >
-                        <div className="book-reader-folio book-reader-folio-subsection">
-                          <span>Folio {index + 1}.{childIndex + 1}</span>
-                          <span>{subsection.kind}</span>
-                        </div>
-                        <div className="book-reader-panel-header">
-                          <div>
-                            <p className="meta book-reader-label">
-                              Subsection {index + 1}.{childIndex + 1} · {subsection.kind}
-                            </p>
-                            <h3 className="card-title book-reader-entry-title">{subsection.title}</h3>
-                          </div>
-                          <button
-                            type="button"
-                            className="mini-button"
-                            onClick={() => togglePinned(subsection.id)}
-                          >
-                            {pinnedEntryIds.includes(subsection.id) ? "Collapse" : "Pin Open"}
-                          </button>
-                        </div>
+          <article className="book-reader-page">
+            <header className="book-reader-page-header">
+              <div>
+                <p className="book-reader-page-kicker">
+                  {activeEntry?.level === "subsection"
+                    ? `${activeEntry.label} · ${activeEntry.kind}`
+                    : `Chapter ${activeEntry?.label ?? "1"} · ${activeEntry?.kind ?? "Section"}`}
+                </p>
+                <h2 className="book-reader-page-title">{activeEntry?.title ?? activeSection?.title ?? "Begin reading"}</h2>
+                {activeEntry?.parentTitle ? (
+                  <p className="book-reader-page-context">From {activeEntry.parentTitle}</p>
+                ) : null}
+              </div>
+              <div className="book-reader-page-meta">
+                <strong>
+                  {activeIndex >= 0 ? `${activeIndex + 1} of ${entries.length}` : `0 of ${entries.length}`}
+                </strong>
+                <span>reading position</span>
+              </div>
+            </header>
+
+            {activeSubsection ? (
+              <div className="book-reader-manuscript">
+                {activeSubsection.summary ? (
+                  <p className="book-reader-lead">{activeSubsection.summary}</p>
+                ) : null}
+                <div className="markdown book-reader-prose">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {activeSubsection.content || "No content yet."}
+                  </ReactMarkdown>
+                </div>
+              </div>
+            ) : activeSection ? (
+              <div className="book-reader-manuscript">
+                {activeSection.summary ? (
+                  <p className="book-reader-lead">{activeSection.summary}</p>
+                ) : null}
+                <div className="markdown book-reader-prose">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {activeSection.content || "No content yet."}
+                  </ReactMarkdown>
+                </div>
+                {activeSection.subsections.length > 0 ? (
+                  <div className="book-reader-subsections">
+                    {activeSection.subsections.map((subsection, index) => (
+                      <section key={subsection.id} className="book-reader-subsection-block">
+                        <p className="book-reader-page-kicker">
+                          {activeEntry?.label ?? "1"}.{index + 1} · {subsection.kind}
+                        </p>
+                        <h3 className="book-reader-subsection-title">{subsection.title}</h3>
                         {subsection.summary ? (
-                          <p className="preview book-reader-summary">{subsection.summary}</p>
+                          <p className="book-reader-subsection-summary">{subsection.summary}</p>
                         ) : null}
-                        <div className="markdown book-reader-panel-body book-reader-prose">
+                        <div className="markdown book-reader-prose">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>
                             {subsection.content || "No content yet."}
                           </ReactMarkdown>
                         </div>
                       </section>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </section>
-          );
-        })}
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </article>
+        </div>
       </div>
     </section>
   );
