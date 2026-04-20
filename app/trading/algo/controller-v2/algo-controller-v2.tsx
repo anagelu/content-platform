@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   getAlpacaAlgoSnapshot,
   getTurboOptionCandidates,
@@ -81,6 +81,15 @@ type SpatialHoverTarget = {
   tone?: string;
   symbol?: string | null;
 };
+type ScopePanelMode = "preview" | "interacting" | "expanded";
+type ScopePanelFact = {
+  label: string;
+  value: string;
+};
+type ScopePanelAction =
+  | { type: "preview" }
+  | { type: "interacting" }
+  | { type: "expanded" };
 type CopilotContextOptions = {
   symbol: string;
   snapshot: Snapshot | null;
@@ -92,6 +101,19 @@ type CopilotContextOptions = {
   requestedSymbolInPrompt: string | null;
   effectiveMode: ControllerMode;
 };
+
+function scopePanelModeReducer(state: ScopePanelMode, action: ScopePanelAction): ScopePanelMode {
+  switch (action.type) {
+    case "preview":
+      return "preview";
+    case "interacting":
+      return "interacting";
+    case "expanded":
+      return "expanded";
+    default:
+      return state;
+  }
+}
 const COMMON_CRYPTO_BASE_SYMBOLS = new Set([
   "BTC",
   "ETH",
@@ -1457,13 +1479,15 @@ export function AlgoControllerV2({
   const [snapshotRefreshKey, setSnapshotRefreshKey] = useState(0);
   const [actionNotice, setActionNotice] = useState("");
   const [isBusy, setIsBusy] = useState(false);
+  const [panelPosition, setPanelPosition] = useState({ x: 148, y: 148 });
+  const [frozenPanelPosition, setFrozenPanelPosition] = useState<{ x: number; y: number } | null>(null);
   const [hoveredSpatialTarget, setHoveredSpatialTarget] = useState<SpatialHoverTarget | null>(null);
   const [lockedSpatialTarget, setLockedSpatialTarget] = useState<SpatialHoverTarget | null>(null);
   const [clipboardMemory, setClipboardMemory] = useState("");
   const [spatialInsight, setSpatialInsight] = useState("");
   const [isSpatialInsightLoading, setIsSpatialInsightLoading] = useState(false);
   const [spatialHudMinimized, setSpatialHudMinimized] = useState(false);
-  const [spatialHudExpanded, setSpatialHudExpanded] = useState(false);
+  const [scopePanelMode, dispatchScopePanelMode] = useReducer(scopePanelModeReducer, "preview");
   const [lastAutoInsightKey, setLastAutoInsightKey] = useState("");
   const [spatialQuery, setSpatialQuery] = useState("");
   const [copilotFocusSymbol, setCopilotFocusSymbol] = useState<string | null>(null);
@@ -1478,6 +1502,10 @@ export function AlgoControllerV2({
     },
   ]);
   const spatialHudRef = useRef<HTMLDivElement | null>(null);
+  const hoverReleaseTimerRef = useRef<number | null>(null);
+  const panelLeaveTimerRef = useRef<number | null>(null);
+  const pointerOverPanelRef = useRef(false);
+  const lastPointerRef = useRef({ x: 120, y: 120 });
   const normalizedSymbol = canonicalizeMarketSymbol(symbol);
   const clipboardSymbol = useMemo(
     () => extractRequestedMarketSymbol(clipboardMemory),
@@ -1830,8 +1858,15 @@ export function AlgoControllerV2({
       )}${selectedTurboContract.type === "call" ? "C" : "P"}`
       : "--";
   const activeSpatialTarget = lockedSpatialTarget ?? hoveredSpatialTarget;
+  const scopePanelStatusLabel =
+    scopePanelMode === "expanded"
+      ? "EXPANDED"
+      : scopePanelMode === "interacting"
+        ? "INTERACTING"
+        : "LIVE";
   const spatialHud = useMemo(() => {
     const nextActions: string[] = [];
+    const facts: ScopePanelFact[] = [];
 
     if (clipboardSymbol && clipboardSymbol !== normalizedSymbol) {
       nextActions.push(`Load copied ticker ${clipboardSymbol} into the cockpit`);
@@ -1858,6 +1893,53 @@ export function AlgoControllerV2({
       nextActions.push(`Select ${activeSpatialTarget.symbol} as the active contract`);
     }
 
+    if (!activeSpatialTarget) {
+      facts.push(
+        { label: "Market", value: normalizedSymbol || "--" },
+        { label: "Timeframe", value: analysisTimeframe },
+        { label: "Mode", value: mode === "turbo" ? "Turbo" : "Standard" },
+        { label: "State", value: displayedSessionState },
+      );
+    } else if (activeSpatialTarget.kind === "contract") {
+      const contract = turboContracts.find((entry) => entry.symbol === activeSpatialTarget.symbol);
+      facts.push(
+        { label: "Fit", value: String(activeSpatialTarget.score ?? contract?.fitScore ?? "--") },
+        { label: "Mark", value: contract?.markPrice ? formatMoney(contract.markPrice) : "--" },
+        {
+          label: "Delta",
+          value:
+            contract?.snapshot.delta !== null && contract?.snapshot.delta !== undefined
+              ? formatNumber(contract.snapshot.delta, 2)
+              : "--",
+        },
+        {
+          label: "Breakeven",
+          value: contract?.breakevenPrice ? formatMoney(contract.breakevenPrice) : "--",
+        },
+      );
+    } else if (activeSpatialTarget.kind === "actions") {
+      facts.push(
+        { label: "Session", value: displayedSessionState },
+        { label: "Primary", value: displayedCommand.label },
+        { label: "Mode", value: mode === "turbo" ? "Turbo" : "Standard" },
+        { label: "Position", value: formatNumber(currentQty, isCrypto ? 4 : 0) },
+      );
+    } else {
+      const gauge = confluence.gauges.find((entry) => entry.label === activeSpatialTarget.label);
+      facts.push(
+        { label: "Score", value: String(activeSpatialTarget.score ?? gauge?.score ?? "--") },
+        {
+          label: "Band",
+          value:
+            activeSpatialTarget.kind === "timeframe"
+              ? timeframeConfluenceGauge?.band ?? "Mixed"
+              : gauge?.band ?? "Mixed",
+        },
+        { label: "Ticker", value: normalizedSymbol || "--" },
+        { label: "Timeframe", value: analysisTimeframe },
+      );
+    }
+
     return {
       title: activeSpatialTarget?.label ?? "Scope Panel",
       summary:
@@ -1865,9 +1947,24 @@ export function AlgoControllerV2({
         "Hover any cockpit surface to preview it here, then click once to lock that target into the panel.",
       tone: activeSpatialTarget?.tone ?? "is-neutral",
       nextActions,
+      facts,
       isEmpty: !activeSpatialTarget,
     };
-  }, [activeSpatialTarget, clipboardSymbol, normalizedSymbol, selectedTurboContract?.symbol]);
+  }, [
+    activeSpatialTarget,
+    analysisTimeframe,
+    clipboardSymbol,
+    confluence.gauges,
+    currentQty,
+    displayedCommand.label,
+    displayedSessionState,
+    isCrypto,
+    mode,
+    normalizedSymbol,
+    selectedTurboContract?.symbol,
+    timeframeConfluenceGauge?.band,
+    turboContracts,
+  ]);
   const spatialCockpitContext = useMemo<SpatialCockpitContext>(
     () => ({
       symbol: normalizedSymbol || "--",
@@ -2203,6 +2300,78 @@ ${recentOrderSummary}`;
   }, [clipboardMemory]);
 
   useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      setLockedSpatialTarget(null);
+      setHoveredSpatialTarget(null);
+      setFrozenPanelPosition(null);
+      dispatchScopePanelMode({ type: "preview" });
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    function clearHoverReleaseTimer() {
+      if (hoverReleaseTimerRef.current !== null) {
+        window.clearTimeout(hoverReleaseTimerRef.current);
+        hoverReleaseTimerRef.current = null;
+      }
+    }
+
+    function clearPanelLeaveTimer() {
+      if (panelLeaveTimerRef.current !== null) {
+        window.clearTimeout(panelLeaveTimerRef.current);
+        panelLeaveTimerRef.current = null;
+      }
+    }
+
+    function updatePanelPreviewPosition(nextCursor: { x: number; y: number }) {
+      const width = scopePanelMode === "expanded" ? 440 : 320;
+      const height = spatialHudMinimized ? 124 : scopePanelMode === "interacting" ? 280 : 220;
+      const nextX = Math.min(
+        Math.max(16, nextCursor.x + 22),
+        Math.max(16, window.innerWidth - width - 16),
+      );
+      const nextY = Math.min(
+        Math.max(16, nextCursor.y + 18),
+        Math.max(16, window.innerHeight - height - 16),
+      );
+      setPanelPosition({ x: nextX, y: nextY });
+    }
+
+    function handleMouseMove(event: MouseEvent) {
+      const nextPointer = { x: event.clientX, y: event.clientY };
+      const previousPointer = lastPointerRef.current;
+      lastPointerRef.current = nextPointer;
+
+      if (scopePanelMode === "preview" && hoveredSpatialTarget) {
+        updatePanelPreviewPosition(nextPointer);
+      }
+
+      if (
+        hoverReleaseTimerRef.current !== null &&
+        !pointerOverPanelRef.current &&
+        scopePanelMode === "preview" &&
+        spatialHudRef.current
+      ) {
+        const rect = spatialHudRef.current.getBoundingClientRect();
+        const center = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+        const previousDistance = Math.hypot(previousPointer.x - center.x, previousPointer.y - center.y);
+        const nextDistance = Math.hypot(nextPointer.x - center.x, nextPointer.y - center.y);
+
+        if (nextDistance < previousDistance - 6) {
+          clearHoverReleaseTimer();
+          setFrozenPanelPosition({ x: rect.left, y: rect.top });
+          dispatchScopePanelMode({ type: "interacting" });
+        }
+      }
+    }
+
     function handleCopy(event: ClipboardEvent) {
       const copiedText =
         event.clipboardData?.getData("text/plain")?.trim() ||
@@ -2214,12 +2383,16 @@ ${recentOrderSummary}`;
       }
     }
 
+    window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("copy", handleCopy);
 
     return () => {
+      clearHoverReleaseTimer();
+      clearPanelLeaveTimer();
+      window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("copy", handleCopy);
     };
-  }, []);
+  }, [hoveredSpatialTarget, scopePanelMode, spatialHudMinimized]);
 
   useEffect(() => {
     if (!autoBiasEnabled || mode !== "turbo") {
@@ -2622,6 +2795,20 @@ The requested follow-up market refresh could not be loaded, so answer using the 
     setSpatialQuery("");
   }
 
+  function clearHoverReleaseTimer() {
+    if (hoverReleaseTimerRef.current !== null) {
+      window.clearTimeout(hoverReleaseTimerRef.current);
+      hoverReleaseTimerRef.current = null;
+    }
+  }
+
+  function clearPanelLeaveTimer() {
+    if (panelLeaveTimerRef.current !== null) {
+      window.clearTimeout(panelLeaveTimerRef.current);
+      panelLeaveTimerRef.current = null;
+    }
+  }
+
   function focusSpatialHud() {
     window.setTimeout(() => {
       spatialHudRef.current?.focus();
@@ -2629,25 +2816,111 @@ The requested follow-up market refresh could not be loaded, so answer using the 
   }
 
   function previewSpatialTarget(target: SpatialHoverTarget) {
+    clearHoverReleaseTimer();
+    clearPanelLeaveTimer();
+    if (scopePanelMode !== "preview") {
+      return;
+    }
     setHoveredSpatialTarget(target);
+  }
+
+  function isSurfaceControlTarget(target: HTMLElement) {
+    return Boolean(target.closest("button, input, textarea, select, option, a, summary, label"));
+  }
+
+  function handleTargetSurfaceClick(
+    event: React.MouseEvent<HTMLElement>,
+    target: SpatialHoverTarget,
+  ) {
+    if (isSurfaceControlTarget(event.target as HTMLElement)) {
+      return;
+    }
+
+    lockSpatialTarget(target);
   }
 
   function lockSpatialTarget(target: SpatialHoverTarget) {
     setLockedSpatialTarget(target);
     setHoveredSpatialTarget(target);
     setSpatialHudMinimized(false);
+    setFrozenPanelPosition(panelPosition);
+    dispatchScopePanelMode({ type: "interacting" });
     focusSpatialHud();
   }
 
   function clearLockedSpatialTarget() {
     setLockedSpatialTarget(null);
+    setSpatialInsight("");
+    setHoveredSpatialTarget(null);
+    setFrozenPanelPosition(null);
+    dispatchScopePanelMode({ type: "preview" });
+  }
+
+  function handleSpatialTargetLeave() {
+    if (scopePanelMode !== "preview") {
+      return;
+    }
+
+    clearHoverReleaseTimer();
+    hoverReleaseTimerRef.current = window.setTimeout(() => {
+      if (!pointerOverPanelRef.current) {
+        setHoveredSpatialTarget(null);
+      }
+      hoverReleaseTimerRef.current = null;
+    }, 400);
+  }
+
+  function handleScopePanelEnter() {
+    pointerOverPanelRef.current = true;
+    clearHoverReleaseTimer();
+    clearPanelLeaveTimer();
+
+    if (scopePanelMode !== "expanded") {
+      setFrozenPanelPosition(panelPosition);
+      dispatchScopePanelMode({ type: "interacting" });
+    }
+  }
+
+  function handleScopePanelLeave() {
+    pointerOverPanelRef.current = false;
+    clearPanelLeaveTimer();
+
+    if (scopePanelMode === "expanded" || lockedSpatialTarget) {
+      return;
+    }
+
+    panelLeaveTimerRef.current = window.setTimeout(() => {
+      setFrozenPanelPosition(null);
+      dispatchScopePanelMode({ type: "preview" });
+      setHoveredSpatialTarget(null);
+      panelLeaveTimerRef.current = null;
+    }, 240);
+  }
+
+  function handleExpandScopePanel() {
+    clearHoverReleaseTimer();
+    clearPanelLeaveTimer();
+    setSpatialHudMinimized(false);
+    setFrozenPanelPosition(panelPosition);
+    dispatchScopePanelMode({ type: "expanded" });
+    focusSpatialHud();
+  }
+
+  function handleResumeLive() {
+    setLockedSpatialTarget(null);
+    setHoveredSpatialTarget(null);
+    setSpatialInsight("");
+    setFrozenPanelPosition(null);
+    dispatchScopePanelMode({ type: "preview" });
   }
 
   return (
     <section
       className="algo-v2-shell"
       onMouseLeave={() => {
-        setHoveredSpatialTarget(null);
+        if (scopePanelMode === "preview" && !pointerOverPanelRef.current) {
+          handleSpatialTargetLeave();
+        }
       }}
     >
       <div className="algo-v2-stage">
@@ -2662,8 +2935,8 @@ The requested follow-up market refresh could not be loaded, so answer using the 
               } overall confluence on ${analysisTimeframe}.`,
             })
           }
-          onClick={() =>
-            lockSpatialTarget({
+          onClick={(event) =>
+            handleTargetSurfaceClick(event, {
               kind: "header",
               label: `${normalizedSymbol || "Market"} cockpit`,
               summary: `Session is ${displayedSessionState.toLowerCase()} with ${
@@ -2671,6 +2944,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
               } overall confluence on ${analysisTimeframe}.`,
             })
           }
+          onMouseLeave={handleSpatialTargetLeave}
         >
           <div className="algo-v2-topbar-left">
             <div className="algo-v2-symbol-badge">{normalizedSymbol || "--"}</div>
@@ -2719,8 +2993,8 @@ The requested follow-up market refresh could not be loaded, so answer using the 
               }Change the market, timeframe, or order size from here.`,
             })
           }
-          onClick={() =>
-            lockSpatialTarget({
+          onClick={(event) =>
+            handleTargetSurfaceClick(event, {
               kind: "controls",
               label: "Snapshot controls",
               summary: `${
@@ -2730,6 +3004,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
               }Change the market, timeframe, or order size from here.`,
             })
           }
+          onMouseLeave={handleSpatialTargetLeave}
         >
           <label className="algo-v2-field">
             <span className="algo-v2-field-label">Market Ticker</span>
@@ -2924,8 +3199,8 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                           tone: gauge.tone,
                         })
                       }
-                      onClick={() =>
-                        lockSpatialTarget({
+                      onClick={(event) =>
+                        handleTargetSurfaceClick(event, {
                           kind: gauge.label === "Timeframe Confluence" ? "timeframe" : "gauge",
                           label: gauge.label,
                           summary: gauge.summary,
@@ -2933,6 +3208,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                           tone: gauge.tone,
                         })
                       }
+                      onMouseLeave={handleSpatialTargetLeave}
                     >
                       <div className="algo-v2-mini-gauge-top">
                         <div>
@@ -3215,8 +3491,8 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                               tone: gauge.tone,
                             })
                           }
-                          onClick={() =>
-                            lockSpatialTarget({
+                          onClick={(event) =>
+                            handleTargetSurfaceClick(event, {
                               kind: gauge.key === "timeframeConfluence" ? "timeframe" : "gauge",
                               label: gauge.label,
                               summary: gauge.reason,
@@ -3224,6 +3500,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                               tone: gauge.tone,
                             })
                           }
+                          onMouseLeave={handleSpatialTargetLeave}
                         >
                           <div className="algo-v2-mini-gauge-top">
                             <div>
@@ -3455,8 +3732,8 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                           symbol: contract.symbol,
                         })
                       }
-                      onClick={() =>
-                        lockSpatialTarget({
+                      onClick={(event) =>
+                        handleTargetSurfaceClick(event, {
                           kind: "contract",
                           label: `${normalizedSymbol} ${Math.round(contract.strikePrice)}${contract.type === "call" ? "C" : "P"}`,
                           summary: `Fit ${contract.fitScore}, mark ${formatMoney(contract.markPrice)}, breakeven ${formatMoney(contract.breakevenPrice)}.`,
@@ -3465,6 +3742,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                           symbol: contract.symbol,
                         })
                       }
+                      onMouseLeave={handleSpatialTargetLeave}
                     >
                       <div className="algo-v2-contract-top">
                         <div>
@@ -3558,8 +3836,8 @@ The requested follow-up market refresh could not be loaded, so answer using the 
               }.`,
             })
           }
-          onClick={() =>
-            lockSpatialTarget({
+          onClick={(event) =>
+            handleTargetSurfaceClick(event, {
               kind: "actions",
               label: "Execution bar",
               summary: `The cockpit is ${displayedSessionState.toLowerCase()}. Primary control is ${
@@ -3567,6 +3845,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
               }.`,
             })
           }
+          onMouseLeave={handleSpatialTargetLeave}
         >
           <div className="algo-v2-action-bar">
             <div className="algo-v2-action-state">
@@ -3742,21 +4021,29 @@ The requested follow-up market refresh could not be loaded, so answer using the 
       </div>
       <aside
         ref={spatialHudRef}
-        className={`algo-v2-spatial-hud${spatialHudMinimized ? " is-minimized" : ""}${spatialHudExpanded ? " is-expanded" : ""}`}
+        className={`algo-v2-spatial-hud is-${scopePanelMode}${spatialHudMinimized ? " is-minimized" : ""}`}
         tabIndex={0}
+        onMouseEnter={handleScopePanelEnter}
+        onMouseLeave={handleScopePanelLeave}
+        style={
+          scopePanelMode === "expanded"
+            ? undefined
+            : {
+                left: `${(scopePanelMode === "interacting" ? frozenPanelPosition?.x : panelPosition.x) ?? panelPosition.x}px`,
+                top: `${(scopePanelMode === "interacting" ? frozenPanelPosition?.y : panelPosition.y) ?? panelPosition.y}px`,
+              }
+        }
       >
         <div className="algo-v2-spatial-hud-handle" />
         <div className="algo-v2-spatial-hud-header">
           <div>
             <span className="algo-v2-spatial-hud-label">Scope Panel</span>
-            <strong className={`algo-v2-spatial-hud-title ${spatialHud.tone}`}>{spatialHud.title}</strong>
+            <div className="algo-v2-spatial-hud-heading-row">
+              <strong className={`algo-v2-spatial-hud-title ${spatialHud.tone}`}>{spatialHud.title}</strong>
+              <span className={`algo-v2-spatial-hud-status is-${scopePanelMode}`}>{scopePanelStatusLabel}</span>
+            </div>
           </div>
           <div className="algo-v2-spatial-hud-topline">
-            {lockedSpatialTarget ? (
-              <span className="algo-v2-spatial-hud-memory">Locked</span>
-            ) : (
-              <span className="algo-v2-spatial-hud-memory">Live preview</span>
-            )}
             <button
               type="button"
               className="algo-v2-spatial-hud-pin"
@@ -3764,27 +4051,68 @@ The requested follow-up market refresh could not be loaded, so answer using the 
             >
               {spatialHudMinimized ? "Open" : "Minimize"}
             </button>
-            {!spatialHudMinimized ? (
+            {scopePanelMode !== "expanded" ? (
               <button
                 type="button"
                 className="algo-v2-spatial-hud-pin"
-                onClick={() => setSpatialHudExpanded((current) => !current)}
+                onClick={handleExpandScopePanel}
               >
-                {spatialHudExpanded ? "Compact" : "Expand"}
+                Expand
               </button>
-            ) : null}
+            ) : (
+              <button
+                type="button"
+                className="algo-v2-spatial-hud-pin"
+                onClick={() => {
+                  dispatchScopePanelMode({ type: lockedSpatialTarget ? "interacting" : "preview" });
+                }}
+              >
+                Collapse
+              </button>
+            )}
           </div>
         </div>
         {!spatialHudMinimized ? (
           <>
-            {clipboardMemory ? (
-              <p className="algo-v2-spatial-hud-chip-row">
-                Copied: <strong>{clipboardSymbol || clipboardMemory}</strong>
-              </p>
-            ) : null}
             <p className="algo-v2-spatial-hud-copy">{spatialHud.summary}</p>
+            <div className="algo-v2-spatial-hud-facts">
+              {spatialHud.facts.slice(0, scopePanelMode === "preview" ? 2 : 4).map((fact) => (
+                <div key={fact.label} className="algo-v2-spatial-hud-fact">
+                  <span>{fact.label}</span>
+                  <strong>{fact.value}</strong>
+                </div>
+              ))}
+            </div>
+            {scopePanelMode !== "preview" ? (
+              <>
+                {clipboardMemory ? (
+                  <p className="algo-v2-spatial-hud-chip-row">
+                    Copied: <strong>{clipboardSymbol || clipboardMemory}</strong>
+                  </p>
+                ) : null}
+                {spatialInsight ? (
+                  <p className="algo-v2-spatial-hud-copy is-insight">{spatialInsight}</p>
+                ) : null}
+                <form className="algo-v2-spatial-hud-form" onSubmit={handleSpatialQuerySubmit}>
+                  <input
+                    className="form-input algo-v2-spatial-hud-input"
+                    value={spatialQuery}
+                    onChange={(event) => setSpatialQuery(event.target.value)}
+                    placeholder="Ask about this target..."
+                    disabled={!activeSpatialTarget && !isSpatialInsightLoading}
+                  />
+                  <button
+                    type="submit"
+                    className="algo-v2-spatial-hud-button is-secondary"
+                    disabled={isSpatialInsightLoading || !spatialQuery.trim() || !activeSpatialTarget}
+                  >
+                    Ask
+                  </button>
+                </form>
+              </>
+            ) : null}
             <div className="algo-v2-spatial-hud-actions">
-              {spatialPromptTarget ? (
+              {spatialPromptTarget && scopePanelMode !== "preview" ? (
                 <button
                   type="button"
                   className="algo-v2-spatial-hud-button is-secondary"
@@ -3815,41 +4143,19 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                   Select Contract
                 </button>
               ) : null}
-              {lockedSpatialTarget ? (
+              {scopePanelMode !== "preview" ? (
                 <button
                   type="button"
                   className="algo-v2-spatial-hud-button is-ghost"
-                  onClick={clearLockedSpatialTarget}
+                  onClick={handleResumeLive}
                 >
-                  Unlock
+                  Resume Live
                 </button>
               ) : null}
             </div>
-            {spatialInsight ? (
-              <p className="algo-v2-spatial-hud-copy is-insight">{spatialInsight}</p>
-            ) : null}
-            <form className="algo-v2-spatial-hud-form" onSubmit={handleSpatialQuerySubmit}>
-              <input
-                className="form-input algo-v2-spatial-hud-input"
-                value={spatialQuery}
-                onChange={(event) => setSpatialQuery(event.target.value)}
-                placeholder="Ask about this target..."
-                disabled={!activeSpatialTarget && !isSpatialInsightLoading}
-              />
-              <button
-                type="submit"
-                className="algo-v2-spatial-hud-button is-secondary"
-                disabled={isSpatialInsightLoading || !spatialQuery.trim() || !activeSpatialTarget}
-              >
-                Ask
-              </button>
-            </form>
-            <p className="algo-v2-spatial-hud-hint">
-              Hover to preview. Click once on any cockpit surface to lock it into this panel, just like selecting a card in a mobile sheet.
-            </p>
-            {spatialHud.nextActions.length > 0 ? (
+            {scopePanelMode !== "preview" && spatialHud.nextActions.length > 0 ? (
               <ul className="algo-v2-spatial-hud-list">
-                {spatialHud.nextActions.slice(0, 3).map((action) => (
+                {spatialHud.nextActions.slice(0, 4).map((action) => (
                   <li key={action}>{action}</li>
                 ))}
               </ul>
@@ -3857,7 +4163,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
           </>
         ) : (
           <p className="algo-v2-spatial-hud-hint">
-            Mobile-style scope minimized. Reopen it to inspect or ask about the current target.
+            Scope Panel minimized. Reopen it to continue inspecting the current context.
           </p>
         )}
       </aside>
