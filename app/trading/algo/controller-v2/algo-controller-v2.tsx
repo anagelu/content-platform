@@ -1502,10 +1502,13 @@ export function AlgoControllerV2({
     },
   ]);
   const spatialHudRef = useRef<HTMLDivElement | null>(null);
+  const spatialHudHeaderRef = useRef<HTMLDivElement | null>(null);
   const hoverReleaseTimerRef = useRef<number | null>(null);
   const panelLeaveTimerRef = useRef<number | null>(null);
   const pointerOverPanelRef = useRef(false);
   const lastPointerRef = useRef({ x: 120, y: 120 });
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const isDraggingPanelRef = useRef(false);
   const normalizedSymbol = canonicalizeMarketSymbol(symbol);
   const clipboardSymbol = useMemo(
     () => extractRequestedMarketSymbol(clipboardMemory),
@@ -2349,6 +2352,20 @@ ${recentOrderSummary}`;
       const previousPointer = lastPointerRef.current;
       lastPointerRef.current = nextPointer;
 
+      if (isDraggingPanelRef.current && scopePanelMode !== "expanded") {
+        const nextX = Math.min(
+          Math.max(16, nextPointer.x - dragOffsetRef.current.x),
+          Math.max(16, window.innerWidth - 320),
+        );
+        const nextY = Math.min(
+          Math.max(16, nextPointer.y - dragOffsetRef.current.y),
+          Math.max(16, window.innerHeight - 120),
+        );
+        setPanelPosition({ x: nextX, y: nextY });
+        setFrozenPanelPosition({ x: nextX, y: nextY });
+        return;
+      }
+
       if (scopePanelMode === "preview" && hoveredSpatialTarget) {
         updatePanelPreviewPosition(nextPointer);
       }
@@ -2383,13 +2400,19 @@ ${recentOrderSummary}`;
       }
     }
 
+    function handleMouseUp() {
+      isDraggingPanelRef.current = false;
+    }
+
     window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
     window.addEventListener("copy", handleCopy);
 
     return () => {
       clearHoverReleaseTimer();
       clearPanelLeaveTimer();
       window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
       window.removeEventListener("copy", handleCopy);
     };
   }, [hoveredSpatialTarget, scopePanelMode, spatialHudMinimized]);
@@ -2791,6 +2814,11 @@ The requested follow-up market refresh could not be loaded, so answer using the 
       return;
     }
 
+    if (activeSpatialTarget && !lockedSpatialTarget) {
+      setLockedSpatialTarget(activeSpatialTarget);
+    }
+    setFrozenPanelPosition(panelPosition);
+    dispatchScopePanelMode({ type: "interacting" });
     await handleSpatialInsightRequest(trimmedQuery);
     setSpatialQuery("");
   }
@@ -2856,6 +2884,18 @@ The requested follow-up market refresh could not be loaded, so answer using the 
     dispatchScopePanelMode({ type: "preview" });
   }
 
+  function engageScopePanel() {
+    clearHoverReleaseTimer();
+    clearPanelLeaveTimer();
+    if (activeSpatialTarget && !lockedSpatialTarget) {
+      setLockedSpatialTarget(activeSpatialTarget);
+    }
+    setFrozenPanelPosition(panelPosition);
+    if (scopePanelMode !== "expanded") {
+      dispatchScopePanelMode({ type: "interacting" });
+    }
+  }
+
   function handleSpatialTargetLeave() {
     if (scopePanelMode !== "preview") {
       return;
@@ -2872,13 +2912,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
 
   function handleScopePanelEnter() {
     pointerOverPanelRef.current = true;
-    clearHoverReleaseTimer();
-    clearPanelLeaveTimer();
-
-    if (scopePanelMode !== "expanded") {
-      setFrozenPanelPosition(panelPosition);
-      dispatchScopePanelMode({ type: "interacting" });
-    }
+    engageScopePanel();
   }
 
   function handleScopePanelLeave() {
@@ -2898,8 +2932,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
   }
 
   function handleExpandScopePanel() {
-    clearHoverReleaseTimer();
-    clearPanelLeaveTimer();
+    engageScopePanel();
     setSpatialHudMinimized(false);
     setFrozenPanelPosition(panelPosition);
     dispatchScopePanelMode({ type: "expanded" });
@@ -2912,6 +2945,25 @@ The requested follow-up market refresh could not be loaded, so answer using the 
     setSpatialInsight("");
     setFrozenPanelPosition(null);
     dispatchScopePanelMode({ type: "preview" });
+  }
+
+  function handleScopePanelDragStart(event: React.MouseEvent<HTMLDivElement>) {
+    if (scopePanelMode === "expanded") {
+      return;
+    }
+
+    const target = event.target as HTMLElement;
+    if (target.closest("button, input, textarea, form")) {
+      return;
+    }
+
+    engageScopePanel();
+    const rect = spatialHudRef.current?.getBoundingClientRect();
+    dragOffsetRef.current = {
+      x: event.clientX - (rect?.left ?? panelPosition.x),
+      y: event.clientY - (rect?.top ?? panelPosition.y),
+    };
+    isDraggingPanelRef.current = true;
   }
 
   return (
@@ -4034,8 +4086,12 @@ The requested follow-up market refresh could not be loaded, so answer using the 
               }
         }
       >
-        <div className="algo-v2-spatial-hud-handle" />
-        <div className="algo-v2-spatial-hud-header">
+        <div
+          ref={spatialHudHeaderRef}
+          className="algo-v2-spatial-hud-header"
+          onMouseDown={handleScopePanelDragStart}
+        >
+          <div className="algo-v2-spatial-hud-handle" />
           <div>
             <span className="algo-v2-spatial-hud-label">Scope Panel</span>
             <div className="algo-v2-spatial-hud-heading-row">
@@ -4098,6 +4154,7 @@ The requested follow-up market refresh could not be loaded, so answer using the 
                     className="form-input algo-v2-spatial-hud-input"
                     value={spatialQuery}
                     onChange={(event) => setSpatialQuery(event.target.value)}
+                    onFocus={engageScopePanel}
                     placeholder="Ask about this target..."
                     disabled={!activeSpatialTarget && !isSpatialInsightLoading}
                   />
