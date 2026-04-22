@@ -238,7 +238,10 @@ export function BookReaderWorkspace({
             {activeSubsection ? (
               <div className="book-reader-manuscript">
                 {activeSubsection.summary ? (
-                  <p className="book-reader-lead">{activeSubsection.summary}</p>
+                  <div className="book-reader-summary-callout">
+                    <p className="book-reader-summary-label">Section Summary</p>
+                    <p className="book-reader-lead">{activeSubsection.summary}</p>
+                  </div>
                 ) : null}
                 <div className="markdown book-reader-prose">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -249,7 +252,10 @@ export function BookReaderWorkspace({
             ) : activeSection ? (
               <div className="book-reader-manuscript">
                 {activeSection.summary ? (
-                  <p className="book-reader-lead">{activeSection.summary}</p>
+                  <div className="book-reader-summary-callout">
+                    <p className="book-reader-summary-label">Section Summary</p>
+                    <p className="book-reader-lead">{activeSection.summary}</p>
+                  </div>
                 ) : null}
                 <div className="markdown book-reader-prose">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -265,7 +271,10 @@ export function BookReaderWorkspace({
                         </p>
                         <h3 className="book-reader-subsection-title">{subsection.title}</h3>
                         {subsection.summary ? (
-                          <p className="book-reader-subsection-summary">{subsection.summary}</p>
+                          <div className="book-reader-summary-callout is-subsection">
+                            <p className="book-reader-summary-label">Subsection Summary</p>
+                            <p className="book-reader-subsection-summary">{subsection.summary}</p>
+                          </div>
                         ) : null}
                         <div className="markdown book-reader-prose">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>
