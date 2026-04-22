@@ -78,9 +78,13 @@ export function BookReaderWorkspace({
   const previousEntry = activeIndex > 0 ? entries[activeIndex - 1] : null;
   const nextEntry = activeIndex >= 0 && activeIndex < entries.length - 1 ? entries[activeIndex + 1] : null;
 
+  function closeOutline() {
+    setIsOutlineOpen(false);
+  }
+
   function focusEntry(id: number) {
     setActiveEntryId(id);
-    setIsOutlineOpen(false);
+    closeOutline();
     window.requestAnimationFrame(() => {
       document.getElementById("book-reader-surface")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
@@ -90,7 +94,7 @@ export function BookReaderWorkspace({
     <section className="book-reader-shell">
       <div className="book-reader-stage">
         <aside className={isOutlineOpen ? "book-reader-overlay is-open" : "book-reader-overlay"}>
-          <div className="book-reader-overlay-backdrop" onClick={() => setIsOutlineOpen(false)} />
+          <div className="book-reader-overlay-backdrop" onClick={closeOutline} />
           <div className="book-reader-overlay-panel">
             <div className="book-reader-overlay-header">
               <div>
@@ -103,7 +107,7 @@ export function BookReaderWorkspace({
               <button
                 type="button"
                 className="mini-button"
-                onClick={() => setIsOutlineOpen(false)}
+                onClick={closeOutline}
               >
                 Close
               </button>
@@ -159,20 +163,18 @@ export function BookReaderWorkspace({
         <div
           id="book-reader-surface"
           className="book-reader-window"
-          onClick={() => {
-            if (isOutlineOpen) {
-              setIsOutlineOpen(false);
-            }
+          onPointerDown={() => {
+            if (isOutlineOpen) closeOutline();
           }}
         >
           <div className="book-reader-toolbar">
-            <button
-              type="button"
-              className="button-link secondary"
-              onClick={() => setIsOutlineOpen((current) => !current)}
-            >
-              {isOutlineOpen ? "Hide Outline" : "Show Outline"}
-            </button>
+              <button
+                type="button"
+                className="button-link secondary"
+                onClick={() => setIsOutlineOpen((current) => !current)}
+              >
+                {isOutlineOpen ? "Hide Outline" : "Show Outline"}
+              </button>
             <button
               type="button"
               className="button-link"
@@ -213,6 +215,14 @@ export function BookReaderWorkspace({
                     : `Chapter ${activeEntry?.label ?? "1"} · ${activeEntry?.kind ?? "Section"}`}
                 </p>
                 <h2 className="book-reader-page-title">{activeEntry?.title ?? activeSection?.title ?? "Begin reading"}</h2>
+                <button
+                  type="button"
+                  className="book-reader-title-hitbox"
+                  onClick={closeOutline}
+                  aria-label="Keep reading and hide outline"
+                >
+                  Keep Reading
+                </button>
                 {activeEntry?.parentTitle ? (
                   <p className="book-reader-page-context">From {activeEntry.parentTitle}</p>
                 ) : null}
