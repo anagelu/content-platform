@@ -49,7 +49,7 @@ main {
   margin: 0 auto;
   padding: 1.4rem 1.4rem 4.5rem;
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: minmax(208px, 228px) minmax(0, 1fr);
   gap: 1.5rem;
   align-items: start;
 }
@@ -67,6 +67,11 @@ main {
   gap: 1rem;
 }
 
+.app-shell-inner:has(.book-page-shell) {
+  grid-template-columns: minmax(212px, 232px) minmax(0, 1fr);
+  gap: 1.2rem;
+}
+
 .posts-page-shell {
   max-width: 980px;
   padding-left: 0.8rem;
@@ -75,6 +80,7 @@ main {
 
 .app-content {
   min-width: 0;
+  overflow-x: clip;
 }
 
 .app-content > .site-shell,
@@ -89,6 +95,8 @@ main {
   top: 1rem;
   display: grid;
   gap: 0.95rem;
+  width: 100%;
+  min-width: 0;
 }
 
 .site-sidebar-card {
@@ -97,6 +105,8 @@ main {
   border: 1px solid rgba(197, 205, 218, 0.82);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(246, 248, 252, 0.92));
   box-shadow: 0 12px 26px rgba(32, 45, 64, 0.06);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .site-sidebar-card-spotlight {
