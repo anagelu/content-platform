@@ -5085,8 +5085,9 @@ main {
 }
 
 .book-reader-page {
-  max-width: 48rem;
-  margin: 0 auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
   padding: 2.4rem clamp(1.25rem, 3vw, 2.75rem) 3.2rem;
   border-radius: 28px;
   border: 1px solid rgba(221, 200, 167, 0.7);
@@ -5227,11 +5228,11 @@ main {
 }
 
 .book-reader-prose {
-  max-width: 36rem;
+  max-width: 33rem;
   margin: 0;
   color: #221b15;
   font-size: 1.08rem;
-  line-height: 1.95;
+  line-height: 1.88;
 }
 
 .book-reader-prose > :first-child {
