@@ -23,7 +23,7 @@ export default async function PostsPage() {
 
   return (
     <main>
-      <div className="site-shell">
+      <div className="site-shell posts-page-shell">
         <section className="section-command-surface">
           <div className="section-command-main">
             <p className="home-hero-kicker">Publishing Archive</p>
