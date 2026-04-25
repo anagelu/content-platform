@@ -1487,6 +1487,7 @@ export function AlgoControllerV2({
   const [spatialInsight, setSpatialInsight] = useState("");
   const [isSpatialInsightLoading, setIsSpatialInsightLoading] = useState(false);
   const [spatialHudMinimized, setSpatialHudMinimized] = useState(false);
+  const [scopePanelHidden, setScopePanelHidden] = useState(false);
   const [scopePanelMode, dispatchScopePanelMode] = useReducer(scopePanelModeReducer, "preview");
   const [lastAutoInsightKey, setLastAutoInsightKey] = useState("");
   const [spatialQuery, setSpatialQuery] = useState("");
@@ -2947,6 +2948,23 @@ The requested follow-up market refresh could not be loaded, so answer using the 
     dispatchScopePanelMode({ type: "preview" });
   }
 
+  function handleHideScopePanel() {
+    clearHoverReleaseTimer();
+    clearPanelLeaveTimer();
+    setScopePanelHidden(true);
+    setSpatialHudMinimized(false);
+    setLockedSpatialTarget(null);
+    setHoveredSpatialTarget(null);
+    setSpatialInsight("");
+    setFrozenPanelPosition(null);
+    dispatchScopePanelMode({ type: "preview" });
+  }
+
+  function handleShowScopePanel() {
+    setScopePanelHidden(false);
+    setSpatialHudMinimized(false);
+  }
+
   function handleScopePanelDragStart(event: React.MouseEvent<HTMLDivElement>) {
     if (scopePanelMode === "expanded") {
       return;
@@ -4071,21 +4089,22 @@ The requested follow-up market refresh could not be loaded, so answer using the 
         {actionNotice ? <p className="form-help">{actionNotice}</p> : null}
         {error ? <p className="form-error">{error}</p> : null}
       </div>
-      <aside
-        ref={spatialHudRef}
-        className={`algo-v2-spatial-hud is-${scopePanelMode}${spatialHudMinimized ? " is-minimized" : ""}`}
-        tabIndex={0}
-        onMouseEnter={handleScopePanelEnter}
-        onMouseLeave={handleScopePanelLeave}
-        style={
-          scopePanelMode === "expanded"
-            ? undefined
-            : {
-                left: `${(scopePanelMode === "interacting" ? frozenPanelPosition?.x : panelPosition.x) ?? panelPosition.x}px`,
-                top: `${(scopePanelMode === "interacting" ? frozenPanelPosition?.y : panelPosition.y) ?? panelPosition.y}px`,
-              }
-        }
-      >
+      {!scopePanelHidden ? (
+        <aside
+          ref={spatialHudRef}
+          className={`algo-v2-spatial-hud is-${scopePanelMode}${spatialHudMinimized ? " is-minimized" : ""}`}
+          tabIndex={0}
+          onMouseEnter={handleScopePanelEnter}
+          onMouseLeave={handleScopePanelLeave}
+          style={
+            scopePanelMode === "expanded"
+              ? undefined
+              : {
+                  left: `${(scopePanelMode === "interacting" ? frozenPanelPosition?.x : panelPosition.x) ?? panelPosition.x}px`,
+                  top: `${(scopePanelMode === "interacting" ? frozenPanelPosition?.y : panelPosition.y) ?? panelPosition.y}px`,
+                }
+          }
+        >
         <div
           ref={spatialHudHeaderRef}
           className="algo-v2-spatial-hud-header"
@@ -4106,6 +4125,13 @@ The requested follow-up market refresh could not be loaded, so answer using the 
               onClick={() => setSpatialHudMinimized((current) => !current)}
             >
               {spatialHudMinimized ? "Open" : "Minimize"}
+            </button>
+            <button
+              type="button"
+              className="algo-v2-spatial-hud-pin is-danger"
+              onClick={handleHideScopePanel}
+            >
+              Exit
             </button>
             {scopePanelMode !== "expanded" ? (
               <button
@@ -4223,7 +4249,16 @@ The requested follow-up market refresh could not be loaded, so answer using the 
             Scope Panel minimized. Reopen it to continue inspecting the current context.
           </p>
         )}
-      </aside>
+        </aside>
+      ) : (
+        <button
+          type="button"
+          className="algo-v2-spatial-hud-reopen"
+          onClick={handleShowScopePanel}
+        >
+          Open Scope Panel
+        </button>
+      )}
     </section>
   );
 }
