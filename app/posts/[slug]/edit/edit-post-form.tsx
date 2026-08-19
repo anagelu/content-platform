@@ -410,7 +410,7 @@ export function EditPostForm({
             onClick={handleGenerateDraft}
             disabled={isGenerating || isGeneratingWithAi}
           >
-            {isGenerating ? "Formatting Conversation..." : "Quick Local Draft"}
+            {isGenerating ? "Formatting Transcript..." : "Format Transcript Only"}
           </button>
 
           <button
@@ -419,12 +419,11 @@ export function EditPostForm({
             onClick={handleGenerateDraftWithAi}
             disabled={!aiDraftEnabled || isGenerating || isGeneratingWithAi}
           >
-            {isGeneratingWithAi ? "Generating AI Draft..." : "Generate With AI"}
+            {isGeneratingWithAi ? "Writing Polished Article..." : "Write Polished Article with AI"}
           </button>
 
           <p className="form-help generate-help">
-            The quick draft uses local heuristics. The AI draft fills the
-            summary, presentation outline, and short article.
+            Format Transcript Only preserves the conversation for reference. The AI option replaces it with a summary, presentation outline, and reader-ready article.
           </p>
         </div>
 

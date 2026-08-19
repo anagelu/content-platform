@@ -337,20 +337,21 @@ export function PostEditorForm({
               onClick={handleGenerateDraft}
               disabled={isGenerating || isGeneratingWithAi}
             >
-              {isGenerating ? "Building Quick Draft..." : "Quick Draft"}
+              {isGenerating ? "Formatting Transcript..." : "Format Transcript Only"}
             </button>
 
-            {!reviewVisible ? (
-              <button
-                type="button"
-                className="button-link"
-                onClick={handleGenerateDraftWithAi}
-                disabled={!aiDraftEnabled || isGenerating || isGeneratingWithAi}
-              >
-                {isGeneratingWithAi ? "Generating your draft..." : "Generate with AI"}
-              </button>
-            ) : null}
+            <button
+              type="button"
+              className="button-link"
+              onClick={handleGenerateDraftWithAi}
+              disabled={!aiDraftEnabled || isGenerating || isGeneratingWithAi}
+            >
+              {isGeneratingWithAi ? "Writing Polished Article..." : "Write Polished Article with AI"}
+            </button>
           </div>
+          <p className="form-help generate-help">
+            Format Transcript Only preserves the conversation for reference. Write Polished Article with AI turns it into reader-ready prose.
+          </p>
         </section>
 
         {aiDraftEnabled ? (

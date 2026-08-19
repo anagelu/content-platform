@@ -736,9 +736,13 @@ export async function generatePostDraftFromSourceChat({
   }
 
   const provider = await getAiProvider();
-  const model = await getPostDraftGenerationModel();
+  const model = await getPostRefinementModel();
   const systemInstruction =
-    "You are a cost-conscious writing assistant for a content platform. Convert the source chat into a concise post package. Return JSON only with keys title, summary, presentationOutline, and article. Keep the summary to 1 to 3 sentences. Keep the presentationOutline concise and useful for speaking or presenting. Keep the article under 500 words, use Markdown headings sparingly, and preserve the author's core ideas without filler or meta commentary about AI.";
+    `You are a senior magazine editor turning source material into a publication-ready post. Return JSON only with keys title, summary, presentationOutline, and article.
+
+Synthesize the source into a complete article rather than reproducing a transcript, speaker labels, chat turns, or raw notes. Preserve the author's core idea and useful details, but create a strong opening, coherent paragraph progression, clear transitions, and a satisfying conclusion. Use specific, natural language without generic filler or meta commentary about AI. Do not invent facts, quotations, examples, or personal experiences.
+
+The article must be polished Markdown under 500 words. Separate paragraphs with blank lines. Use short Markdown headings only when they improve the structure. Put list items on separate lines with valid Markdown markers. Keep the summary to one to three sentences and the presentation outline concise and useful for speaking.`;
   const userText = `Working title: ${title || "Untitled idea"}
 
 Source conversation:
@@ -760,11 +764,25 @@ Return a JSON object with this exact shape:
           model,
           systemInstruction,
           userText,
-          maxOutputTokens: 900,
+          maxOutputTokens: 1800,
+          thinkingLevel: "low",
+          responseSchema: {
+            type: "object",
+            properties: {
+              title: { type: "string" },
+              summary: { type: "string" },
+              presentationOutline: { type: "string" },
+              article: {
+                type: "string",
+                description: "A complete publication-ready article in valid Markdown.",
+              },
+            },
+            required: ["title", "summary", "presentationOutline", "article"],
+          },
         })
       : await createOpenAIResponse({
           model,
-          max_output_tokens: 900,
+          max_output_tokens: 1800,
           input: [
             {
               role: "system",
@@ -839,6 +857,9 @@ export async function refinePostDraftWithAi({
 
   const provider = await getAiProvider();
   const model = await getPostRefinementModel();
+  const isTranscriptScaffold =
+    /(?:^|\n)#{1,6}\s+conversation transcript\s*(?:\n|$)/i.test(trimmedArticle) ||
+    /(?:^|\n)(?:message|user said|assistant replied):\s*["“]/i.test(trimmedArticle);
   const currentWordCount = trimmedArticle.split(/\s+/).filter(Boolean).length;
   const targetLengthInstruction =
     length === "shorter"
@@ -877,6 +898,11 @@ Write a complete, polished article—not feedback, an outline, or a lightly para
 Use natural, specific language. Remove repetition, throat-clearing, vague abstractions, inflated claims, and generic motivational filler. Avoid stock AI-writing phrases and metaphors such as “in today's world,” “delve,” “tapestry,” “game-changer,” “journey,” “spark,” “take root,” “blossom,” and “it is important to note.” Do not invent facts, quotations, examples, or personal experiences. Use Markdown headings only when they genuinely improve a longer article. Never mention AI or the refinement process unless the article itself is about AI.`;
   const userText = `Working title: ${title || "Untitled idea"}
 Refinement request: ${intentInstruction}
+Draft-form instruction: ${
+    isTranscriptScaffold
+      ? "The current draft is a transcript scaffold. Replace that form completely: remove the Conversation transcript heading, speaker labels, quoted-message wrapper, and chat-like structure. Synthesize the ideas into a standalone article with real paragraphs and intentional Markdown structure."
+      : "Keep the draft as a standalone article while improving its editorial quality."
+  }
 
 Source conversation:
 ${trimmedSourceChat || "(not provided)"}
