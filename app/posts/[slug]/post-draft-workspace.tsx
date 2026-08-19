@@ -143,19 +143,27 @@ export function PostDraftWorkspace({
         throw new Error(payload.error || "Unable to refine this draft right now.");
       }
 
-      if (payload.summary) {
-        setDraftSummary(payload.summary);
+      if (!payload.article?.trim() || !payload.summary?.trim()) {
+        throw new Error("Gemini returned an incomplete article. Your saved draft was not changed.");
       }
 
-      if (payload.article) {
-        setDraftBody(payload.article);
-        setCommittedBody(payload.article);
-      }
+      const refinedArticle = payload.article.trim();
+      const refinedSummary = payload.summary.trim();
+      const saveData = new FormData();
+      saveData.set("id", String(id));
+      saveData.set("slug", slug);
+      saveData.set("body", refinedArticle);
+      saveData.set("summary", refinedSummary);
+      const savedPost = await saveInlinePostDraft(saveData);
+
+      setDraftSummary(refinedSummary);
+      setDraftBody(refinedArticle);
+      setCommittedBody(refinedArticle);
 
       setSaveNote(
         payload.model
-          ? `Draft updated with ${payload.model}.`
-          : "Draft updated.",
+          ? `Draft refined with ${payload.model} and saved${savedPost.updatedAt ? ` at ${new Date(savedPost.updatedAt).toLocaleString()}` : ""}.`
+          : "Draft refined and saved.",
       );
       setIsEditing(false);
     } catch (error) {

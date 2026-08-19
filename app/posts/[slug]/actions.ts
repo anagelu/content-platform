@@ -160,6 +160,9 @@ export async function saveInlinePostDraft(formData: FormData) {
   const id = Number(formData.get("id"));
   const slug = formData.get("slug")?.toString() || "";
   const body = formData.get("body")?.toString().trim() || "";
+  const summaryValue = formData.get("summary");
+  const summary =
+    typeof summaryValue === "string" ? summaryValue.trim() : undefined;
 
   if (!id || !slug || !body) {
     throw new Error("Post ID, slug, and body are required.");
@@ -169,6 +172,7 @@ export async function saveInlinePostDraft(formData: FormData) {
     where: { id },
     data: {
       body,
+      ...(summary !== undefined ? { summary: summary || null } : {}),
     },
   });
 
