@@ -9,7 +9,8 @@ import {
 const OPENAI_API_URL = "https://api.openai.com/v1/responses";
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const DEFAULT_ARTICLE_MODEL = "gpt-5-mini";
-const DEFAULT_POST_DRAFT_MODEL = "gemini-2.5-flash-lite";
+const DEFAULT_POST_DRAFT_MODEL = "gemini-3.5-flash-lite";
+const DEFAULT_GEMINI_POST_REFINE_MODEL = "gemini-3.7-flash";
 const OPENAI_TIMEOUT_MS = 20000;
 const MAX_POST_SOURCE_CHARS = 6000;
 
@@ -480,6 +481,19 @@ export async function getPostDraftGenerationModel() {
   return getModelForTier(tier, provider) || DEFAULT_POST_DRAFT_MODEL;
 }
 
+async function getPostRefinementModel() {
+  const provider = await getAiProvider();
+
+  if (provider === "gemini") {
+    return (
+      process.env.GEMINI_POST_REFINE_MODEL?.trim() ||
+      DEFAULT_GEMINI_POST_REFINE_MODEL
+    );
+  }
+
+  return getPostDraftGenerationModel();
+}
+
 async function createOpenAIResponse(body: Record<string, unknown>) {
   const apiKey = process.env.OPENAI_API_KEY;
 
@@ -535,6 +549,7 @@ function getGeminiResponseText(payload: unknown) {
             content?: {
               parts?: Array<{
                 text?: string;
+                thought?: boolean;
               }>;
             };
           }>;
@@ -543,7 +558,8 @@ function getGeminiResponseText(payload: unknown) {
 
   return (
     candidates?.[0]?.content?.parts
-      ?.map((part) => part.text?.trim() || "")
+      ?.filter((part) => part.thought !== true)
+      .map((part) => part.text?.trim() || "")
       .filter(Boolean)
       .join("\n") ?? ""
   );
@@ -555,6 +571,9 @@ async function createGeminiResponse({
   userText,
   maxOutputTokens,
   responseSchema,
+  temperature = 0.4,
+  thinkingBudget,
+  thinkingLevel,
   tools,
 }: {
   model: string;
@@ -562,6 +581,9 @@ async function createGeminiResponse({
   userText: string;
   maxOutputTokens: number;
   responseSchema?: Record<string, unknown>;
+  temperature?: number;
+  thinkingBudget?: number;
+  thinkingLevel?: "low" | "medium" | "high";
   tools?: Array<Record<string, unknown>>;
 }) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -574,6 +596,7 @@ async function createGeminiResponse({
   const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
 
   try {
+    const supportsLegacyGenerationConfig = !/^gemini-3\.(?:5|6|7)-/.test(model);
     const response = await fetch(
       `${GEMINI_API_URL}/${encodeURIComponent(model)}:generateContent?key=${apiKey}`,
       {
@@ -592,10 +615,16 @@ async function createGeminiResponse({
             },
           ],
           generationConfig: {
-            temperature: 0.4,
+            ...(supportsLegacyGenerationConfig ? { temperature } : {}),
             maxOutputTokens,
             responseMimeType: "application/json",
             ...(responseSchema ? { responseSchema } : {}),
+            ...(supportsLegacyGenerationConfig && thinkingBudget !== undefined
+              ? { thinkingConfig: { thinkingBudget } }
+              : {}),
+            ...(!supportsLegacyGenerationConfig && thinkingLevel
+              ? { thinkingConfig: { thinkingLevel } }
+              : {}),
           },
           ...(tools && tools.length > 0 ? { tools } : {}),
         }),
@@ -706,8 +735,8 @@ export async function generatePostDraftFromSourceChat({
     );
   }
 
-  const model = await getPostDraftGenerationModel();
   const provider = await getAiProvider();
+  const model = await getPostDraftGenerationModel();
   const systemInstruction =
     "You are a cost-conscious writing assistant for a content platform. Convert the source chat into a concise post package. Return JSON only with keys title, summary, presentationOutline, and article. Keep the summary to 1 to 3 sentences. Keep the presentationOutline concise and useful for speaking or presenting. Keep the article under 500 words, use Markdown headings sparingly, and preserve the author's core ideas without filler or meta commentary about AI.";
   const userText = `Working title: ${title || "Untitled idea"}
@@ -808,8 +837,24 @@ export async function refinePostDraftWithAi({
     );
   }
 
-  const model = await getPostDraftGenerationModel();
   const provider = await getAiProvider();
+  const model = await getPostRefinementModel();
+  const currentWordCount = trimmedArticle.split(/\s+/).filter(Boolean).length;
+  const targetLengthInstruction =
+    length === "shorter"
+      ? `Aim for roughly ${Math.max(100, Math.round(currentWordCount * 0.7))} words.`
+      : length === "longer"
+        ? `Develop the article to roughly ${Math.max(300, Math.round(currentWordCount * 1.5))} words, but add only useful substance.`
+        : `Keep the finished article close to its current length of about ${currentWordCount} words (within roughly 15 percent).`;
+  const maxOutputTokens = Math.min(
+    3200,
+    Math.max(
+      1400,
+      Math.ceil(
+        currentWordCount * (length === "longer" ? 1.8 : length === "shorter" ? 1 : 1.35) * 2,
+      ),
+    ),
+  );
   const intentInstruction =
     intent === "regenerate"
       ? "Produce a stronger fresh version while preserving the same core idea."
@@ -825,7 +870,11 @@ export async function refinePostDraftWithAi({
                 ? "Adjust the tone while preserving the same core substance and direction."
                 : "Make the draft more detailed with clearer explanation, examples, and support while keeping the same direction.";
   const systemInstruction =
-    "You are a cost-conscious writing assistant refining an AI-assisted post draft. Return JSON only with keys summary and article. Keep the author's viewpoint intact, preserve the strongest original idea, and avoid generic filler or meta commentary about AI.";
+    `You are a senior magazine editor refining a post for publication. Return JSON only with keys summary and article.
+
+Write a complete, polished article—not feedback, an outline, or a lightly paraphrased draft. Preserve the author's viewpoint, distinctive details, factual claims, and strongest original idea. Improve the opening, structure, paragraph progression, transitions, sentence rhythm, precision, and ending. Make every paragraph advance the piece.
+
+Use natural, specific language. Remove repetition, throat-clearing, vague abstractions, inflated claims, and generic motivational filler. Avoid stock AI-writing phrases and metaphors such as “in today's world,” “delve,” “tapestry,” “game-changer,” “journey,” “spark,” “take root,” “blossom,” and “it is important to note.” Do not invent facts, quotations, examples, or personal experiences. Use Markdown headings only when they genuinely improve a longer article. Never mention AI or the refinement process unless the article itself is about AI.`;
   const userText = `Working title: ${title || "Untitled idea"}
 Refinement request: ${intentInstruction}
 
@@ -837,6 +886,7 @@ ${authorNotes.trim() || "(none)"}
 
 Requested tone: ${tone}
 Requested length: ${length}
+Length guidance: ${targetLengthInstruction}
 Requested focus: ${focus}
 Specific instruction:
 ${instruction.trim() || "(none)"}
@@ -861,11 +911,28 @@ Return a JSON object with this exact shape:
           model,
           systemInstruction,
           userText,
-          maxOutputTokens: 900,
+          maxOutputTokens,
+          temperature: 0.7,
+          thinkingBudget: 0,
+          thinkingLevel: "low",
+          responseSchema: {
+            type: "object",
+            properties: {
+              summary: {
+                type: "string",
+                description: "A specific one-to-three-sentence summary of the finished article.",
+              },
+              article: {
+                type: "string",
+                description: "The complete refined article in polished Markdown prose.",
+              },
+            },
+            required: ["summary", "article"],
+          },
         })
       : await createOpenAIResponse({
           model,
-          max_output_tokens: 900,
+          max_output_tokens: maxOutputTokens,
           input: [
             {
               role: "system",

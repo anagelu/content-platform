@@ -41,7 +41,8 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=change-me
 
 GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-flash-lite
+GEMINI_MODEL=gemini-3.5-flash-lite
+GEMINI_POST_REFINE_MODEL=gemini-3.7-flash
 
 OPENAI_API_KEY=your_openai_api_key_here
 OPENAI_ARTICLE_MODEL=gpt-5-mini
@@ -53,7 +54,8 @@ Notes:
 - The admin AI control center lets you choose between Gemini and OpenAI.
 - `GEMINI_API_KEY` enables Gemini when Gemini is the selected provider.
 - `OPENAI_API_KEY` enables OpenAI when OpenAI is the selected provider.
-- `OPENAI_POST_DRAFT_MODEL` and `GEMINI_MODEL` are optional manual overrides.
+- `OPENAI_POST_DRAFT_MODEL` and `GEMINI_MODEL` are optional manual overrides for draft generation.
+- `GEMINI_POST_REFINE_MODEL` optionally selects the Gemini model used for publication-quality post refinement; it defaults to `gemini-3.7-flash`.
 - Both AI flows cap input size and output length so you can test the feature without opening the door to runaway spend.
 
 ## Alpaca Paper Trading Setup

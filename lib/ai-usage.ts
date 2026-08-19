@@ -48,6 +48,20 @@ const PRICING_BY_MODEL: Record<string, Pricing> = {
     cachedInputPerMillion: 0.01,
     outputPerMillion: 0.4,
   },
+  "gemini-3.6-flash": {
+    inputPerMillion: 1.5,
+    cachedInputPerMillion: 0.15,
+    outputPerMillion: 7.5,
+  },
+  "gemini-3.5-flash-lite": {
+    inputPerMillion: 0.3,
+    cachedInputPerMillion: 0.03,
+    outputPerMillion: 2.5,
+  },
+  "gemini-3.7-flash": {
+    inputPerMillion: 0.75,
+    outputPerMillion: 3.75,
+  },
 };
 
 let ensureTablePromise: Promise<void> | null = null;
@@ -114,6 +128,7 @@ export function parseGeminiUsage(payload: unknown): OpenAIUsageStats {
           usageMetadata?: {
             promptTokenCount?: number;
             candidatesTokenCount?: number;
+            thoughtsTokenCount?: number;
             totalTokenCount?: number;
           };
         }).usageMetadata
@@ -123,7 +138,7 @@ export function parseGeminiUsage(payload: unknown): OpenAIUsageStats {
     inputTokens: usageMetadata?.promptTokenCount ?? 0,
     outputTokens: usageMetadata?.candidatesTokenCount ?? 0,
     cachedInputTokens: 0,
-    reasoningTokens: 0,
+    reasoningTokens: usageMetadata?.thoughtsTokenCount ?? 0,
     totalTokens: usageMetadata?.totalTokenCount ?? 0,
   };
 }

@@ -86,12 +86,12 @@ export function getModelForTier(tier: AiCapacityTier, provider: AiProvider) {
   if (provider === "gemini") {
     switch (tier) {
       case "high":
-        return "gemini-2.5-flash";
+        return "gemini-3.7-flash";
       case "medium":
-        return "gemini-2.5-flash";
+        return "gemini-3.7-flash";
       case "low":
       default:
-        return "gemini-2.5-flash-lite";
+        return "gemini-3.5-flash-lite";
     }
   }
 
