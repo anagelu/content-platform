@@ -182,7 +182,12 @@ export default async function HomePage() {
                   </Link>
                 </div>
                 {posts.length === 0 ? (
-                  <p className="meta">No posts yet.</p>
+                  <div className="home-empty-state">
+                    <p className="meta">No posts published yet.</p>
+                    <Link href="/posts/new" className="button-link secondary">
+                      Write your first post
+                    </Link>
+                  </div>
                 ) : (
                   <div className="home-compact-list">
                     {posts.map((post) => (
@@ -229,7 +234,14 @@ export default async function HomePage() {
                         </Link>
                       ))
                     : null}
-                  {books.length === 0 && patents.length === 0 ? <p className="meta">No active drafts yet.</p> : null}
+                  {books.length === 0 && patents.length === 0 ? (
+                    <div className="home-empty-state">
+                      <p className="meta">No active drafts yet.</p>
+                      <Link href="/books/new" className="button-link secondary">
+                        Start a book draft
+                      </Link>
+                    </div>
+                  ) : null}
                 </div>
               </section>
             </div>
