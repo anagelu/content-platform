@@ -5016,7 +5016,7 @@ main {
 .book-reader-overlay-backdrop {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, rgba(255, 252, 246, 0.08), rgba(255, 252, 246, 0));
+  background: rgba(35, 26, 15, 0.45);
 }
 
 .book-reader-overlay-panel {
@@ -5028,10 +5028,10 @@ main {
   overflow: auto;
   padding: 1.15rem 1rem 1rem;
   border-radius: 24px;
-  border: 1px solid rgba(221, 200, 167, 0.3);
-  background: linear-gradient(180deg, rgba(255, 252, 246, 0.3), rgba(244, 234, 215, 0.16));
+  border: 1px solid rgba(221, 200, 167, 0.55);
+  background: linear-gradient(180deg, rgba(255, 252, 246, 0.99), rgba(250, 243, 230, 0.99));
   backdrop-filter: blur(14px);
-  box-shadow: 0 12px 24px rgba(73, 52, 24, 0.06);
+  box-shadow: 0 12px 24px rgba(73, 52, 24, 0.18);
 }
 
 .book-reader-overlay-header {
