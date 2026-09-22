@@ -10,12 +10,7 @@ import { getLiveConfluenceSnapshot } from "@/lib/algo-backtest";
 import { NextResponse } from "next/server";
 
 // Read-only mirror of the Controller V2 dashboard data for an external
-// (Claude-hosted) viewer. No order placement lives here. Access is
-// admin-session OR a bearer token, since this is also called from an
-// unauthenticated automation context (this Claude session's browser tool),
-// which cannot hold a signed-in admin cookie.
-const DASHBOARD_SNAPSHOT_TOKEN = "O-9Hf5J3VQzeycekNPMFx55e9wP_wRt61zwb97YSM-E";
-
+// (Claude-hosted) viewer. No order placement lives here. Admin session only.
 const VALID_TIMEFRAMES: AlpacaBarTimeframe[] = [
   "1Min",
   "5Min",
@@ -26,21 +21,10 @@ const VALID_TIMEFRAMES: AlpacaBarTimeframe[] = [
   "1Week",
 ];
 
-function isAuthorized(request: Request, sessionRole: string | undefined) {
-  if (sessionRole === "admin") {
-    return true;
-  }
-
-  const authHeader = request.headers.get("authorization") ?? "";
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
-
-  return token === DASHBOARD_SNAPSHOT_TOKEN;
-}
-
 export async function GET(request: Request) {
   const session = await auth();
 
-  if (!isAuthorized(request, session?.user?.role)) {
+  if (session?.user?.role !== "admin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
