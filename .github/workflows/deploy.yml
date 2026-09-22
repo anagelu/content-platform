@@ -8,14 +8,18 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.DROPLET_HOST }}" >> ~/.ssh/known_hosts
+
       - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.DROPLET_HOST }}
-          port: 22
-          username: ${{ secrets.DROPLET_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
+        run: |
+          ssh -i ~/.ssh/deploy_key "${{ secrets.DROPLET_USER }}@${{ secrets.DROPLET_HOST }}" '
+            set -e
             cd /var/www/pattern-foundry/current
             git pull origin main
             ./scripts/deploy-vps.sh
+          '
