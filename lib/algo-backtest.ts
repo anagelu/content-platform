@@ -837,6 +837,53 @@ function getWarmupBars(timeframe: AlpacaBarTimeframe) {
   return timeframe === "1Week" ? 60 : timeframe === "1Day" ? 140 : 120;
 }
 
+export async function getLiveConfluenceSnapshot({
+  symbol,
+  timeframe,
+  sensitivityProfile = DEFAULT_SENSITIVITY_PROFILE,
+  credentials,
+}: {
+  symbol: string;
+  timeframe: AlpacaBarTimeframe;
+  sensitivityProfile?: AlgoBacktestSensitivityProfile;
+  credentials: AlpacaCredentials;
+}) {
+  const normalizedSymbol = normalizeAlpacaTradingSymbol(symbol);
+
+  if (!normalizedSymbol) {
+    throw new Error("Add a ticker symbol first.");
+  }
+
+  const { sensitivityValue } = resolveBacktestSensitivity(sensitivityProfile, 70);
+  const isCrypto = isAlpacaCryptoSymbol(normalizedSymbol);
+  const limit = getWarmupBars(timeframe) + 30;
+
+  const bars = (
+    isCrypto
+      ? await getCryptoBars(normalizedSymbol, { timeframe, limit }, credentials)
+      : await getStockBars(normalizedSymbol, { timeframe, limit }, credentials)
+  ).sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+
+  if (bars.length === 0) {
+    throw new Error("No live bars were returned for this symbol.");
+  }
+
+  const snapshot = buildHistoricalSnapshot(normalizedSymbol, timeframe, bars);
+  const confluence = buildConfluenceModel(snapshot, sensitivityValue);
+
+  return {
+    symbol: normalizedSymbol,
+    timeframe,
+    asOf: bars.at(-1)?.timestamp ?? null,
+    latestPrice: snapshot.latestPrice,
+    priceChangePercent: snapshot.priceChangePercent,
+    relativeVolume: snapshot.relativeVolume,
+    rsi14: snapshot.rsi14,
+    candlestickSignals: snapshot.candlestickSignals,
+    confluence,
+  };
+}
+
 export async function runAlgoBacktest({
   symbol,
   timeframe,
