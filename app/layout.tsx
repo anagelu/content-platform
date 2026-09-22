@@ -21,21 +21,24 @@ export default async function RootLayout({
       <body>
         <header className="site-header">
           <div className="site-shell site-header-inner">
-            <Link
-              href="/"
-              className="brand-lockup"
-            >
-              <span className="brand-mark" aria-hidden="true">
-                <span className="brand-mark-cell brand-mark-cell-a" />
-                <span className="brand-mark-cell brand-mark-cell-b" />
-                <span className="brand-mark-cell brand-mark-cell-c" />
-                <span className="brand-mark-cell brand-mark-cell-d" />
-              </span>
-              <span className="brand-wordmark">
-                <span className="brand-wordmark-top">Pattern</span>
-                <span className="brand-wordmark-bottom">Foundry</span>
-              </span>
-            </Link>
+            <div className="brand-group">
+              <Link
+                href="/"
+                className="brand-lockup"
+              >
+                <span className="brand-mark" aria-hidden="true">
+                  <span className="brand-mark-cell brand-mark-cell-a" />
+                  <span className="brand-mark-cell brand-mark-cell-b" />
+                  <span className="brand-mark-cell brand-mark-cell-c" />
+                  <span className="brand-mark-cell brand-mark-cell-d" />
+                </span>
+                <span className="brand-wordmark">
+                  <span className="brand-wordmark-top">Pattern</span>
+                  <span className="brand-wordmark-bottom">Foundry</span>
+                </span>
+              </Link>
+              <span className="brand-tagline">Turn ideas into durable assets</span>
+            </div>
 
             <nav className="site-header-nav">
               <form action="/search" method="get" className="site-search-form">

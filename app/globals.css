@@ -3212,12 +3212,32 @@ main {
   cursor: pointer;
 }
 
+.brand-group {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
 .brand-lockup {
   display: inline-flex;
   align-items: center;
   gap: 0.8rem;
   color: #1a1814;
   text-decoration: none;
+}
+
+.brand-tagline {
+  color: #6b7280;
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding-left: 0.9rem;
+  border-left: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+@media (max-width: 720px) {
+  .brand-tagline {
+    display: none;
+  }
 }
 
 .brand-wordmark {
