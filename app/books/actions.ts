@@ -84,6 +84,10 @@ async function createBookSections(
         sceneGoal: section.sceneGoal || null,
         sceneConflict: section.sceneConflict || null,
         povCharacterId: section.povCharacterId || null,
+        characterDirectionsJson:
+          Object.keys(section.characterDirections || {}).length > 0
+            ? JSON.stringify(section.characterDirections)
+            : null,
         position: index,
       },
     });

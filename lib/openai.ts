@@ -272,6 +272,7 @@ type StoryCharacterContext = {
   arc?: string;
   voice?: string;
   notes?: string;
+  sceneDirection?: string;
 };
 
 type StorySettingContext = {
@@ -322,6 +323,12 @@ function formatStoryCharacters(value: string) {
         `  Voice: ${character.voice?.trim() || "(not specified)"}`,
         `  Notes: ${character.notes?.trim() || "(none)"}`,
       ];
+
+      if (character.sceneDirection?.trim()) {
+        lines.push(
+          `  Director's note for this scene: ${character.sceneDirection.trim()}`,
+        );
+      }
 
       return lines.join("\n");
     });
@@ -1258,8 +1265,8 @@ export async function refineBookSectionWithAi({
   const provider = await getAiProvider();
   const systemInstruction = storyMode
     ? hasLocalDraft
-      ? "You are a fiction editor and scene writer helping refine one chapter or subsection of a novel. Return JSON only with keys kind, title, summary, and content. Write actual narrative prose for the selected section only. Preserve the current section's role, POV, tone, and story direction while improving voice, scene flow, specificity, and immersion. Treat the selected characters, selected settings, POV profile, scene goal, and scene conflict as primary constraints, and use the wider book context only as background. Do not rewrite other chapters, do not return outlining notes, and do not add meta commentary about AI."
-      : "You are a fiction writer helping draft one chapter or subsection of a novel from planning context. Return JSON only with keys kind, title, summary, and content. Write actual narrative prose for the selected section only, not an outline, prompt, or editorial note. Treat the selected characters, selected settings, POV profile, scene goal, and scene conflict as the main context for what happens on the page, and use the wider story bible only as supporting continuity. Keep the scope local to this section, do not rewrite other chapters, and do not add meta commentary about AI."
+      ? "You are a fiction editor and scene writer helping refine one chapter or subsection of a novel. Return JSON only with keys kind, title, summary, and content. Write actual narrative prose for the selected section only. Preserve the current section's role, POV, tone, and story direction while improving voice, scene flow, specificity, and immersion. Treat the selected characters, selected settings, POV profile, scene goal, and scene conflict as primary constraints, and use the wider book context only as background. When more than one character is selected, direct the scene the way a film director briefs actors: honor each character's individual director's note (their tactic, tone, or private agenda for this scene) and let real, distinct dialogue and behavior emerge from the friction between them rather than narrating around it. Do not rewrite other chapters, do not return outlining notes, and do not add meta commentary about AI."
+      : "You are a fiction writer helping draft one chapter or subsection of a novel from planning context. Return JSON only with keys kind, title, summary, and content. Write actual narrative prose for the selected section only, not an outline, prompt, or editorial note. Treat the selected characters, selected settings, POV profile, scene goal, and scene conflict as the main context for what happens on the page, and use the wider story bible only as supporting continuity. When more than one character is selected, direct the scene the way a film director briefs actors: honor each character's individual director's note (their tactic, tone, or private agenda for this scene) and write real, distinct dialogue between them that plays out their goals and conflict on the page. Keep the scope local to this section, do not rewrite other chapters, and do not add meta commentary about AI."
     : "You are a cost-conscious book editor. Refine only the requested section while preserving its role in the larger book. Return JSON only with keys kind, title, summary, and content. Keep the same section scope, improve clarity and flow, and avoid changing unrelated chapters or introducing meta commentary about AI.";
   const actionLabel = storyMode
     ? hasLocalDraft

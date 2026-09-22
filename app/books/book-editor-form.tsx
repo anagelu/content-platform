@@ -30,6 +30,7 @@ type InitialBookSection = {
   sceneGoal?: string | null;
   sceneConflict?: string | null;
   povCharacterId?: string | null;
+  characterDirectionsJson?: string | null;
   subsections?: InitialBookSection[];
 };
 
@@ -45,6 +46,28 @@ function parseStringArrayJson(value: string | null | undefined) {
       : [];
   } catch {
     return [];
+  }
+}
+
+function parseStringRecordJson(value: string | null | undefined) {
+  if (!value?.trim()) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, unknown>).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string",
+      ),
+    );
+  } catch {
+    return {};
   }
 }
 
@@ -89,6 +112,7 @@ function hydrateSections(sections: InitialBookSection[]) {
       sceneGoal: section.sceneGoal || "",
       sceneConflict: section.sceneConflict || "",
       povCharacterId: section.povCharacterId || "",
+      characterDirections: parseStringRecordJson(section.characterDirectionsJson),
       children: (section.subsections || []).map((child) =>
         createBookSectionDraft({
           id: String(child.id),
@@ -101,6 +125,7 @@ function hydrateSections(sections: InitialBookSection[]) {
           sceneGoal: child.sceneGoal || "",
           sceneConflict: child.sceneConflict || "",
           povCharacterId: child.povCharacterId || "",
+          characterDirections: parseStringRecordJson(child.characterDirectionsJson),
         }),
       ),
     }),
@@ -314,6 +339,14 @@ export function BookEditorForm({
         activeSection?.characterIds.includes(character.id),
       ),
     [activeSection, storyCharacters],
+  );
+  const activeSectionCharactersForAi = useMemo(
+    () =>
+      activeSectionCharacters.map((character) => ({
+        ...character,
+        sceneDirection: activeSection?.characterDirections?.[character.id] || "",
+      })),
+    [activeSection, activeSectionCharacters],
   );
   const activeSectionSettings = useMemo(
     () =>
@@ -541,7 +574,7 @@ export function BookEditorForm({
           storyStructureNotes,
           characterProfilesJson: JSON.stringify(storyCharacters),
           settingProfilesJson: JSON.stringify(storySettings),
-          selectedCharacterProfilesJson: JSON.stringify(activeSectionCharacters),
+          selectedCharacterProfilesJson: JSON.stringify(activeSectionCharactersForAi),
           selectedSettingProfilesJson: JSON.stringify(activeSectionSettings),
           sceneGoal: activeSection.sceneGoal,
           sceneConflict: activeSection.sceneConflict,
@@ -655,16 +688,42 @@ export function BookEditorForm({
       return;
     }
 
-    const nextCharacterIds = currentSection.characterIds.includes(characterId)
+    const isRemoving = currentSection.characterIds.includes(characterId);
+    const nextCharacterIds = isRemoving
       ? currentSection.characterIds.filter((id) => id !== characterId)
       : [...currentSection.characterIds, characterId];
 
+    const nextCharacterDirections = { ...currentSection.characterDirections };
+    if (isRemoving) {
+      delete nextCharacterDirections[characterId];
+    }
+
     updateSection(sectionId, {
       characterIds: nextCharacterIds,
+      characterDirections: nextCharacterDirections,
       povCharacterId:
         currentSection.povCharacterId === characterId && !nextCharacterIds.includes(characterId)
           ? ""
           : currentSection.povCharacterId,
+    });
+  }
+
+  function setSectionCharacterDirection(
+    sectionId: string,
+    characterId: string,
+    direction: string,
+  ) {
+    const currentSection = findSectionById(sections, sectionId);
+
+    if (!currentSection) {
+      return;
+    }
+
+    updateSection(sectionId, {
+      characterDirections: {
+        ...currentSection.characterDirections,
+        [characterId]: direction,
+      },
     });
   }
 
@@ -1627,9 +1686,12 @@ export function BookEditorForm({
                   <section className="book-section-context">
                     <div className="book-story-header">
                       <div>
-                        <h3 className="card-title">Section Story Context</h3>
+                        <h3 className="card-title">Direct This Scene</h3>
                         <p className="meta">
-                          Choose the characters, setting, and scene intent that matter for this specific section.
+                          Set the scene goal and conflict, pick who is in the scene, and give each
+                          character a quick note on how to play it here &mdash; like a director
+                          briefing actors before a take. &ldquo;Generate With AI&rdquo; writes the
+                          scene through that lens.
                         </p>
                       </div>
                     </div>
@@ -1702,21 +1764,41 @@ export function BookEditorForm({
                           <p className="meta">Add characters in the story bible first.</p>
                         ) : (
                           <div className="book-selection-stack">
-                            {storyCharacters.map((character) => (
-                              <label key={character.id} className="book-selection-chip">
-                                <input
-                                  type="checkbox"
-                                  checked={activeSection.characterIds.includes(character.id)}
-                                  onChange={() =>
-                                    toggleSectionCharacter(activeSection.id, character.id)
-                                  }
-                                />
-                                <span>
-                                  <strong>{character.name || "Untitled character"}</strong>
-                                  <small>{character.role || "Role not set"}</small>
-                                </span>
-                              </label>
-                            ))}
+                            {storyCharacters.map((character) => {
+                              const isInScene = activeSection.characterIds.includes(character.id);
+                              return (
+                                <div key={character.id} className="book-director-entry">
+                                  <label className="book-selection-chip">
+                                    <input
+                                      type="checkbox"
+                                      checked={isInScene}
+                                      onChange={() =>
+                                        toggleSectionCharacter(activeSection.id, character.id)
+                                      }
+                                    />
+                                    <span>
+                                      <strong>{character.name || "Untitled character"}</strong>
+                                      <small>{character.role || "Role not set"}</small>
+                                    </span>
+                                  </label>
+                                  {isInScene ? (
+                                    <input
+                                      type="text"
+                                      className="form-input book-director-note"
+                                      value={activeSection.characterDirections[character.id] || ""}
+                                      onChange={(event) =>
+                                        setSectionCharacterDirection(
+                                          activeSection.id,
+                                          character.id,
+                                          event.target.value,
+                                        )
+                                      }
+                                      placeholder={`Direction for ${character.name || "this character"} in this scene (tone, tactic, what they want)`}
+                                    />
+                                  ) : null}
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>

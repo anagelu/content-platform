@@ -4741,6 +4741,23 @@ main {
   font-size: 0.82rem;
 }
 
+.book-director-entry {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.book-director-note {
+  margin-left: 0.1rem;
+  font-size: 0.85rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  background: rgba(255, 252, 246, 0.7);
+}
+
+.book-director-note::placeholder {
+  color: #a89a86;
+}
+
 .book-outline-shell {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);

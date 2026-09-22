@@ -9,6 +9,7 @@ export type BookSectionDraft = {
   sceneGoal: string;
   sceneConflict: string;
   povCharacterId: string;
+  characterDirections: Record<string, string>;
   children: BookSectionDraft[];
 };
 
@@ -76,6 +77,17 @@ export function createBookSectionDraft(
     sceneGoal: partial.sceneGoal?.trim() || "",
     sceneConflict: partial.sceneConflict?.trim() || "",
     povCharacterId: partial.povCharacterId?.trim() || "",
+    characterDirections:
+      partial.characterDirections && typeof partial.characterDirections === "object"
+        ? Object.fromEntries(
+            Object.entries(partial.characterDirections).filter(
+              (entry): entry is [string, string] =>
+                typeof entry[0] === "string" &&
+                typeof entry[1] === "string" &&
+                entry[1].trim().length > 0,
+            ),
+          )
+        : {},
     children: Array.isArray(partial.children)
       ? partial.children.map((child) => createBookSectionDraft(child))
       : [],
