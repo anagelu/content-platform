@@ -5016,7 +5016,8 @@ main {
 .book-reader-overlay-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(35, 26, 15, 0.45);
+  background: rgba(28, 21, 12, 0.88);
+  backdrop-filter: blur(2px);
 }
 
 .book-reader-overlay-panel {
