@@ -66,7 +66,9 @@ export default async function HomePage() {
     { href: "/posts", label: "Posts", hint: "Publishing" },
     { href: "/books", label: "Books", hint: "Manuscripts" },
     { href: "/studio", label: "Studio", hint: "Distribution" },
-    ...(session ? [{ href: "/trading", label: "Trading", hint: "Markets" }] : []),
+    ...(session?.user?.role === "admin"
+      ? [{ href: "/trading", label: "Trading", hint: "Markets" }]
+      : []),
     ...(session ? [{ href: "/inbox/messages", label: "Inbox", hint: "Capture" }] : []),
   ];
   const operatingLanes = [
@@ -212,7 +214,7 @@ export default async function HomePage() {
                     <Link href="/books" className="button-link secondary">
                       Books
                     </Link>
-                    {session ? (
+                    {session?.user?.role === "admin" ? (
                       <Link href="/trading" className="button-link secondary">
                         Trading
                       </Link>

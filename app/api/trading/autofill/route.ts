@@ -13,6 +13,13 @@ export async function POST(request: Request) {
     );
   }
 
+  if (session.user.role !== "admin") {
+    return NextResponse.json(
+      { error: "Trading tools are limited to admin accounts." },
+      { status: 403 },
+    );
+  }
+
   try {
     const body = (await request.json()) as {
       market?: string;

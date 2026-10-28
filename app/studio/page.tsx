@@ -89,9 +89,11 @@ export default async function StudioPage({
           <Link href="/posts" className="button-link secondary">
             Posts
           </Link>
-          <Link href="/trading" className="button-link secondary">
-            Trading
-          </Link>
+          {session.user.role === "admin" ? (
+            <Link href="/trading" className="button-link secondary">
+              Trading
+            </Link>
+          ) : null}
           <Link href="/" className="button-link secondary">
             Home
           </Link>

@@ -54,6 +54,7 @@ const STATIC_PAGES: Array<{
     href: "/trading",
     kind: "Page",
     excerpt: "Trading sessions, journal, tools, pipeline, and SPX workflows.",
+    requiresAuth: true,
   },
   {
     id: "trading-tools",
@@ -61,6 +62,7 @@ const STATIC_PAGES: Array<{
     href: "/trading/tools",
     kind: "Page",
     excerpt: "Risk reward calculator and candlestick signal tools.",
+    requiresAuth: true,
   },
   {
     id: "trading-algo",

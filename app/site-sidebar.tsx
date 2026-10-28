@@ -223,9 +223,11 @@ export function SiteSidebar({
       isAuthenticated ? true : !["/patents", "/studio"].includes(item.href),
     ),
   }));
-  const visibleSecondaryItems = secondaryItems.filter((item) =>
-    isAuthenticated ? true : !["/inbox/messages", "/os"].includes(item.href),
-  );
+  const visibleSecondaryItems = secondaryItems
+    .filter((item) => (item.href === "/trading" ? isAdmin : true))
+    .filter((item) =>
+      isAuthenticated ? true : !["/inbox/messages", "/os"].includes(item.href),
+    );
 
   return (
     <aside className="site-sidebar">

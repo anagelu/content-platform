@@ -11,6 +11,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  if (session.user.role !== "admin") {
+    return NextResponse.json(
+      { error: "Trading tools are limited to admin accounts." },
+      { status: 403 },
+    );
+  }
+
   try {
     const userId = Number(session.user.id);
     const body = (await request.json()) as {
