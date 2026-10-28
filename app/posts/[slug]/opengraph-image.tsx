@@ -39,9 +39,10 @@ function clampTitle(title: string) {
   return title.length > 110 ? `${title.slice(0, 110)}...` : title;
 }
 
-export default async function Image({ params }: { params: { slug: string } }) {
+export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
   const post = await prisma.post.findUnique({
-    where: { slug: params.slug },
+    where: { slug },
     select: { title: true, category: { select: { name: true } } },
   });
 

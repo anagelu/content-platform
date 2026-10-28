@@ -39,11 +39,12 @@ function clampTitle(title: string) {
   return title.length > 110 ? `${title.slice(0, 110)}...` : title;
 }
 
-export default async function Image({ params }: { params: { slug: string } }) {
+export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
   // Never resolved from a session here: crawlers fetch this unauthenticated,
   // so a private book must never have its real title rendered into the image.
   const book = await prisma.book.findUnique({
-    where: { slug: params.slug },
+    where: { slug },
     select: { title: true, bookType: true, isPublic: true },
   });
 
