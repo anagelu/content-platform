@@ -1,5 +1,39 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ name: string }>;
+}): Promise<Metadata> {
+  const { name } = await params;
+  const decodedName = decodeURIComponent(name);
+
+  const category = await prisma.category.findUnique({
+    where: { name: decodedName },
+    select: { name: true, posts: { select: { id: true } } },
+  });
+
+  if (!category) {
+    return { title: "Category not found", robots: { index: false, follow: false } };
+  }
+
+  const url = `/categories/${encodeURIComponent(category.name)}`;
+  const description = `${category.posts.length} post${category.posts.length === 1 ? "" : "s"} in ${category.name} on Pattern Foundry.`;
+
+  return {
+    title: category.name,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      type: "website",
+      title: category.name,
+      description,
+      url,
+    },
+  };
+}
 
 export default async function CategoryPage({
   params,

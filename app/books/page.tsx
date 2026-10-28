@@ -1,6 +1,13 @@
+import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Books",
+  description: "Structured book drafts, outlines, and manuscripts from Pattern Foundry.",
+  alternates: { canonical: "/books" },
+};
 
 export default async function BooksPage() {
   const session = await auth();

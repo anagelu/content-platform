@@ -1,6 +1,13 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { ensureDefaultCategories } from "@/lib/categories";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Categories",
+  description: "Browse Pattern Foundry content by topic and category.",
+  alternates: { canonical: "/categories" },
+};
 
 export default async function CategoriesPage() {
   await ensureDefaultCategories();

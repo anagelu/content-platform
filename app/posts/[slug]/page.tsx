@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
+import { SITE_URL } from "@/lib/site-url";
 import {
   type PostComment,
   listPostComments,
@@ -101,8 +102,26 @@ export default async function PostPage({
     );
   }
 
+  const articleJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: post.title,
+    description: buildPostDescription(post),
+    datePublished: post.createdAt.toISOString(),
+    dateModified: post.updatedAt.toISOString(),
+    url: `${SITE_URL}/posts/${post.slug}`,
+    author: { "@type": "Organization", name: "Pattern Foundry" },
+    publisher: { "@type": "Organization", name: "Pattern Foundry" },
+    ...(post.category ? { articleSection: post.category.name } : {}),
+  };
+
   return (
     <main>
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+      />
       <div className="site-shell">
         <article className="article-card">
           <h1 className="article-title">{post.title}</h1>

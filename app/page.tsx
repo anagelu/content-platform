@@ -1,7 +1,15 @@
+import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { HomeIdeaStarter, type OutputOption } from "./home-idea-starter";
+
+export const metadata: Metadata = {
+  title: "Pattern Foundry",
+  description:
+    "Turn a rough idea into a post, a book, or a durable framework, steered by you and written with AI.",
+  alternates: { canonical: "/" },
+};
 
 const outputOptions: OutputOption[] = [
   {

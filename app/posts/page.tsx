@@ -1,5 +1,12 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Posts",
+  description: "Browse published posts and long-form writing from Pattern Foundry.",
+  alternates: { canonical: "/posts" },
+};
 
 export default async function PostsPage() {
   const posts = await prisma.post.findMany({
