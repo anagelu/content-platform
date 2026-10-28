@@ -13,19 +13,22 @@ function BrandMark() {
   return (
     <div
       style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(2, 22px)",
-        gridTemplateRows: "repeat(2, 22px)",
+        display: "flex",
+        flexDirection: "column",
         gap: 8,
         padding: 8,
         borderRadius: 18,
         background: INK,
       }}
     >
-      <div style={{ borderRadius: 6, background: GOLD }} />
-      <div style={{ borderRadius: 6, background: CREAM }} />
-      <div style={{ borderRadius: 6, background: BRONZE }} />
-      <div style={{ borderRadius: 6, background: GOLD }} />
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", width: 22, height: 22, borderRadius: 6, background: GOLD }} />
+        <div style={{ display: "flex", width: 22, height: 22, borderRadius: 6, background: CREAM }} />
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", width: 22, height: 22, borderRadius: 6, background: BRONZE }} />
+        <div style={{ display: "flex", width: 22, height: 22, borderRadius: 6, background: GOLD }} />
+      </div>
     </div>
   );
 }
