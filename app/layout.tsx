@@ -3,10 +3,31 @@ import Link from "next/link";
 import "./globals.css";
 import { auth, signOut } from "@/auth";
 import { SiteSidebar } from "./site-sidebar";
+import { SITE_URL } from "@/lib/site-url";
+
+const SITE_TITLE = "Pattern Foundry";
+const SITE_DESCRIPTION =
+  "A platform where ideas become patterns, frameworks, and media.";
 
 export const metadata: Metadata = {
-  title: "Pattern Foundry",
-  description: "A platform where ideas become patterns, frameworks, and media.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: SITE_TITLE,
+    template: `%s | ${SITE_TITLE}`,
+  },
+  description: SITE_DESCRIPTION,
+  openGraph: {
+    type: "website",
+    siteName: SITE_TITLE,
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
+  },
+  twitter: {
+    card: "summary",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
 };
 
 export default async function RootLayout({

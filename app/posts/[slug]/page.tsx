@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import {
   type PostComment,
@@ -19,6 +20,52 @@ import { SharePlatformButtons } from "@/app/share-platform-buttons";
 import type { ReactNode } from "react";
 
 const REACTION_OPTIONS = ["👍", "❤️", "🔥", "👏", "😂"] as const;
+
+function buildPostDescription(post: { summary: string | null; body: string }) {
+  const trimmedSummary = post.summary?.trim();
+  if (trimmedSummary) {
+    return trimmedSummary;
+  }
+
+  const plainBody = post.body.replace(/\s+/g, " ").trim();
+  return plainBody.length > 160 ? `${plainBody.slice(0, 160)}...` : plainBody;
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const post = await prisma.post.findUnique({
+    where: { slug },
+    select: { title: true, summary: true, body: true, slug: true },
+  });
+
+  if (!post) {
+    return { title: "Post not found" };
+  }
+
+  const description = buildPostDescription(post);
+  const url = `/posts/${post.slug}`;
+
+  return {
+    title: post.title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      type: "article",
+      title: post.title,
+      description,
+      url,
+    },
+    twitter: {
+      card: "summary",
+      title: post.title,
+      description,
+    },
+  };
+}
 
 export default async function PostPage({
   params,

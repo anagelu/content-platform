@@ -1,8 +1,77 @@
+import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { deleteBook, setBookVisibility } from "../actions";
 import { BookReaderWorkspace } from "../book-reader-workspace";
+
+function buildBookDescription(book: { summary: string | null; outline: string | null; bookType: string }) {
+  const trimmedSummary = book.summary?.trim();
+  if (trimmedSummary) {
+    return trimmedSummary;
+  }
+
+  const trimmedOutline = book.outline?.trim().replace(/\s+/g, " ");
+  if (trimmedOutline) {
+    return trimmedOutline.length > 160 ? `${trimmedOutline.slice(0, 160)}...` : trimmedOutline;
+  }
+
+  return `A ${book.bookType} manuscript on Pattern Foundry.`;
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const session = await auth();
+  const book = await prisma.book.findUnique({
+    where: { slug },
+    select: {
+      title: true,
+      slug: true,
+      summary: true,
+      outline: true,
+      bookType: true,
+      isPublic: true,
+      authorId: true,
+    },
+  });
+
+  if (!book) {
+    return { title: "Book not found", robots: { index: false, follow: false } };
+  }
+
+  const userId = session?.user?.id ? Number(session.user.id) : null;
+  const canManage =
+    session?.user?.role === "admin" || (userId !== null && book.authorId === userId);
+
+  if (!book.isPublic && !canManage) {
+    return { title: "Private book", robots: { index: false, follow: false } };
+  }
+
+  const description = buildBookDescription(book);
+  const url = `/books/${book.slug}`;
+
+  return {
+    title: book.title,
+    description,
+    alternates: { canonical: url },
+    robots: book.isPublic ? undefined : { index: false, follow: false },
+    openGraph: {
+      type: "book",
+      title: book.title,
+      description,
+      url,
+    },
+    twitter: {
+      card: "summary",
+      title: book.title,
+      description,
+    },
+  };
+}
 
 export default async function BookPage({
   params,
