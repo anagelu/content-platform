@@ -230,60 +230,66 @@ export function SiteSidebar({
     );
 
   return (
-    <aside className="site-sidebar">
-      {visiblePrimarySections.map((section, index) => (
-        <NavBlock
-          key={section.title}
-          title={section.title}
-          description={section.description}
-          items={
-            isAdmin && index === primarySections.length - 1
-              ? [...section.items, { href: "/admin/ai?range=30d", label: "Admin", hint: "ops" }]
-              : section.items
-          }
-          pathname={pathname}
-        />
-      ))}
+    <details className="site-sidebar-shell">
+      <summary className="site-sidebar-toggle">
+        <span className="site-sidebar-toggle-label">Menu</span>
+        <span className="site-sidebar-toggle-hint">Browse sections</span>
+      </summary>
+      <aside className="site-sidebar">
+        {visiblePrimarySections.map((section, index) => (
+          <NavBlock
+            key={section.title}
+            title={section.title}
+            description={section.description}
+            items={
+              isAdmin && index === primarySections.length - 1
+                ? [...section.items, { href: "/admin/ai?range=30d", label: "Admin", hint: "ops" }]
+                : section.items
+            }
+            pathname={pathname}
+          />
+        ))}
 
-      {matchedSection ? (
-        <NavBlock
-          title={matchedSection.title}
-          description={matchedSection.description}
-          items={matchedSection.items}
-          pathname={pathname}
-        />
-      ) : null}
+        {matchedSection ? (
+          <NavBlock
+            title={matchedSection.title}
+            description={matchedSection.description}
+            items={matchedSection.items}
+            pathname={pathname}
+          />
+        ) : null}
 
-      <details className="site-sidebar-card site-sidebar-disclosure">
-        <summary className="site-sidebar-disclosure-summary">
-          <span>
-            <span className="site-sidebar-label">More</span>
-            <span className="site-sidebar-description">
-              Secondary systems, archives, and deeper workspace areas.
+        <details className="site-sidebar-card site-sidebar-disclosure">
+          <summary className="site-sidebar-disclosure-summary">
+            <span>
+              <span className="site-sidebar-label">More</span>
+              <span className="site-sidebar-description">
+                Secondary systems, archives, and deeper workspace areas.
+              </span>
             </span>
-          </span>
-          <span className="site-sidebar-disclosure-hint">Expand</span>
-        </summary>
-        <nav className="site-sidebar-nav" aria-label="More">
-          {[...visibleSecondaryItems, ...(isAdmin ? [{ href: "/admin/ai?range=30d", label: "Admin", hint: "ops" }] : [])].map((item) => {
-            const active = isItemActive(pathname, item);
+            <span className="site-sidebar-disclosure-hint">Expand</span>
+          </summary>
+          <nav className="site-sidebar-nav" aria-label="More">
+            {[...visibleSecondaryItems, ...(isAdmin ? [{ href: "/admin/ai?range=30d", label: "Admin", hint: "ops" }] : [])].map((item) => {
+              const active = isItemActive(pathname, item);
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={active ? "site-sidebar-link is-active" : "site-sidebar-link"}
-                aria-current={active ? "page" : undefined}
-              >
-                <span className="site-sidebar-link-copy">
-                  <span className="site-sidebar-link-title">{item.label}</span>
-                  {item.hint ? <span className="site-sidebar-link-hint">{item.hint}</span> : null}
-                </span>
-              </Link>
-            );
-          })}
-        </nav>
-      </details>
-    </aside>
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={active ? "site-sidebar-link is-active" : "site-sidebar-link"}
+                  aria-current={active ? "page" : undefined}
+                >
+                  <span className="site-sidebar-link-copy">
+                    <span className="site-sidebar-link-title">{item.label}</span>
+                    {item.hint ? <span className="site-sidebar-link-hint">{item.hint}</span> : null}
+                  </span>
+                </Link>
+              );
+            })}
+          </nav>
+        </details>
+      </aside>
+    </details>
   );
 }
