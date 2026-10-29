@@ -4286,12 +4286,7 @@ main {
     color: #fffaf1;
   }
 
-  .site-sidebar-shell > .site-sidebar {
-    display: none;
-  }
-
   .site-sidebar-shell[open] > .site-sidebar {
-    display: grid;
     margin-top: 0.85rem;
   }
 

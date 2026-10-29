@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useLayoutEffect, useRef } from "react";
 
 type NavItem = {
   href: string;
@@ -214,9 +215,16 @@ export function SiteSidebar({
   isAuthenticated: boolean;
 }) {
   const pathname = usePathname();
+  const detailsRef = useRef<HTMLDetailsElement>(null);
   const matchedSection = contextualSections.find((section) =>
     section.match(pathname),
   );
+
+  useLayoutEffect(() => {
+    if (window.matchMedia("(max-width: 720px)").matches) {
+      detailsRef.current?.removeAttribute("open");
+    }
+  }, []);
   const visiblePrimarySections = primarySections.map((section) => ({
     ...section,
     items: section.items.filter((item) =>
@@ -230,7 +238,7 @@ export function SiteSidebar({
     );
 
   return (
-    <details className="site-sidebar-shell">
+    <details className="site-sidebar-shell" open ref={detailsRef}>
       <summary className="site-sidebar-toggle">
         <span className="site-sidebar-toggle-label">Menu</span>
         <span className="site-sidebar-toggle-hint">Browse sections</span>
