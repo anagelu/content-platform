@@ -4,7 +4,9 @@ import {
   calculatePotSize,
   getActiveParticipants,
   getCycleFrequencyLabel,
+  getGroupCashFlowSummary,
   getPayoutMethodLabel,
+  SIMULATED_FUNDS_NOTICE,
 } from "@/lib/ekub";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
@@ -68,6 +70,7 @@ export default async function EkubGroupPage({
   const potSize = calculatePotSize(group.contributionAmount, activeParticipants.length);
   const currentCycle = group.cycles.find((cycle) => cycle.status !== "COMPLETED") ?? group.cycles[0] ?? null;
   const pastCycles = currentCycle ? group.cycles.filter((cycle) => cycle.id !== currentCycle.id) : group.cycles;
+  const cashFlow = getGroupCashFlowSummary(group.cycles);
 
   return (
     <main>
@@ -80,6 +83,7 @@ export default async function EkubGroupPage({
               {group.description ||
                 "Manage the member circle, keep contributions current, and move the pot from cycle to cycle."}
             </p>
+            <p className="ekub-sim-note">{SIMULATED_FUNDS_NOTICE}</p>
             <div className="section-command-strip">
               <Link href="/ekub" className="section-command-link">
                 <strong>All Groups</strong>
@@ -227,6 +231,29 @@ export default async function EkubGroupPage({
           </section>
         </div>
 
+        <section className="card">
+          <h2 className="trading-section-title">Cash Flow</h2>
+          <p className="meta">Totals across every cycle this group has run, derived from recorded contributions and payouts.</p>
+          <div className="ekub-metric-grid">
+            <div>
+              <span>Total Collected</span>
+              <strong>{cashFlow.totalCollected.toFixed(2)}</strong>
+            </div>
+            <div>
+              <span>Total Paid Out</span>
+              <strong>{cashFlow.totalPaidOut.toFixed(2)}</strong>
+            </div>
+            <div>
+              <span>Completed Cycles</span>
+              <strong>{cashFlow.completedCycles} / {cashFlow.totalCycles}</strong>
+            </div>
+            <div>
+              <span>Completion Rate</span>
+              <strong>{cashFlow.completionRate}%</strong>
+            </div>
+          </div>
+        </section>
+
         <div className="ekub-dashboard-grid">
           <section className="card">
             <div className="ekub-card-header">
@@ -240,7 +267,11 @@ export default async function EkubGroupPage({
             </div>
             <div className="ekub-list">
               {group.participants.map((participant) => (
-                <div key={participant.id} className="ekub-list-row">
+                <Link
+                  key={participant.id}
+                  href={`/ekub/${group.id}/participants/${participant.id}`}
+                  className="ekub-list-row ekub-list-link"
+                >
                   <div>
                     <strong>{participant.name}</strong>
                     <p className="meta">
@@ -250,7 +281,7 @@ export default async function EkubGroupPage({
                   <span className="badge">
                     {participant.status}
                   </span>
-                </div>
+                </Link>
               ))}
             </div>
           </section>

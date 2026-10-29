@@ -68,7 +68,9 @@ export default async function EkubParticipantsPage({
               {group.participants.map((participant) => (
                 <div key={participant.id} className="ekub-list-row">
                   <div>
-                    <strong>{participant.name}</strong>
+                    <strong>
+                      <Link href={`/ekub/${group.id}/participants/${participant.id}`}>{participant.name}</Link>
+                    </strong>
                     <p className="meta">
                       {participant.email || "No email"} · {getParticipantStatusLabel(participant.status)}
                     </p>

@@ -10,6 +10,7 @@ import {
   calculatePotSize,
   chooseRandomRecipient,
   getActiveParticipants,
+  getEligibleRandomParticipants,
   getNextCycleDueDate,
   getNextRotationRecipient,
   getTotalCollected,
@@ -315,6 +316,78 @@ export async function assignEkubRecipient(formData: FormData) {
 
   revalidatePath(`/ekub/${groupId}`);
   revalidatePath(`/ekub/${groupId}/cycles/${cycleId}`);
+}
+
+export type EkubDrawResult = {
+  recipientId: number;
+  recipientName: string;
+};
+
+/**
+ * Draw-room variant of assignEkubRecipient: takes plain arguments (called
+ * directly from a client component, not bound to a <form> action) and
+ * returns the winner so the UI can play a short reveal animation. The
+ * random pick and the database write both happen here, before anything is
+ * shown to the browser -- the animation on the client only replays a result
+ * that has already been decided and stored, it never influences it.
+ */
+export async function runRandomEkubDraw(
+  groupId: number,
+  cycleId: number,
+): Promise<EkubDrawResult> {
+  if (!Number.isFinite(groupId) || groupId <= 0) {
+    throw new Error("Group ID is required.");
+  }
+
+  if (!Number.isFinite(cycleId) || cycleId <= 0) {
+    throw new Error("Cycle ID is required.");
+  }
+
+  const group = await getAuthorizedGroup(groupId);
+
+  if (group.payoutMethod !== "RANDOM_DRAW") {
+    throw new Error("This group is not configured for a random draw.");
+  }
+
+  const cycle = group.cycles.find((entry) => entry.id === cycleId);
+
+  if (!cycle) {
+    throw new Error("Cycle not found.");
+  }
+
+  if (cycle.recipientParticipantId || cycle.payout) {
+    throw new Error("A recipient has already been drawn for this cycle.");
+  }
+
+  const payouts = group.cycles
+    .map((entry) => entry.payout)
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+
+  const eligible = getEligibleRandomParticipants(group.participants, payouts);
+
+  if (eligible.length === 0) {
+    throw new Error("No eligible participants remain for this draw.");
+  }
+
+  const recipient = chooseRandomRecipient(group.participants, payouts);
+
+  if (!recipient) {
+    throw new Error("No eligible recipient found for this cycle.");
+  }
+
+  await prisma.ekubCycle.update({
+    where: { id: cycleId },
+    data: {
+      recipientParticipantId: recipient.id,
+      drawRunAt: new Date(),
+      status: "OPEN",
+    },
+  });
+
+  revalidatePath(`/ekub/${groupId}`);
+  revalidatePath(`/ekub/${groupId}/cycles/${cycleId}`);
+
+  return { recipientId: recipient.id, recipientName: recipient.name };
 }
 
 export async function updateEkubContribution(formData: FormData) {

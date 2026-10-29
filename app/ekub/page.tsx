@@ -1,5 +1,12 @@
 import { auth } from "@/auth";
-import { calculatePotSize, getActiveParticipants, getCycleFrequencyLabel, getPayoutMethodLabel } from "@/lib/ekub";
+import {
+  calculatePotSize,
+  getActiveParticipants,
+  getCycleFrequencyLabel,
+  getGroupCashFlowSummary,
+  getPayoutMethodLabel,
+  SIMULATED_FUNDS_NOTICE,
+} from "@/lib/ekub";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -33,6 +40,8 @@ export default async function EkubPage() {
     orderBy: { updatedAt: "desc" },
   });
 
+  const platformCashFlow = getGroupCashFlowSummary(groups.flatMap((group) => group.cycles));
+
   return (
     <main>
       <div className="site-shell site-shell-wide">
@@ -43,6 +52,7 @@ export default async function EkubPage() {
             <p className="page-subtitle">
               Create a group, add members, open cycles, collect contributions, and record payouts without introducing blockchain complexity yet.
             </p>
+            <p className="ekub-sim-note">{SIMULATED_FUNDS_NOTICE}</p>
             <div className="section-command-strip">
               <Link href="/ekub/new" className="section-command-link is-accent">
                 <strong>Create Group</strong>
@@ -76,6 +86,14 @@ export default async function EkubPage() {
                     0,
                   )}
                 </strong>
+              </div>
+              <div>
+                <span>Total contributed</span>
+                <strong>{platformCashFlow.totalCollected.toFixed(2)}</strong>
+              </div>
+              <div>
+                <span>Total paid out</span>
+                <strong>{platformCashFlow.totalPaidOut.toFixed(2)}</strong>
               </div>
             </div>
           </div>

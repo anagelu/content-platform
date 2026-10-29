@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import {
   calculateCollectionProgress,
+  getEligibleRandomParticipants,
   getPayoutMethodLabel,
 } from "@/lib/ekub";
 import { prisma } from "@/lib/prisma";
@@ -11,6 +12,7 @@ import {
   recordEkubPayout,
   updateEkubContribution,
 } from "../../../actions";
+import { EkubDrawRoom } from "./draw-room";
 
 export default async function EkubCyclePage({
   params,
@@ -39,6 +41,17 @@ export default async function EkubCyclePage({
         include: {
           participants: {
             orderBy: [{ rotationOrder: "asc" }, { createdAt: "asc" }],
+          },
+          cycles: {
+            include: {
+              recipient: true,
+              payout: {
+                include: {
+                  recipient: true,
+                },
+              },
+            },
+            orderBy: { cycleNumber: "asc" },
           },
         },
       },
@@ -78,6 +91,16 @@ export default async function EkubCyclePage({
 
     return a.participant.id - b.participant.id;
   });
+
+  const groupPayouts = cycle.group.cycles
+    .map((entry) => entry.payout)
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+  const eligibleForDraw = getEligibleRandomParticipants(cycle.group.participants, groupPayouts).map(
+    (participant) => ({ id: participant.id, name: participant.name }),
+  );
+  const drawHistory = cycle.group.cycles
+    .filter((entry) => entry.drawRunAt && entry.recipient)
+    .sort((a, b) => new Date(b.drawRunAt as Date).getTime() - new Date(a.drawRunAt as Date).getTime());
 
   return (
     <main>
@@ -138,16 +161,26 @@ export default async function EkubCyclePage({
               </div>
             </div>
 
-            {!cycle.recipient ? (
+            {!cycle.recipient && cycle.group.payoutMethod === "FIXED_ROTATION" ? (
               <form action={assignEkubRecipient} className="ekub-inline-toolbar">
                 <input type="hidden" name="groupId" value={cycle.groupId} />
                 <input type="hidden" name="cycleId" value={cycle.id} />
                 <button type="submit" className="button-link secondary">
-                  {cycle.group.payoutMethod === "FIXED_ROTATION" ? "Assign Rotation Recipient" : "Run Draw"}
+                  Assign Rotation Recipient
                 </button>
               </form>
             ) : null}
           </section>
+
+          {!cycle.recipient && cycle.group.payoutMethod === "RANDOM_DRAW" ? (
+            <EkubDrawRoom
+              groupId={cycle.groupId}
+              cycleId={cycle.id}
+              cycleNumber={cycle.cycleNumber}
+              potSize={cycle.totalExpectedContribution}
+              eligibleParticipants={eligibleForDraw}
+            />
+          ) : null}
 
           <section className="card">
             <h2 className="trading-section-title">Payout</h2>
@@ -275,6 +308,30 @@ export default async function EkubCyclePage({
               </form>
             ))}
           </div>
+        </section>
+
+        <section className="card">
+          <h2 className="trading-section-title">Draw History</h2>
+          {drawHistory.length === 0 ? (
+            <p className="preview">No recipients have been drawn or assigned yet.</p>
+          ) : (
+            <div className="ekub-list">
+              {drawHistory.map((entry) => (
+                <div key={entry.id} className="ekub-list-row">
+                  <div>
+                    <strong>{entry.recipient?.name}</strong>
+                    <p className="meta">
+                      Cycle #{entry.cycleNumber} &middot;{" "}
+                      {entry.drawRunAt ? new Date(entry.drawRunAt).toLocaleString() : "date unknown"}
+                    </p>
+                  </div>
+                  <span className="badge">
+                    {entry.payout ? "Paid out" : "Selected"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       </div>
     </main>

@@ -3866,6 +3866,102 @@ main {
   }
 }
 
+.ekub-sim-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  margin-top: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(124, 79, 24, 0.28);
+  background: rgba(214, 156, 77, 0.12);
+  color: #7c4f18;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.ekub-draw-room {
+  gap: 1rem;
+}
+
+.ekub-draw-stage {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  padding: 2.25rem 1.5rem;
+  border-radius: 18px;
+  border: 1px dashed rgba(202, 165, 111, 0.4);
+  background: rgba(255, 251, 244, 0.6);
+  text-align: center;
+}
+
+.ekub-draw-placeholder {
+  color: #8a7a63;
+  font-size: 0.95rem;
+}
+
+.ekub-draw-name {
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: #4a3414;
+  letter-spacing: 0.01em;
+}
+
+.ekub-draw-stage[data-phase="drawing"] .ekub-draw-name {
+  animation: ekub-draw-pulse 0.55s ease-in-out infinite;
+}
+
+@keyframes ekub-draw-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+.ekub-draw-name-settled {
+  color: #7c4f18;
+}
+
+.ekub-draw-result {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #4a3414;
+}
+
+.ekub-draw-error {
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(185, 28, 28, 0.3);
+  background: rgba(185, 28, 28, 0.08);
+  color: #991b1b;
+  font-size: 0.9rem;
+}
+
+.ekub-draw-eligible summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #7c4f18;
+  font-size: 0.85rem;
+}
+
+.ekub-draw-eligible .ekub-list {
+  margin-top: 0.75rem;
+}
+
+.ekub-ledger-credit {
+  color: #15803d;
+}
+
+.ekub-ledger-debit {
+  color: #4a3414;
+}
+
 .pipeline-score-row {
   display: flex;
   flex-wrap: wrap;
