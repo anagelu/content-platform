@@ -46,6 +46,7 @@ export default async function HomePage() {
   const session = await auth();
   const [posts, books, patents] = await Promise.all([
     prisma.post.findMany({
+      where: { isPublic: true },
       orderBy: { createdAt: "desc" },
       include: {
         category: true,

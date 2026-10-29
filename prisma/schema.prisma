@@ -70,6 +70,7 @@ model User {
   contentDerivatives ContentDerivative[]
   patentRecords PatentRecord[]
   books                Book[]
+  posts                Post[]
   ekubGroups           EkubGroup[]
   directMessageThreadsStarted DirectMessageThread[] @relation("DirectMessageStarter")
   directMessageThreadsA DirectMessageThread[] @relation("DirectMessageParticipantA")
@@ -119,12 +120,18 @@ model Post {
   body       String
   sourceChat String?
   votes      Int       @default(0)
+  isPublic   Boolean   @default(true)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @default(now()) @updatedAt
 
   categoryId Int?
   category   Category? @relation(fields: [categoryId], references: [id])
   contentDerivatives ContentDerivative[]
+
+  authorId Int?
+  author   User? @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([authorId])
 }
 
 model Category {

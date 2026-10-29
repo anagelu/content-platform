@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import { auth } from "@/auth";
 
 export async function generateMetadata({
   params,
@@ -12,7 +13,7 @@ export async function generateMetadata({
 
   const category = await prisma.category.findUnique({
     where: { name: decodedName },
-    select: { name: true, posts: { select: { id: true } } },
+    select: { name: true, posts: { where: { isPublic: true }, select: { id: true } } },
   });
 
   if (!category) {
@@ -47,6 +48,9 @@ export default async function CategoryPage({
 }) {
   const { name } = await params;
   const decodedName = decodeURIComponent(name);
+  const session = await auth();
+  const userId = session?.user?.id ? Number(session.user.id) : null;
+  const isAdmin = session?.user?.role === "admin";
 
   const category = await prisma.category.findUnique({
     where: {
@@ -54,6 +58,14 @@ export default async function CategoryPage({
     },
     include: {
       posts: {
+        where: isAdmin
+          ? undefined
+          : {
+              OR: [
+                { isPublic: true },
+                ...(userId !== null ? [{ authorId: userId }] : []),
+              ],
+            },
         orderBy: {
           createdAt: "desc",
         },

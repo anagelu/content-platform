@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import { auth } from "@/auth";
 
 export const metadata: Metadata = {
   title: "Posts",
@@ -9,11 +10,24 @@ export const metadata: Metadata = {
 };
 
 export default async function PostsPage() {
+  const session = await auth();
+  const userId = session?.user?.id ? Number(session.user.id) : null;
+  const isAdmin = session?.user?.role === "admin";
+
   const posts = await prisma.post.findMany({
+    where: isAdmin
+      ? undefined
+      : {
+          OR: [
+            { isPublic: true },
+            ...(userId !== null ? [{ authorId: userId }] : []),
+          ],
+        },
     orderBy: { createdAt: "desc" },
     include: {
       category: true,
       contentDerivatives: true,
+      author: true,
     },
   });
   const conversationDerivedCount = posts.filter((post) => post.sourceChat?.trim()).length;
@@ -106,7 +120,9 @@ export default async function PostsPage() {
                 </h2>
 
                 <p className="meta">
+                  By {post.author?.name ?? post.author?.username ?? "Pattern Foundry"} ·{" "}
                   Published {new Date(post.createdAt).toLocaleDateString()}
+                  {post.isPublic ? "" : " · Private"}
                 </p>
 
                 <div className="badge-row">

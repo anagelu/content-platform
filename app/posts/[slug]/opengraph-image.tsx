@@ -41,12 +41,15 @@ function clampTitle(title: string) {
 
 export default async function Image({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  // Never resolved from a session here: crawlers fetch this unauthenticated,
+  // so a private post must never have its real title rendered into the image.
   const post = await prisma.post.findUnique({
     where: { slug },
-    select: { title: true, category: { select: { name: true } } },
+    select: { title: true, isPublic: true, category: { select: { name: true } } },
   });
 
-  const title = post ? clampTitle(post.title) : "Pattern Foundry";
+  const isRevealable = Boolean(post?.isPublic);
+  const title = isRevealable && post ? clampTitle(post.title) : "Pattern Foundry";
 
   return new ImageResponse(
     (
@@ -78,7 +81,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
         </div>
 
         <div style={{ display: "flex", flexDirection: "column" }}>
-          {post?.category ? (
+          {isRevealable && post?.category ? (
             <div
               style={{
                 display: "flex",

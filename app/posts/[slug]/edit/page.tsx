@@ -8,6 +8,7 @@ import {
   getTierLabel,
   isAiProviderConfigured,
 } from "@/lib/ai-admin";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { EditPostForm } from "./edit-post-form";
 
@@ -18,7 +19,7 @@ export default async function EditPostPage({
 }) {
   const session = await auth();
 
-  if (!session) {
+  if (!session?.user?.id) {
     redirect("/login");
   }
 
@@ -35,6 +36,27 @@ export default async function EditPostPage({
 
   if (!post) {
     return <div style={{ padding: "2rem" }}>Post not found.</div>;
+  }
+
+  const userId = Number(session.user.id);
+  const isAdmin = session.user.role === "admin";
+
+  if (!isAdmin && post.authorId !== userId) {
+    return (
+      <main>
+        <div className="site-shell">
+          <div className="card">
+            <h1 className="page-title">You can&apos;t edit this post</h1>
+            <p className="form-help">
+              Only the post&apos;s author or an admin can make changes here.
+            </p>
+            <Link href={`/posts/${post.slug}`} className="button-link secondary">
+              Back to Post
+            </Link>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   await ensureDefaultCategories();

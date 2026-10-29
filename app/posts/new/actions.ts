@@ -23,6 +23,12 @@ export async function createPost(formData: FormData) {
     throw new Error("Title and content are required.");
   }
 
+  const authorId = Number(session.user.id);
+
+  if (!Number.isFinite(authorId)) {
+    throw new Error("Valid user session required.");
+  }
+
   const slug = await generateUniqueSlug(title);
 
   const post = await prisma.post.create({
@@ -33,6 +39,7 @@ export async function createPost(formData: FormData) {
       body: content,
       sourceChat: sourceChat || null,
       categoryId: categoryIdValue ? Number(categoryIdValue) : null,
+      authorId,
     },
   });
 

@@ -14,7 +14,7 @@ const ALLOWED_REACTIONS = new Set(["👍", "❤️", "🔥", "👏", "😂"]);
 export async function deletePost(formData: FormData) {
   const session = await auth();
 
-  if (!session) {
+  if (!session?.user?.id) {
     redirect("/login");
   }
 
@@ -24,11 +24,65 @@ export async function deletePost(formData: FormData) {
     throw new Error("Post ID is required.");
   }
 
+  const post = await prisma.post.findUnique({
+    where: { id },
+  });
+
+  if (!post) {
+    redirect("/posts");
+  }
+
+  const userId = Number(session.user.id);
+
+  if (post.authorId !== userId) {
+    throw new Error("You do not have permission to delete this post.");
+  }
+
   await prisma.post.delete({
     where: { id },
   });
 
   redirect("/posts");
+}
+
+export async function setPostVisibility(formData: FormData) {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    redirect("/login");
+  }
+
+  const id = Number(formData.get("id"));
+  const nextVisibility = formData.get("isPublic")?.toString() === "true";
+
+  if (!Number.isFinite(id) || id <= 0) {
+    throw new Error("Post ID is required.");
+  }
+
+  const post = await prisma.post.findUnique({
+    where: { id },
+    select: { id: true, slug: true, authorId: true },
+  });
+
+  if (!post) {
+    throw new Error("Post not found.");
+  }
+
+  const userId = Number(session.user.id);
+  const isAdmin = session.user.role === "admin";
+
+  if (!isAdmin && post.authorId !== userId) {
+    throw new Error("You do not have permission to change this post's visibility.");
+  }
+
+  await prisma.post.update({
+    where: { id },
+    data: {
+      isPublic: nextVisibility,
+    },
+  });
+
+  redirect(`/posts/${post.slug}`);
 }
 
 export async function upvotePost(formData: FormData) {
@@ -166,6 +220,22 @@ export async function saveInlinePostDraft(formData: FormData) {
 
   if (!id || !slug || !body) {
     throw new Error("Post ID, slug, and body are required.");
+  }
+
+  const existingPost = await prisma.post.findUnique({
+    where: { id },
+    select: { authorId: true },
+  });
+
+  if (!existingPost) {
+    throw new Error("Post not found.");
+  }
+
+  const draftUserId = Number(session.user.id);
+  const isDraftAdmin = session.user.role === "admin";
+
+  if (!isDraftAdmin && existingPost.authorId !== draftUserId) {
+    throw new Error("You do not have permission to edit this post.");
   }
 
   const updatedPost = await prisma.post.update({

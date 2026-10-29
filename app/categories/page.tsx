@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { ensureDefaultCategories } from "@/lib/categories";
 import Link from "next/link";
+import { auth } from "@/auth";
 
 export const metadata: Metadata = {
   title: "Categories",
@@ -12,12 +13,25 @@ export const metadata: Metadata = {
 export default async function CategoriesPage() {
   await ensureDefaultCategories();
 
+  const session = await auth();
+  const userId = session?.user?.id ? Number(session.user.id) : null;
+  const isAdmin = session?.user?.role === "admin";
+
   const categories = await prisma.category.findMany({
     orderBy: {
       name: "asc",
     },
     include: {
-      posts: true,
+      posts: {
+        where: isAdmin
+          ? undefined
+          : {
+              OR: [
+                { isPublic: true },
+                ...(userId !== null ? [{ authorId: userId }] : []),
+              ],
+            },
+      },
     },
   });
 

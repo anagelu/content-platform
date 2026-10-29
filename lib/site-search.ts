@@ -172,7 +172,7 @@ function rowMatchesTokens(row: SearchRow, tokens: string[]) {
   return tokens.every((token) => haystack.includes(token));
 }
 
-async function searchPosts() {
+async function searchPosts(userId: number | null, isAdmin: boolean) {
   return prisma.$queryRawUnsafe<SearchRow[]>(
     `
       SELECT
@@ -181,11 +181,19 @@ async function searchPosts() {
         '/posts/' || slug AS href,
         'Post' AS kind,
         COALESCE(summary, substr(body, 1, 220)) AS excerpt,
-        'public' AS visibility
+        CASE WHEN isPublic = 1 THEN 'public' ELSE 'private' END AS visibility
       FROM "Post"
+      WHERE ${
+        isAdmin
+          ? "1 = 1"
+          : userId
+            ? "(authorId = ? OR isPublic = 1)"
+            : "isPublic = 1"
+      }
       ORDER BY datetime(updatedAt) DESC
       LIMIT 80
     `,
+    ...(isAdmin ? [] : userId ? [userId as number] : []),
   );
 }
 
@@ -352,7 +360,7 @@ export async function searchSiteContent(input: {
     books,
     patents,
   ] = await Promise.all([
-    searchPosts(),
+    searchPosts(input.userId, input.isAdmin),
     searchCategories(),
     searchTradingSessions(input.userId, input.isAdmin),
     searchTradingJournal(input.userId, input.isAdmin),

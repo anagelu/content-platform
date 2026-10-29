@@ -8,7 +8,7 @@ import { redirect } from "next/navigation";
 export async function updatePost(formData: FormData) {
   const session = await auth();
 
-  if (!session) {
+  if (!session?.user?.id) {
     redirect("/login");
   }
 
@@ -21,6 +21,21 @@ export async function updatePost(formData: FormData) {
 
   if (!id || !title || !content) {
     throw new Error("Post ID, title, and content are required.");
+  }
+
+  const existingPost = await prisma.post.findUnique({
+    where: { id },
+  });
+
+  if (!existingPost) {
+    throw new Error("Post not found.");
+  }
+
+  const userId = Number(session.user.id);
+  const isAdmin = session.user.role === "admin";
+
+  if (!isAdmin && existingPost.authorId !== userId) {
+    throw new Error("You do not have permission to edit this post.");
   }
 
   const post = await prisma.post.update({

@@ -12,6 +12,7 @@ import {
   deletePost,
   reactToComment,
   reactToPost,
+  setPostVisibility,
   upvotePost,
 } from "./actions";
 import { auth } from "@/auth";
@@ -38,13 +39,30 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  const session = await auth();
   const post = await prisma.post.findUnique({
     where: { slug },
-    select: { title: true, summary: true, body: true, slug: true },
+    select: {
+      title: true,
+      summary: true,
+      body: true,
+      slug: true,
+      isPublic: true,
+      authorId: true,
+    },
   });
 
   if (!post) {
     return { title: "Post not found" };
+  }
+
+  const viewerId = session?.user?.id ? Number(session.user.id) : null;
+  const canManage =
+    session?.user?.role === "admin" ||
+    (viewerId !== null && post.authorId === viewerId);
+
+  if (!post.isPublic && !canManage) {
+    return { title: "Private post", robots: { index: false, follow: false } };
   }
 
   const description = buildPostDescription(post);
@@ -54,6 +72,7 @@ export async function generateMetadata({
     title: post.title,
     description,
     alternates: { canonical: url },
+    robots: post.isPublic ? undefined : { index: false, follow: false },
     openGraph: {
       type: "article",
       title: post.title,
@@ -82,10 +101,9 @@ export default async function PostPage({
     },
     include: {
       category: true,
+      author: true,
     },
   });
-  const comments = post ? await listPostComments(post.id) : [];
-  const reactions = post ? await listPostReactionCounts(post.id) : [];
 
   if (!post) {
     return (
@@ -101,6 +119,35 @@ export default async function PostPage({
       </main>
     );
   }
+
+  const userId = session?.user?.id ? Number(session.user.id) : null;
+  const isAdmin = session?.user?.role === "admin";
+  const isAuthor = userId !== null && post.authorId === userId;
+  const canModerate = isAdmin || isAuthor;
+  const canView = Boolean(post.isPublic || canModerate);
+
+  if (!canView) {
+    return (
+      <main>
+        <div className="site-shell">
+          <div className="card">
+            <h1 className="page-title">This post is private</h1>
+            <div className="toolbar" style={{ marginBottom: 0 }}>
+              <Link href="/posts" className="button-link secondary">
+                Back to Posts
+              </Link>
+              <Link href="/login" className="button-link">
+                Sign In
+              </Link>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  const comments = await listPostComments(post.id);
+  const reactions = await listPostReactionCounts(post.id);
 
   const articleJsonLd = {
     "@context": "https://schema.org",
@@ -125,6 +172,11 @@ export default async function PostPage({
       <div className="site-shell">
         <article className="article-card">
           <h1 className="article-title">{post.title}</h1>
+
+          <p className="meta article-meta">
+            By {post.author?.name ?? post.author?.username ?? "Pattern Foundry"}
+            {post.isPublic ? "" : " · Private"}
+          </p>
 
           <p className="meta article-meta">
             Published: {new Date(post.createdAt).toLocaleDateString()}
@@ -158,22 +210,36 @@ export default async function PostPage({
               </button>
             </form>
 
-            {session ? (
+            {canModerate ? (
               <>
+                <form action={setPostVisibility}>
+                  <input type="hidden" name="id" value={post.id} />
+                  <input
+                    type="hidden"
+                    name="isPublic"
+                    value={post.isPublic ? "false" : "true"}
+                  />
+                  <button type="submit" className="button-link secondary">
+                    {post.isPublic ? "Make Private" : "Make Public"}
+                  </button>
+                </form>
+
                 <Link
                   href={`/posts/${post.slug}/edit`}
                   className="button-link secondary article-admin-button"
                 >
                   Edit
                 </Link>
-
-                <form action={deletePost}>
-                  <input type="hidden" name="id" value={post.id} />
-                  <button type="submit" className="delete-button article-admin-delete">
-                    Delete
-                  </button>
-                </form>
               </>
+            ) : null}
+
+            {isAuthor ? (
+              <form action={deletePost}>
+                <input type="hidden" name="id" value={post.id} />
+                <button type="submit" className="delete-button article-admin-delete">
+                  Delete
+                </button>
+              </form>
             ) : null}
           </div>
 
@@ -210,7 +276,7 @@ export default async function PostPage({
             body={post.body}
             sourceChat={post.sourceChat}
             authorNotes={null}
-            canManage={Boolean(session)}
+            canManage={canModerate}
           />
 
           <section className="comments-section">
