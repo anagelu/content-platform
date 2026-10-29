@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { deleteBook, setBookVisibility } from "../actions";
+import { deleteBook, setBookVisibility, setBookCompletionStatus } from "../actions";
 import { BookReaderWorkspace } from "../book-reader-workspace";
 
 function buildBookDescription(book: { summary: string | null; outline: string | null; bookType: string }) {
@@ -147,6 +147,15 @@ export default async function BookPage({
             <div className="book-page-hero-copy">
               <p className="book-page-kicker">Reading Copy</p>
               <h1 className="article-title book-page-title">{book.title}</h1>
+              <p className="book-status-badge-row">
+                <span
+                  className={`book-status-badge ${
+                    book.isCompleted ? "book-status-completed" : "book-status-in-progress"
+                  }`}
+                >
+                  {book.isCompleted ? "Completed" : "In Progress"}
+                </span>
+              </p>
               <p className="book-page-meta">
                 {book.bookType}
                 {book.isPublic ? " · Public" : ""}
@@ -171,6 +180,17 @@ export default async function BookPage({
                       <input type="hidden" name="isPublic" value={book.isPublic ? "false" : "true"} />
                       <button type="submit" className="button-link secondary">
                         {book.isPublic ? "Make Private" : "Make Public"}
+                      </button>
+                    </form>
+                    <form action={setBookCompletionStatus}>
+                      <input type="hidden" name="id" value={book.id} />
+                      <input
+                        type="hidden"
+                        name="isCompleted"
+                        value={book.isCompleted ? "false" : "true"}
+                      />
+                      <button type="submit" className="button-link secondary">
+                        {book.isCompleted ? "Mark as In Progress" : "Mark as Completed"}
                       </button>
                     </form>
                     <Link href={`/books/${book.slug}/edit`} className="button-link secondary">

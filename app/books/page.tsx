@@ -86,6 +86,10 @@ export default async function BooksPage() {
                 <strong>{books.filter((book) => book.isPublic).length}</strong>
               </div>
               <div>
+                <span>Completed</span>
+                <strong>{books.filter((book) => book.isCompleted).length}</strong>
+              </div>
+              <div>
                 <span>Total sections</span>
                 <strong>{books.reduce((sum, book) => sum + book.sections.length, 0)}</strong>
               </div>
@@ -104,6 +108,15 @@ export default async function BooksPage() {
                 <h2 className="card-title">
                   <Link href={`/books/${book.slug}`}>{book.title}</Link>
                 </h2>
+                <p className="book-status-badge-row">
+                  <span
+                    className={`book-status-badge ${
+                      book.isCompleted ? "book-status-completed" : "book-status-in-progress"
+                    }`}
+                  >
+                    {book.isCompleted ? "Completed" : "In Progress"}
+                  </span>
+                </p>
                 <p className="meta">
                   {book.bookType}
                   {book.isPublic ? " · Public" : " · Private"}

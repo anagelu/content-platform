@@ -1,0 +1,1 @@
+ALTER TABLE "Book" ADD COLUMN "isCompleted" BOOLEAN NOT NULL DEFAULT false;

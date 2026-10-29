@@ -5046,6 +5046,32 @@ main {
   font-size: 0.98rem;
 }
 
+.book-status-badge-row {
+  margin: 0 0 0.6rem;
+}
+
+.book-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.32rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.book-status-completed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.book-status-in-progress {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .book-page-summary {
   margin: 1rem 0 1.35rem;
   max-width: 62ch;

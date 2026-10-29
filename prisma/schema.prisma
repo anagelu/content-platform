@@ -243,6 +243,7 @@ model Book {
   slug         String   @unique
   bookType     String
   isPublic     Boolean  @default(false)
+  isCompleted  Boolean  @default(false)
   targetLength String?
   audience     String?
   tone         String?

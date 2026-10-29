@@ -281,3 +281,47 @@ export async function setBookVisibility(formData: FormData) {
 
   redirect(`/books/${book.slug}`);
 }
+
+export async function setBookCompletionStatus(formData: FormData) {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    redirect("/login");
+  }
+
+  const id = Number(formData.get("id"));
+  const nextCompletion = formData.get("isCompleted")?.toString() === "true";
+
+  if (!Number.isFinite(id) || id <= 0) {
+    throw new Error("Book ID is required.");
+  }
+
+  const book = await prisma.book.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      slug: true,
+      authorId: true,
+    },
+  });
+
+  if (!book) {
+    throw new Error("Book not found.");
+  }
+
+  const userId = Number(session.user.id);
+  const isAdmin = session.user.role === "admin";
+
+  if (!isAdmin && book.authorId !== userId) {
+    throw new Error("You do not have permission to change this book's completion status.");
+  }
+
+  await prisma.book.update({
+    where: { id },
+    data: {
+      isCompleted: nextCompletion,
+    },
+  });
+
+  redirect(`/books/${book.slug}`);
+}
