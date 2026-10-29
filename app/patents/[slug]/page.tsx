@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { deletePatentRecord, markPatentFiled } from "./actions";
 
 function formatDate(value: Date | null) {
   return value ? new Date(value).toLocaleDateString() : "Not set";
@@ -51,6 +52,8 @@ export default async function PatentRecordPage({
     redirect("/patents");
   }
 
+  const canManage = canView;
+
   return (
     <main>
       <div className="site-shell">
@@ -68,6 +71,49 @@ export default async function PatentRecordPage({
           <p className="meta" style={{ fontWeight: 600 }}>
             Provisional deadline: {formatDate(record.provisionalDeadline)}
           </p>
+
+          {canManage ? (
+            <div className="toolbar">
+              <Link
+                href={`/patents/${record.slug}/edit`}
+                className="button-link secondary"
+              >
+                Edit
+              </Link>
+
+              <form action={deletePatentRecord}>
+                <input type="hidden" name="id" value={record.id} />
+                <button type="submit" className="delete-button">
+                  Delete
+                </button>
+              </form>
+            </div>
+          ) : null}
+
+          {canManage && !record.provisionalFiledAt ? (
+            <form action={markPatentFiled} className="form-card" style={{ marginBottom: "1.5rem" }}>
+              <input type="hidden" name="id" value={record.id} />
+              <div className="form-group" style={{ marginBottom: "0.75rem" }}>
+                <label htmlFor="provisionalFiledAt" className="form-label">
+                  Just filed the provisional? Record the date.
+                </label>
+                <input
+                  id="provisionalFiledAt"
+                  name="provisionalFiledAt"
+                  type="date"
+                  required
+                  className="form-input"
+                />
+                <p className="form-help">
+                  This starts the 12-month countdown to file a non-provisional
+                  application.
+                </p>
+              </div>
+              <button type="submit" className="submit-button">
+                Mark as Filed
+              </button>
+            </form>
+          ) : null}
 
           <div className="trading-detail-grid">
             <section className="card">
