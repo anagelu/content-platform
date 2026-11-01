@@ -277,6 +277,9 @@ export default async function PostPage({
             sourceChat={post.sourceChat}
             authorNotes={null}
             canManage={canModerate}
+            hasPreviousVersion={post.previousBody !== null}
+            previousLabel={post.previousLabel}
+            previousSavedAt={post.previousSavedAt ? post.previousSavedAt.toISOString() : null}
           />
 
           <section className="comments-section">

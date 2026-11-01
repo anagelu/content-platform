@@ -4502,6 +4502,25 @@ main {
   line-height: 1.6;
 }
 
+.article-revert-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0.1rem 0 0.85rem;
+  padding: 0.75rem 0.95rem;
+  border-radius: 14px;
+  border: 1px solid rgba(197, 205, 218, 0.7);
+  background: rgba(246, 248, 252, 0.6);
+}
+
+.article-revert-note {
+  margin: 0;
+  color: #5c5348;
+  line-height: 1.5;
+}
+
 .article-refine-disclosure {
   margin-top: 0.6rem;
 }

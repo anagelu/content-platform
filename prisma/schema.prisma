@@ -124,6 +124,15 @@ model Post {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @default(now()) @updatedAt
 
+  // One-level undo: the body/summary this post held just before its most
+  // recent AI refine or manual edit, so a bad save can be reverted. Swapped
+  // (not appended) on revert, so reverting twice toggles back and forth
+  // rather than building a history.
+  previousBody      String?
+  previousSummary   String?
+  previousLabel     String?
+  previousSavedAt   DateTime?
+
   categoryId Int?
   category   Category? @relation(fields: [categoryId], references: [id])
   contentDerivatives ContentDerivative[]

@@ -4,7 +4,7 @@ import { startTransition, useState } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { saveInlinePostDraft } from "./actions";
+import { revertInlinePostDraft, saveInlinePostDraft } from "./actions";
 
 type IterationIntent =
   | "regenerate"
@@ -39,6 +39,17 @@ const TONE_OPTIONS = ["professional", "casual", "persuasive", "technical"] as co
 const LENGTH_OPTIONS = ["shorter", "same", "longer"] as const;
 const FOCUS_OPTIONS = ["clarity", "detail", "emotion", "argument"] as const;
 
+const ITERATION_LABELS: Record<IterationIntent, string> = {
+  regenerate: "Regenerate",
+  improve: "Improve writing",
+  voice: "Preserve my voice",
+  shorter: "Make shorter",
+  detailed: "Make more detailed",
+  simplify: "Simplify",
+  persuasive: "Make more persuasive",
+  tone: "Change tone",
+};
+
 export function PostDraftWorkspace({
   id,
   slug,
@@ -48,6 +59,9 @@ export function PostDraftWorkspace({
   sourceChat,
   authorNotes,
   canManage,
+  hasPreviousVersion,
+  previousLabel,
+  previousSavedAt,
 }: {
   id: number;
   slug: string;
@@ -57,6 +71,9 @@ export function PostDraftWorkspace({
   sourceChat: string | null;
   authorNotes: string | null;
   canManage: boolean;
+  hasPreviousVersion: boolean;
+  previousLabel: string | null;
+  previousSavedAt: string | null;
 }) {
   const [draftBody, setDraftBody] = useState(body);
   const [draftSummary, setDraftSummary] = useState(summary ?? "");
@@ -64,7 +81,13 @@ export function PostDraftWorkspace({
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isIterating, setIsIterating] = useState(false);
+  const [isReverting, setIsReverting] = useState(false);
   const [saveNote, setSaveNote] = useState("");
+  const [canRevert, setCanRevert] = useState(hasPreviousVersion);
+  const [revertMeta, setRevertMeta] = useState<{ label: string | null; savedAt: string | null }>({
+    label: previousLabel,
+    savedAt: previousSavedAt,
+  });
   const [iterationIntent, setIterationIntent] = useState<IterationIntent | null>(null);
   const [selectedTone, setSelectedTone] = useState<(typeof TONE_OPTIONS)[number]>("professional");
   const [selectedLength, setSelectedLength] = useState<(typeof LENGTH_OPTIONS)[number]>("same");
@@ -78,6 +101,7 @@ export function PostDraftWorkspace({
     formData.set("id", String(id));
     formData.set("slug", slug);
     formData.set("body", draftBody);
+    formData.set("label", "Manual edit");
 
     setIsSaving(true);
     setSaveNote("");
@@ -90,6 +114,8 @@ export function PostDraftWorkspace({
         );
         setCommittedBody(draftBody);
         setIsEditing(false);
+        setCanRevert(true);
+        setRevertMeta({ label: result.previousLabel, savedAt: result.previousSavedAt });
       } catch (error) {
         setSaveNote(
           error instanceof Error ? error.message : "Unable to save the inline draft right now.",
@@ -98,6 +124,34 @@ export function PostDraftWorkspace({
         setIsSaving(false);
       }
     });
+  }
+
+  async function handleRevert() {
+    setIsReverting(true);
+    setSaveNote("");
+
+    try {
+      const formData = new FormData();
+      formData.set("id", String(id));
+      formData.set("slug", slug);
+      const result = await revertInlinePostDraft(formData);
+
+      setDraftBody(result.body);
+      setDraftSummary(result.summary ?? "");
+      setCommittedBody(result.body);
+      setIsEditing(false);
+      setCanRevert(true);
+      setRevertMeta({ label: result.previousLabel, savedAt: result.previousSavedAt });
+      setSaveNote(
+        `Reverted${result.updatedAt ? ` at ${new Date(result.updatedAt).toLocaleString()}` : ""}. Revert again to undo this.`,
+      );
+    } catch (error) {
+      setSaveNote(
+        error instanceof Error ? error.message : "Unable to revert this draft right now.",
+      );
+    } finally {
+      setIsReverting(false);
+    }
   }
 
   async function handleIteration(
@@ -157,11 +211,14 @@ export function PostDraftWorkspace({
       saveData.set("slug", slug);
       saveData.set("body", refinedArticle);
       saveData.set("summary", refinedSummary);
+      saveData.set("label", ITERATION_LABELS[intent]);
       const savedPost = await saveInlinePostDraft(saveData);
 
       setDraftSummary(refinedSummary);
       setDraftBody(refinedArticle);
       setCommittedBody(refinedArticle);
+      setCanRevert(true);
+      setRevertMeta({ label: savedPost.previousLabel, savedAt: savedPost.previousSavedAt });
 
       setSaveNote(
         payload.model
@@ -205,6 +262,27 @@ export function PostDraftWorkspace({
             Iterate before you treat this as final.
           </p>
         </div>
+        {canManage && canRevert ? (
+          <div className="article-revert-banner">
+            <p className="article-revert-note">
+              {revertMeta.label
+                ? `Previous version available (before: ${revertMeta.label}${
+                    revertMeta.savedAt
+                      ? `, saved ${new Date(revertMeta.savedAt).toLocaleString()}`
+                      : ""
+                  }).`
+                : "Previous version available."}
+            </p>
+            <button
+              type="button"
+              className="button-link secondary"
+              onClick={handleRevert}
+              disabled={isReverting || isIterating || isSaving}
+            >
+              {isReverting ? "Reverting..." : "Revert to previous version"}
+            </button>
+          </div>
+        ) : null}
         <div className="article-iteration-actions">
           <button
             type="button"

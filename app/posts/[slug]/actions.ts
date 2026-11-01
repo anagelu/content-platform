@@ -217,6 +217,7 @@ export async function saveInlinePostDraft(formData: FormData) {
   const summaryValue = formData.get("summary");
   const summary =
     typeof summaryValue === "string" ? summaryValue.trim() : undefined;
+  const label = formData.get("label")?.toString().trim() || "Manual edit";
 
   if (!id || !slug || !body) {
     throw new Error("Post ID, slug, and body are required.");
@@ -224,7 +225,7 @@ export async function saveInlinePostDraft(formData: FormData) {
 
   const existingPost = await prisma.post.findUnique({
     where: { id },
-    select: { authorId: true },
+    select: { authorId: true, body: true, summary: true },
   });
 
   if (!existingPost) {
@@ -243,10 +244,83 @@ export async function saveInlinePostDraft(formData: FormData) {
     data: {
       body,
       ...(summary !== undefined ? { summary: summary || null } : {}),
+      // Stash what the draft looked like just before this save, so it can be
+      // reverted with one click. Swapped on revert rather than appended, so
+      // this only ever holds the single most recent prior version.
+      previousBody: existingPost.body,
+      previousSummary: existingPost.summary,
+      previousLabel: label,
+      previousSavedAt: new Date(),
     },
   });
 
   return {
     updatedAt: updatedPost.updatedAt.toISOString(),
+    previousLabel: updatedPost.previousLabel,
+    previousSavedAt: updatedPost.previousSavedAt?.toISOString() ?? null,
+  };
+}
+
+export async function revertInlinePostDraft(formData: FormData) {
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/login");
+  }
+
+  const id = Number(formData.get("id"));
+  const slug = formData.get("slug")?.toString() || "";
+
+  if (!id || !slug) {
+    throw new Error("Post ID and slug are required.");
+  }
+
+  const existingPost = await prisma.post.findUnique({
+    where: { id },
+    select: {
+      authorId: true,
+      body: true,
+      summary: true,
+      previousBody: true,
+      previousSummary: true,
+    },
+  });
+
+  if (!existingPost) {
+    throw new Error("Post not found.");
+  }
+
+  const draftUserId = Number(session.user.id);
+  const isDraftAdmin = session.user.role === "admin";
+
+  if (!isDraftAdmin && existingPost.authorId !== draftUserId) {
+    throw new Error("You do not have permission to edit this post.");
+  }
+
+  if (existingPost.previousBody === null) {
+    throw new Error("There's no previous version to revert to.");
+  }
+
+  // Swap current <-> previous rather than discarding either side, so
+  // reverting again toggles back to what was just undone instead of
+  // dead-ending after one step.
+  const updatedPost = await prisma.post.update({
+    where: { id },
+    data: {
+      body: existingPost.previousBody,
+      summary: existingPost.previousSummary,
+      previousBody: existingPost.body,
+      previousSummary: existingPost.summary,
+      previousLabel: "the version before this revert",
+      previousSavedAt: new Date(),
+    },
+  });
+
+  return {
+    updatedAt: updatedPost.updatedAt.toISOString(),
+    body: updatedPost.body,
+    summary: updatedPost.summary,
+    previousLabel: updatedPost.previousLabel,
+    previousSavedAt: updatedPost.previousSavedAt?.toISOString() ?? null,
   };
 }
