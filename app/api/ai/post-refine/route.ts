@@ -18,7 +18,7 @@ export async function POST(request: Request) {
       authorNotes?: string;
       currentSummary?: string;
       currentArticle?: string;
-      intent?: "regenerate" | "improve" | "shorter" | "detailed" | "simplify" | "persuasive" | "tone";
+      intent?: "regenerate" | "improve" | "shorter" | "detailed" | "simplify" | "persuasive" | "tone" | "voice";
       tone?: "professional" | "casual" | "persuasive" | "technical";
       length?: "shorter" | "same" | "longer";
       focus?: "clarity" | "detail" | "emotion" | "argument";
@@ -39,7 +39,8 @@ export async function POST(request: Request) {
         body.intent === "detailed" ||
         body.intent === "simplify" ||
         body.intent === "persuasive" ||
-        body.intent === "tone"
+        body.intent === "tone" ||
+        body.intent === "voice"
           ? body.intent
           : "improve",
       tone:

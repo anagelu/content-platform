@@ -48,7 +48,8 @@ type RefinePostDraftIntent =
   | "detailed"
   | "simplify"
   | "persuasive"
-  | "tone";
+  | "tone"
+  | "voice";
 
 type RefinePostDraftTone = "professional" | "casual" | "persuasive" | "technical";
 type RefinePostDraftLength = "shorter" | "same" | "longer";
@@ -869,7 +870,9 @@ export async function refinePostDraftWithAi({
     /(?:^|\n)(?:message|user said|assistant replied):\s*["“]/i.test(trimmedArticle);
   const currentWordCount = trimmedArticle.split(/\s+/).filter(Boolean).length;
   const targetLengthInstruction =
-    length === "shorter"
+    intent === "voice"
+      ? `Keep the length essentially unchanged — this is a proofreading pass, not a rewrite. Only add or remove words where fixing an actual grammar, spelling, or clarity problem requires it.`
+      : length === "shorter"
       ? `Aim for roughly ${Math.max(100, Math.round(currentWordCount * 0.7))} words.`
       : length === "longer"
         ? `Develop the article to roughly ${Math.max(300, Math.round(currentWordCount * 1.5))} words, but add only useful substance.`
@@ -884,7 +887,9 @@ export async function refinePostDraftWithAi({
     ),
   );
   const intentInstruction =
-    intent === "regenerate"
+    intent === "voice"
+      ? "Proofread only. Fix grammar, spelling, punctuation, and tangled or broken sentences. Do not rewrite sentences that already work, and do not make the draft sound more generic, 'polished,' or like a different writer. Keep the author's own wording, sentence order, and voice intact — the more specific and original their phrasing, the more of it should survive untouched."
+      : intent === "regenerate"
       ? "Produce a stronger fresh version while preserving the same core idea."
       : intent === "improve"
         ? "Improve clarity, rhythm, and sentence quality without changing the main point."
@@ -898,11 +903,25 @@ export async function refinePostDraftWithAi({
                 ? "Adjust the tone while preserving the same core substance and direction."
                 : "Make the draft more detailed with clearer explanation, examples, and support while keeping the same direction.";
   const systemInstruction =
-    `You are a senior magazine editor refining a post for publication. Return JSON only with keys summary and article.
+    intent === "voice"
+      ? `You are a careful copyeditor doing a light, voice-preserving proofreading pass on a personal post — proofreading on steroids, not ghostwriting. Return JSON only with keys summary and article.
+
+Fix only what is actually broken: grammar, spelling, punctuation, run-on or tangled sentences, dangling clauses, and clear typos. Keep the author's own words, sentence order, paragraph structure, phrasing choices, idioms, and quirks wherever they are not actually wrong. Do not rewrite a sentence just to sound more "polished," more "professional," or more like a magazine article. Do not add transitions, framing language, or structure the author didn't write, and do not trim distinctive or unusual phrasing that isn't actually an error — that phrasing is the point. The more specific and original the author's input, the more of it should come through unchanged. The result should read like the author on a clean-copy day, never like a different, more generic writer took over.
+
+Do not invent facts, quotations, examples, or personal experiences. Do not add Markdown headings that weren't already implied by the draft's structure. Never mention AI or the editing process unless the article itself is about AI. If a passage already reads cleanly, leave it exactly as written.`
+      : `You are a senior magazine editor refining a post for publication. Return JSON only with keys summary and article.
 
 Write a complete, polished article—not feedback, an outline, or a lightly paraphrased draft. Preserve the author's viewpoint, distinctive details, factual claims, and strongest original idea. Improve the opening, structure, paragraph progression, transitions, sentence rhythm, precision, and ending. Make every paragraph advance the piece.
 
 Use natural, specific language. Remove repetition, throat-clearing, vague abstractions, inflated claims, and generic motivational filler. Avoid stock AI-writing phrases and metaphors such as “in today's world,” “delve,” “tapestry,” “game-changer,” “journey,” “spark,” “take root,” “blossom,” and “it is important to note.” Do not invent facts, quotations, examples, or personal experiences. Use Markdown headings only when they genuinely improve a longer article. Never mention AI or the refinement process unless the article itself is about AI.`;
+  const styleGuidanceBlock =
+    intent === "voice"
+      ? `This is a proofreading-only pass. Ignore the requested tone and focus below — do not restyle the draft toward them.
+Length guidance: ${targetLengthInstruction}`
+      : `Requested tone: ${tone}
+Requested length: ${length}
+Length guidance: ${targetLengthInstruction}
+Requested focus: ${focus}`;
   const userText = `Working title: ${title || "Untitled idea"}
 Refinement request: ${intentInstruction}
 Draft-form instruction: ${
@@ -917,10 +936,7 @@ ${trimmedSourceChat || "(not provided)"}
 Author notes:
 ${authorNotes.trim() || "(none)"}
 
-Requested tone: ${tone}
-Requested length: ${length}
-Length guidance: ${targetLengthInstruction}
-Requested focus: ${focus}
+${styleGuidanceBlock}
 Specific instruction:
 ${instruction.trim() || "(none)"}
 

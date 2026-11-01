@@ -9,6 +9,7 @@ import { saveInlinePostDraft } from "./actions";
 type IterationIntent =
   | "regenerate"
   | "improve"
+  | "voice"
   | "shorter"
   | "detailed"
   | "simplify"
@@ -20,6 +21,8 @@ const ITERATION_MESSAGES: Record<IterationIntent, string> = {
     "Regenerate is a good next step when the structure is right but the current draft missed the strongest version of the idea.",
   improve:
     "Improve writing is useful when the draft has the right argument but needs cleaner rhythm, sharper phrasing, or stronger transitions.",
+  voice:
+    "Preserve my voice proofreads only — grammar, spelling, and tangled sentences — and leaves your own wording, structure, and quirks alone instead of smoothing them into something more generic.",
   shorter:
     "Make shorter is best when the core point is already strong and you want a tighter, faster version without losing the main takeaway.",
   detailed:
@@ -218,6 +221,14 @@ export function PostDraftWorkspace({
             disabled={isIterating}
           >
             {isIterating && iterationIntent === "improve" ? "Improving..." : "Improve writing"}
+          </button>
+          <button
+            type="button"
+            className={iterationIntent === "voice" ? "reaction-button article-iteration-button is-active" : "reaction-button article-iteration-button"}
+            onClick={() => handleIteration("voice")}
+            disabled={isIterating}
+          >
+            {isIterating && iterationIntent === "voice" ? "Proofreading..." : "Preserve my voice"}
           </button>
           <button
             type="button"
