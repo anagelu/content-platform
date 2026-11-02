@@ -13,9 +13,13 @@ const DEFAULT_POST_DRAFT_MODEL = "gemini-3.5-flash-lite";
 const DEFAULT_GEMINI_POST_REFINE_MODEL = "gemini-3.7-flash";
 const OPENAI_TIMEOUT_MS = 20000;
 const GEMINI_TRANSCRIBE_TIMEOUT_MS = 35000;
-// ~8MB of raw audio, expressed as the base64 size the browser will
-// upload (base64 runs ~4/3 the size of the original bytes).
-export const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
+// Kept well under the reverse proxy's upload cap (confirmed in production
+// to reject multipart uploads above ~1MB with a bare nginx 413 page before
+// they ever reach this app), so an oversized recording hits our own
+// friendly error message instead. A 90-second voice note at a modest
+// bitrate is a few hundred KB, so this still leaves real recordings
+// comfortable headroom.
+export const MAX_AUDIO_BYTES = 900 * 1024;
 const MAX_AUDIO_BASE64_CHARS = Math.ceil((MAX_AUDIO_BYTES * 4) / 3);
 const MAX_POST_SOURCE_CHARS = 6000;
 

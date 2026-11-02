@@ -100,7 +100,13 @@ export function VoiceRecorderButton({
         body: formData,
       });
 
-      const payload = (await response.json()) as { text?: string; error?: string };
+      let payload: { text?: string; error?: string };
+
+      try {
+        payload = (await response.json()) as { text?: string; error?: string };
+      } catch {
+        throw new Error("Transcription failed. Please try again.");
+      }
 
       if (!response.ok) {
         throw new Error(payload.error || "Transcription failed. Please try again.");
@@ -140,7 +146,14 @@ export function VoiceRecorderButton({
     }
 
     const mimeType = pickSupportedMimeType();
-    const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    // Cap the encoding bitrate so even the full 90-second recording stays a
+    // few hundred KB — comfortably under the upload size the server will
+    // accept, without needing the user to think about file size at all.
+    const recorderOptions: MediaRecorderOptions = { audioBitsPerSecond: 32000 };
+    if (mimeType) {
+      recorderOptions.mimeType = mimeType;
+    }
+    const recorder = new MediaRecorder(stream, recorderOptions);
 
     chunksRef.current = [];
     recorder.ondataavailable = (event) => {
