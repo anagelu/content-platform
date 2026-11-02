@@ -5875,3 +5875,57 @@ main {
   }
 
 }
+
+/* Try Demo (/try) — public, no-login AI generation demo meant for linking
+   from social posts. Reuses existing card/button/typography tokens; only
+   layout-specific rules live here. */
+.try-demo-shell {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.try-demo-hero {
+  margin-bottom: 1.4rem;
+}
+
+.try-demo-input-card {
+  margin-bottom: 1.4rem;
+}
+
+.try-demo-input-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0.4rem 0 0.75rem;
+}
+
+.try-demo-char-count {
+  margin: 0;
+  color: #857666;
+  font-size: 0.85rem;
+}
+
+.try-demo-char-count.is-over {
+  color: #991b1b;
+  font-weight: 600;
+}
+
+.try-demo-result {
+  display: grid;
+  gap: 1rem;
+}
+
+.try-demo-result-card .card-title {
+  margin-bottom: 0.5rem;
+}
+
+.try-demo-result-card .markdown {
+  margin-top: 1rem;
+}
+
+.try-demo-cta {
+  background: linear-gradient(180deg, rgba(255, 250, 241, 0.97), rgba(246, 230, 207, 0.9));
+  border-color: #ddc8a7;
+}
