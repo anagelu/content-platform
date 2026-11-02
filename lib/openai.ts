@@ -12,6 +12,11 @@ const DEFAULT_ARTICLE_MODEL = "gpt-5-mini";
 const DEFAULT_POST_DRAFT_MODEL = "gemini-3.5-flash-lite";
 const DEFAULT_GEMINI_POST_REFINE_MODEL = "gemini-3.7-flash";
 const OPENAI_TIMEOUT_MS = 20000;
+const GEMINI_TRANSCRIBE_TIMEOUT_MS = 35000;
+// ~8MB of raw audio, expressed as the base64 size the browser will
+// upload (base64 runs ~4/3 the size of the original bytes).
+export const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
+const MAX_AUDIO_BASE64_CHARS = Math.ceil((MAX_AUDIO_BYTES * 4) / 3);
 const MAX_POST_SOURCE_CHARS = 6000;
 
 type GenerateArticleInput = {
@@ -583,6 +588,8 @@ async function createGeminiResponse({
   thinkingBudget,
   thinkingLevel,
   tools,
+  audioPart,
+  timeoutMs,
 }: {
   model: string;
   systemInstruction: string;
@@ -593,6 +600,8 @@ async function createGeminiResponse({
   thinkingBudget?: number;
   thinkingLevel?: "low" | "medium" | "high";
   tools?: Array<Record<string, unknown>>;
+  audioPart?: { mimeType: string; data: string };
+  timeoutMs?: number;
 }) {
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -601,7 +610,7 @@ async function createGeminiResponse({
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs ?? OPENAI_TIMEOUT_MS);
 
   try {
     const supportsLegacyGenerationConfig = !/^gemini-3\.(?:5|6|7)-/.test(model);
@@ -619,7 +628,12 @@ async function createGeminiResponse({
           contents: [
             {
               role: "user",
-              parts: [{ text: userText }],
+              parts: audioPart
+                ? [
+                    { text: userText },
+                    { inlineData: { mimeType: audioPart.mimeType, data: audioPart.data } },
+                  ]
+                : [{ text: userText }],
             },
           ],
           generationConfig: {
@@ -657,6 +671,92 @@ async function createGeminiResponse({
   } finally {
     clearTimeout(timeout);
   }
+}
+
+// Record + send audio to Gemini: lets voice notes go straight into the same
+// generation pipeline without a separate speech-to-text vendor. Scoped to
+// the app's idea-capture fields (home page, /try demo, new-post source
+// field) rather than every text input. This is a faithful transcription,
+// not a summary — it should read like what the speaker actually said, only
+// cleaned of filler and given basic punctuation, matching the product's
+// voice-preservation philosophy elsewhere in the app.
+export async function transcribeVoiceIdea({
+  audioBase64,
+  mimeType,
+}: {
+  audioBase64: string;
+  mimeType: string;
+}): Promise<{ text: string; model: string; usage: OpenAIUsageStats }> {
+  const provider = await getAiProvider();
+
+  if (provider !== "gemini") {
+    throw new Error(
+      "Voice input needs the Gemini provider. Switch the AI provider in admin settings, or type the idea instead.",
+    );
+  }
+
+  if (!audioBase64) {
+    throw new Error("No recording was received. Please try again.");
+  }
+
+  if (audioBase64.length > MAX_AUDIO_BASE64_CHARS) {
+    throw new Error(
+      "That recording is too long. Keep voice notes to about a minute or two, or paste the text instead.",
+    );
+  }
+
+  const model = await getPostRefinementModel();
+  const systemInstruction = `You transcribe short voice notes into clean written text for someone capturing a rough idea. Return JSON only with key text.
+
+Write down exactly what the speaker said, preserving their own words, phrasing, and meaning as closely as possible. Only clean up obvious filler words (um, uh), false starts, and stutters, and add basic punctuation and paragraph breaks for readability. Do not summarize, rewrite, improve, or add anything the speaker did not say.
+
+If the audio is silent, has no intelligible speech, or is not speech at all, return an empty string for text.`;
+  const userText = "Transcribe the attached voice note.";
+
+  const payload = await createGeminiResponse({
+    model,
+    systemInstruction,
+    userText,
+    maxOutputTokens: 1200,
+    temperature: 0.2,
+    thinkingLevel: "low",
+    timeoutMs: GEMINI_TRANSCRIBE_TIMEOUT_MS,
+    audioPart: { mimeType, data: audioBase64 },
+    responseSchema: {
+      type: "object",
+      properties: {
+        text: { type: "string" },
+      },
+      required: ["text"],
+    },
+  });
+
+  const responseText = getGeminiResponseText(payload);
+  const jsonText = extractJson(responseText);
+
+  let parsed: Partial<{ text: string }>;
+
+  try {
+    parsed = JSON.parse(jsonText) as Partial<{ text: string }>;
+  } catch {
+    throw new Error("The model returned an unreadable transcription. Please try again.");
+  }
+
+  if (typeof parsed.text !== "string") {
+    throw new Error("The model returned an unreadable transcription. Please try again.");
+  }
+
+  const text = parsed.text.trim();
+
+  if (!text) {
+    throw new Error("Didn't catch any speech in that recording. Try again, or type it instead.");
+  }
+
+  return {
+    text,
+    model,
+    usage: parseGeminiUsage(payload),
+  };
 }
 
 export async function generateArticleFromSourceChat({

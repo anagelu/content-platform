@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { VoiceRecorderButton } from "@/app/voice-recorder-button";
 import { inferCategoryNameFromText } from "@/lib/category-inference";
 import { consumeHomeIdeaTransfer } from "@/lib/home-idea-transfer";
 import { generateQuickDraftFromSourceChat } from "@/lib/local-draft";
@@ -281,6 +282,14 @@ export function PostEditorForm({
               placeholder="Paste your conversation here..."
               value={sourceChatValue}
               onChange={(event) => setSourceChatValue(event.target.value)}
+            />
+            <VoiceRecorderButton
+              endpoint="/api/ai/post-voice-transcribe"
+              onTranscribed={(text) =>
+                setSourceChatValue((current) =>
+                  current.trim() ? `${current.trim()}\n\n${text}` : text,
+                )
+              }
             />
           </div>
         </section>

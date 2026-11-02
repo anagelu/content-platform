@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { VoiceRecorderButton } from "@/app/voice-recorder-button";
 import { storeHomeIdeaTransfer } from "@/lib/home-idea-transfer";
 
 type PreviewKind = "post" | "book" | "patent" | "distribution";
@@ -200,6 +201,12 @@ export function HomeIdeaStarter({
           placeholder="Paste a conversation, rough note, or invention idea..."
           value={idea}
           onChange={(event) => setIdea(event.target.value)}
+        />
+        <VoiceRecorderButton
+          endpoint="/api/ai/voice-transcribe"
+          onTranscribed={(text) =>
+            setIdea((current) => (current.trim() ? `${current.trim()}\n\n${text}` : text))
+          }
         />
         <p className="home-idea-helper">
           Capture the rough material first. Choose the output next. Full editing and refinement happen in the workspace.

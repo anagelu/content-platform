@@ -4762,6 +4762,58 @@ main {
   line-height: 1.5;
 }
 
+.voice-recorder {
+  margin: 0.6rem 0 0.9rem;
+}
+
+.voice-recorder-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(255, 252, 246, 0.85);
+  color: #1f1b16;
+  border: 1px solid #d9cfbe;
+  padding: 0.55rem 0.9rem;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.voice-recorder-button:hover:not(:disabled) {
+  background: #fffaf1;
+}
+
+.voice-recorder-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.voice-recorder-button.is-recording {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+  animation: voice-recorder-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes voice-recorder-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.voice-recorder-error {
+  margin: 0.4rem 0 0;
+  color: #991b1b;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
 .transcript-builder {
   display: grid;
   gap: 1rem;

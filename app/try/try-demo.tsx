@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { VoiceRecorderButton } from "@/app/voice-recorder-button";
 import { storeHomeIdeaTransfer } from "@/lib/home-idea-transfer";
 
 const MAX_DEMO_IDEA_CHARS = 1200;
@@ -107,6 +108,13 @@ export function TryDemo() {
             value={idea}
             onChange={(event) => setIdea(event.target.value)}
             disabled={status === "loading"}
+          />
+          <VoiceRecorderButton
+            endpoint="/api/ai/voice-transcribe"
+            disabled={status === "loading"}
+            onTranscribed={(text) =>
+              setIdea((current) => (current.trim() ? `${current.trim()}\n\n${text}` : text))
+            }
           />
           <div className="try-demo-input-footer">
             <p className={overLimit ? "try-demo-char-count is-over" : "try-demo-char-count"}>
